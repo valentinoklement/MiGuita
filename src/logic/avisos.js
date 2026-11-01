@@ -21,7 +21,7 @@ export function avisosDeHoy(notif, estado) {
   if (notif.tipos.racha && estado.racha >= 3 && !estado.hoyHecho && !lista.some((a) => a.hora === "21:00"))
     lista.push({ hora: "21:00", tipo: "racha", texto: "Tu racha de " + estado.racha + " días se corta si hoy no anotás nada." });
   if (notif.tipos.presupuesto)
-    (estado.presupuestos || []).forEach((c) => lista.push({ hora: estado.ahora, tipo: "presupuesto", texto: "Ya usaste el 90% del presupuesto de " + c + "." }));
+    (estado.presupuestos || []).forEach((c) => lista.push({ hora: estado.ahora, tipo: "presupuesto", texto: "Ya usaste el 90% del tope de " + c + "." }));
   return lista.filter((a) => !enNoMolestar(notif.noMolestar, a.hora)).sort((a, b) => a.hora.localeCompare(b.hora)).slice(0, 3);
 }
 

@@ -1,4 +1,4 @@
-// Pantallas de Plan: presupuesto, metas, deudas, gastos fijos y sus formularios.
+// Pantallas de Mis cuentas: topes, metas, deudas, gastos fijos y sus formularios.
 import { Art } from "../art/art.js";
 import { formatear, leerMonto } from "../logic/dinero.js";
 import { delMes, resumenMes } from "../logic/mes.js";
@@ -6,7 +6,7 @@ import { estadoPresupuestos, infoMeta, resumenDeudas, restante } from "../logic/
 import { resumenCuotas, infoCompra, MAX_CUOTAS, SIN_TARJETA } from "../logic/cuotas.js";
 import { esc } from "./pantallas.js";
 
-const PESTANAS = [["presupuesto", "Presupuesto"], ["metas", "Metas"], ["deudas", "Deudas"], ["fijos", "Fijos"], ["cuotas", "Cuotas"]];
+const PESTANAS = [["presupuesto", "Topes"], ["metas", "Metas"], ["deudas", "Deudas"], ["fijos", "Fijos"], ["cuotas", "Cuotas"]];
 
 export function crearVistasPlan(st, hoy, V) {
   const { back, hdr, lbl, crd, chips, interruptor } = V.ayudas;
@@ -17,24 +17,24 @@ export function crearVistasPlan(st, hoy, V) {
 
   function encabezado() {
     const r = resumenMes(st.movs, hoy);
-    return hdr("Lo que planifico", "Plan", V.estadoDelMes(mes, r)) + chips("planTab", PESTANAS, st.planTab, "Parte del plan");
+    return hdr("Lo que planifico", "Mis cuentas", V.estadoDelMes(mes, r), st.planTab) + chips("planTab", PESTANAS, st.planTab, "Parte de mis cuentas");
   }
-  const vacio = (titulo, texto) => crd(`<div class="empty"><b>${titulo}</b><span>${texto}</span></div>`);
+  const vacio = (titulo, texto) => crd(`<div class="empty vacio-m">${Art.miguita("ok").replace("<svg", '<svg style="width:96px"')}<b>${titulo}</b><span>${texto}</span></div>`);
   const nuevo = (tipo, texto) => `<button class="btn pp w" data-act="nuevoPlan" data-v="${tipo}">${texto}</button>`;
 
   /* ---------- pestañas ---------- */
   function presupuesto() {
     const est = estadoPresupuestos(st.presupuestos, st.movs, mes);
-    if (!est.length) return vacio("Sin presupuestos", "Poné un tope por categoría y Miguita te avisa antes de que te pases.") + nuevo("presupuesto", "+ Nuevo presupuesto");
+    if (!est.length) return vacio("¿Querés gastar menos en algo?", "Poné un tope por mes, por ejemplo en Salidas, y Miguita te avisa antes de que te pases.") + nuevo("presupuesto", "+ Poner un tope");
     return crd(lbl("Este mes, por categoría") + est.map((p) =>
       `<button class="pbrow rowb" data-act="editarPlan" data-v="${esc(p.id)}">${Art.pan(p.queda)}<span class="pbt"><b>${esc(nombreCat(p.categoria))}</b>` +
       `<span class="${p.nivel === "pasado" ? "neg" : ""}">${p.resto >= 0 ? "Quedan " + plata(p.resto) : "Te pasaste " + plata(-p.resto)}</span>` +
       `<small>Gastaste ${plata(p.gastado)} de ${plata(p.tope)}</small></span></button>`).join("")) +
-      nuevo("presupuesto", "+ Nuevo presupuesto");
+      nuevo("presupuesto", "+ Poner un tope");
   }
 
   function metas() {
-    if (!st.metas.length) return vacio("Sin metas", "Poné una meta, como un viaje o un fondo de emergencia, y andá sumando.") + nuevo("meta", "+ Nueva meta");
+    if (!st.metas.length) return vacio("¿Estás juntando plata para algo?", "Poné una meta, como un viaje, y andá sumando. Te digo cuánto guardar por mes.") + nuevo("meta", "+ Nueva meta");
     const total = (m) => st.metas.filter((x) => x.moneda === m).reduce((a, x) => a + x.ahorrado, 0);
     const hayUsd = st.metas.some((x) => x.moneda === "USD"), hayArs = st.metas.some((x) => x.moneda !== "USD");
     return crd(`<div class="stats">${hayArs ? `<div><div class="sub">Ahorrado en pesos</div><b>${plata(total("ARS"))}</b></div>` : ""}${hayUsd ? `<div><div class="sub">En dólares</div><b>${dinero(total("USD"), "USD")}</b></div>` : ""}</div>`) +
@@ -58,7 +58,7 @@ export function crearVistasPlan(st, hoy, V) {
         (d.vence && falta ? (r.vencida(d) ? ` · <span class="neg">venció el ${fecha(d.vence)}</span>` : ` · vence el ${fecha(d.vence)}`) : "") + `</span></button>` +
         (falta ? `<div class="chips"><button class="pp" data-act="pagarDeuda" data-v="${esc(d.id)}">${me ? "Registrar cobro" : "Registrar pago"}</button></div>` : ""));
     };
-    if (!st.deudas.length) return vacio("Sin deudas", "Anotá lo que debés o lo que te deben y andá tachando.") + nuevo("deuda", "+ Nueva deuda");
+    if (!st.deudas.length) return vacio("¿Alguien te debe plata? ¿O le debés a alguien?", "Anotalo acá y andá tachando a medida que se paga, así no te olvidás.") + nuevo("deuda", "+ Nueva deuda");
     const usd = (c) => (c ? `<small style="display:block">+ ${dinero(c, "USD")}</small>` : "");
     return crd(`<div class="stats"><div><div class="sub">Debés</div><b class="neg">${plata(r.debo)}${usd(r.deboUsd)}</b></div><div><div class="sub">Te deben</div><b class="pos">${plata(r.meDeben)}${usd(r.meDebenUsd)}</b></div></div>`) +
       r.activas.map(tarjeta).join("") + nuevo("deuda", "+ Nueva deuda") +
@@ -67,7 +67,7 @@ export function crearVistasPlan(st, hoy, V) {
   }
 
   function fijos() {
-    if (!st.fijos.length) return vacio("Sin fijos", "Cargá lo que pagás o cobrás todos los meses, como el alquiler o el sueldo. Se anotan solos el día que elijas, o te preguntamos antes.") + nuevo("fijo", "+ Nuevo fijo");
+    if (!st.fijos.length) return vacio("¿Pagás algo todos los meses?", "Cargá el alquiler, Netflix o tu sueldo una sola vez y se anotan solos el día que elijas.") + nuevo("fijo", "+ Nuevo fijo");
     const activos = st.fijos.filter((f) => f.activo);
     const suma = (t) => activos.filter((f) => (f.tipo || "gasto") === t && f.moneda !== "USD").reduce((a, f) => a + f.monto, 0);
     const gastos = suma("gasto"), ingresosFijos = suma("ingreso");
@@ -85,7 +85,7 @@ export function crearVistasPlan(st, hoy, V) {
   }
 
   function cuotas() {
-    if (!st.compras.length && !st.tarjetas.length) return vacio("Sin cuotas", "Anotá lo que compraste en cuotas y con qué tarjeta. Cada cuota se anota sola en su mes, y acá ves cuánto debés en cada tarjeta.") + nuevo("compra", "+ Nueva compra en cuotas") + nuevo("tarjeta", "+ Nueva tarjeta").replace("btn pp w", "btn pp w alt");
+    if (!st.compras.length && !st.tarjetas.length) return vacio("¿Compraste algo en cuotas?", "Cargalo una vez y cada mes se anota solo. Así sabés cuánto te falta pagar.") + nuevo("compra", "+ Cargar una compra en cuotas") + nuevo("tarjeta", "+ Nueva tarjeta").replace("btn pp w", "btn pp w alt");
     const r = resumenCuotas(st.compras, st.tarjetas, hoy);
     const $$ = (t) => [t.pesos || !t.usd ? plata(t.pesos) : "", t.usd ? dinero(t.usd, "USD") : ""].filter(Boolean).join(" + ");
     const mesCorto = (m) => V.mesTexto(m) + (m.slice(0, 4) === hoy.slice(0, 4) ? "" : " " + m.slice(0, 4));
@@ -131,17 +131,17 @@ export function crearVistasPlan(st, hoy, V) {
       const usadas = new Set(st.presupuestos.filter((p) => p.id !== st.form.id).map((p) => p.categoria));
       const tope = leerMonto(v.tope);
       const gastado = delMes(st.movs, mes).filter((x) => x.tipo !== "ingreso" && x.categoria === v.categoria).reduce((a, x) => a + x.monto, 0);
-      return back("Plan") + hdr("Presupuesto", st.form.id ? "Editar presupuesto" : "Nuevo presupuesto") +
+      return back("Mis cuentas") + hdr("Topes", st.form.id ? "Editar tope" : "Nuevo tope") +
         selector("categoria", "Categoría", catsGasto(v.categoria).filter((c) => !usadas.has(c.id)).map((c) => [c.id, c.nombre])) +
         campo("tope", "Tope del mes, en pesos", { ph: "por ejemplo 90.000", modo: "monto", max: 16 }) +
         crd(`<div class="sub">Este mes gastaste ${plata(gastado)} en ${esc(nombreCat(v.categoria))}.${tope ? (tope >= gastado ? " Con este tope te quedarían " + plata(tope - gastado) + "." : " Con este tope ya te pasaste " + plata(gastado - tope) + ".") : ""}</div>`) +
-        pie("Guardar presupuesto");
+        pie("Guardar tope");
     },
     meta() {
       const v = st.form.vals;
       const obj = leerMonto(v.objetivo), ah = leerMonto(v.ahorrado || "0");
       const i = obj ? infoMeta({ objetivo: obj, ahorrado: ah || 0, fecha: v.fecha }, hoy) : null;
-      return back("Plan") + hdr("Metas", st.form.id ? "Editar meta" : "Nueva meta") +
+      return back("Mis cuentas") + hdr("Metas", st.form.id ? "Editar meta" : "Nueva meta") +
         campo("nombre", "¿Para qué ahorrás?", { ph: "por ejemplo: un viaje", max: 40 }) +
         lbl("Ícono") + `<div class="cats" role="group" aria-label="Ícono">` + Art.ICONOS_META.map((m) =>
           `<button class="cat pp" data-act="formSel" data-k="icono" data-v="${m.id}" aria-pressed="${v.icono === m.id}">${Art.metaIcon(m.id)}${m.nombre}</button>`).join("") + "</div>" +
@@ -154,7 +154,7 @@ export function crearVistasPlan(st, hoy, V) {
     },
     deuda() {
       const me = st.form.vals.tipo === "meDeben";
-      return back("Plan") + hdr("Deudas", st.form.id ? "Editar deuda" : "Nueva deuda") +
+      return back("Mis cuentas") + hdr("Deudas", st.form.id ? "Editar deuda" : "Nueva deuda") +
         lbl("¿Qué tipo es?") + opcion("tipo", [["debo", "Yo debo"], ["meDeben", "Me deben"]], "Tipo de deuda") +
         campo("quien", me ? "¿Quién te debe?" : "¿A quién le debés?", { max: 40 }) +
         campo("concepto", "¿Por qué?", { ph: "por ejemplo: un préstamo", max: 60 }) +
@@ -167,12 +167,12 @@ export function crearVistasPlan(st, hoy, V) {
     fijo() {
       const v = st.form.vals, ing = v.tipo === "ingreso";
       const cats = (ing ? st.cfg.categorias.ingreso : catsGasto(v.categoria)).filter((c) => !c.oculta || c.id === v.categoria);
-      return back("Plan") + hdr("Fijos", st.form.id ? "Editar fijo" : "Nuevo fijo") +
+      return back("Mis cuentas") + hdr("Fijos", st.form.id ? "Editar fijo" : "Nuevo fijo") +
         lbl("¿Qué es?") + opcion("tipo", [["gasto", "Un gasto"], ["ingreso", "Un ingreso"]], "Tipo") +
         campo("nombre", "Nombre", { ph: ing ? "por ejemplo: sueldo" : "por ejemplo: alquiler", max: 40 }) +
         lbl("Moneda") + opcion("moneda", [["ARS", "Pesos"], ["USD", "Dólares"]], "Moneda") +
         campo("monto", v.moneda === "USD" ? "Monto por mes, en dólares" : "Monto por mes, en pesos", { modo: "monto", max: 16 }) +
-        (v.moneda === "USD" ? `<div class="hint">Se anota en pesos con el dólar de ese día (el que elegiste en Más › Dólar).</div>` : "") +
+        (v.moneda === "USD" ? `<div class="hint">Se anota en pesos con el dólar de ese día (el que elegiste en Ajustes › Dólar).</div>` : "") +
         selector("categoria", "Categoría", cats.map((c) => [c.id, c.nombre])) +
         campo("dia", ing ? "Día del mes en que cobrás" : "Día del mes en que se paga", { ph: "1 a 31", modo: "num", max: 2 }) +
         selector("medio", "Medio de pago (opcional)", [["", "Ninguno"], ...mediosVisibles(v.medio).map((m) => [m.id, m.nombre])]) +
@@ -185,7 +185,7 @@ export function crearVistasPlan(st, hoy, V) {
       const v = st.form.vals, id = st.form.id, antes = id && st.compras.find((c) => c.id === id);
       const total = leerMonto(v.total), n = Number(v.cuotas);
       const anotadas = antes ? infoCompra(antes).hechas - (antes.previas || 0) : 0;
-      return back("Plan") + hdr("Cuotas", id ? "Editar compra" : "Nueva compra en cuotas") +
+      return back("Mis cuentas") + hdr("Cuotas", id ? "Editar compra" : "Nueva compra en cuotas") +
         campo("detalle", "¿Qué compraste?", { ph: "por ejemplo: heladera", max: 60 }) +
         lbl("Moneda") + opcion("moneda", [["ARS", "Pesos"], ["USD", "Dólares"]], "Moneda") +
         campo("total", v.moneda === "USD" ? "Total, en dólares" : "Total, en pesos", { ph: "con el interés, si tiene", modo: "monto", max: 16 }) +
@@ -202,7 +202,7 @@ export function crearVistasPlan(st, hoy, V) {
     },
     tarjeta() {
       const id = st.form.id, deCompras = id ? st.compras.filter((c) => c.tarjeta === id).length : 0;
-      return back("Plan") + hdr("Cuotas", id ? "Editar tarjeta" : "Nueva tarjeta") +
+      return back("Mis cuentas") + hdr("Cuotas", id ? "Editar tarjeta" : "Nueva tarjeta") +
         campo("nombre", "Nombre", { ph: "por ejemplo: Visa", max: 30 }) +
         campo("cierre", "Día de cierre (opcional)", { ph: "1 a 31", modo: "num", max: 2 }) +
         campo("vence", "Día de vencimiento (opcional)", { ph: "1 a 31", modo: "num", max: 2 }) +
@@ -214,7 +214,7 @@ export function crearVistasPlan(st, hoy, V) {
       const m = st.metas.find((x) => x.id === st.form.id);
       const suma = leerMonto(st.form.vals.monto) || 0;
       const i = infoMeta({ ...m, ahorrado: m.ahorrado + suma }, hoy);
-      return back("Plan") + hdr(esc(m.nombre), "Sumar ahorro") +
+      return back("Mis cuentas") + hdr(esc(m.nombre), "Sumar ahorro") +
         campo("monto", "¿Cuánto sumás?", { modo: "monto", max: 16 }) +
         crd(`${Art.masa(i.parte).replace('class="dg"', 'class="dg" style="width:104px;flex:none"')}<div><div class="sub">Pasás de ${dinero(m.ahorrado, m.moneda)} a ${dinero(m.ahorrado + suma, m.moneda)}</div><b style="font:800 17px 'Bricolage Grotesque',sans-serif">${Math.floor(i.parte * 100)}% de la meta</b></div>`, "gl") +
         pie("Sumar");
@@ -222,7 +222,7 @@ export function crearVistasPlan(st, hoy, V) {
     pago() {
       const d = st.deudas.find((x) => x.id === st.form.id);
       const me = d.tipo === "meDeben";
-      return back("Plan") + hdr(esc(d.concepto || d.quien), me ? "Cobrarle a " + esc(d.quien || "alguien") : "Pagarle a " + esc(d.quien || "alguien")) +
+      return back("Mis cuentas") + hdr(esc(d.concepto || d.quien), me ? "Cobrarle a " + esc(d.quien || "alguien") : "Pagarle a " + esc(d.quien || "alguien")) +
         campo("monto", d.moneda === "USD" ? "Monto, en dólares" : "Monto", { modo: "monto", max: 16 }) + `<div class="hint">Falta ${me ? "cobrar" : "pagar"} ${dinero(restante(d), d.moneda)}.${d.moneda === "USD" ? " Si lo anotás, se pasa a pesos con el dólar de hoy." : ""}</div>` +
         crd(`<div class="srow f"><span class="rt"><b>Anotarlo también como ${me ? "ingreso" : "gasto"}</b><small>Categoría ${esc(nombreCat(me ? "otros_in" : "deudas"))}</small></span>${interruptor("formSwitch", !!st.form.vals.anotar, "Anotarlo también", "anotar")}</div>`) +
         pie(me ? "Registrar cobro" : "Registrar pago");

@@ -19,7 +19,7 @@ export function pantallaBloqueo(base, raiz) {
       raiz.innerHTML = `<main class="scr bloqueo">` + (olvide ?
         `<button class="back" data-act="volverB">‹ Bloqueo</button><div class="top"><div><small>Seguridad</small><h1>Olvidé mi ${clave ? "contraseña" : "PIN"}</h1></div>${Art.miguita("bad")}</div>` +
         `<div class="card pp"><div class="msg">Sin el ${clave ? "contraseña" : "PIN"} no se pueden abrir los datos de este celu.</div><div class="sub">No hay cuenta ni servidor que lo restablezca.</div></div>` +
-        `<div class="card pp"><div class="sub">Si tenés una copia de seguridad: borrá todo y después, en Más › Copias de seguridad, elegí «Restaurar una copia» con su contraseña.</div></div>` +
+        `<div class="card pp"><div class="sub">Si tenés una copia de seguridad: borrá todo y después, en Ajustes › Copias de seguridad, elegí «Restaurar una copia» con su contraseña.</div></div>` +
         `<button class="btn pp w alt del" data-act="borrarB">${confirmarBorrar ? "Tocá de nuevo: se borra todo lo de este celu" : "Borrar todo y empezar de nuevo"}</button>` :
         `<div class="hero-b">${Art.miguita("ok")}<b>MiGuita está cerrada</b><span>${clave ? "Escribí tu contraseña" : "Poné tu PIN"}</span></div>` +
         (clave ? `<form class="quick" data-form="clave"><div class="pp"><input id="claveB" type="password" class="field" aria-label="Contraseña" autocomplete="current-password"></div><button class="btn pp" type="submit">Abrir</button></form>` :

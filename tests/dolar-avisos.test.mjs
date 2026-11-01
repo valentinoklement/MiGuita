@@ -97,7 +97,7 @@ test("avisos: cantidad, racha, presupuesto, no molestar y máximo 3", () => {
   assert.equal(muchos.length, 3, "nunca más de 3");
   const nm = { ...n, noMolestar: { activo: true, desde: "20:00", hasta: "08:00" } };
   assert.deepEqual(avisosDeHoy(nm, { hoyHecho: false, racha: 0, presupuestos: [], ahora: "09:00" }).map((a) => a.hora), ["13:00"]);
-  assert.deepEqual(avisosDeHoy({ ...n, tipos: { dia: false, racha: false, presupuesto: true } }, { hoyHecho: false, racha: 9, presupuestos: ["Súper"], ahora: "15:00" }).map((a) => a.texto), ["Ya usaste el 90% del presupuesto de Súper."]);
+  assert.deepEqual(avisosDeHoy({ ...n, tipos: { dia: false, racha: false, presupuesto: true } }, { hoyHecho: false, racha: 9, presupuestos: ["Súper"], ahora: "15:00" }).map((a) => a.texto), ["Ya usaste el 90% del tope de Súper."]);
 });
 
 test("no molestar cruzando la medianoche", () => {

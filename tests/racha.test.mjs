@@ -47,7 +47,7 @@ test("apretado: casi todo gastado, presupuestos y deudas", () => {
   assert.deepEqual(apretado([ing, m("2026-10-05", "gasto", 900)], HOY), ["ya gastaste casi todo lo que cobraste"]);
   assert.deepEqual(apretado([m("2026-09-05", "gasto", 5000), ing], HOY), [], "otro mes no cuenta");
   assert.deepEqual(apretado([ing, m("2026-10-05", "gasto", 80)], HOY, [{ categoria: "super", tope: 100 }], [], () => "Súper"), ["estás llegando al tope de Súper"]);
-  assert.deepEqual(apretado([ing, m("2026-10-05", "gasto", 100)], HOY, [{ categoria: "super", tope: 100 }], [], () => "Súper"), ["te pasaste del presupuesto de Súper"]);
+  assert.deepEqual(apretado([ing, m("2026-10-05", "gasto", 100)], HOY, [{ categoria: "super", tope: 100 }], [], () => "Súper"), ["te pasaste del tope de Súper"]);
   assert.deepEqual(apretado([ing], HOY, [], [{ restante: 1000 }]), ["debés más de lo que cobrás en el mes"]);
   assert.deepEqual(apretado([], HOY, [], [{ restante: 1000 }]), [], "sin ingresos no se compara con deudas");
 });

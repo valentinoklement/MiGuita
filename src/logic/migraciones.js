@@ -12,7 +12,7 @@
 import { categoriasIniciales, mediosIniciales } from "./categorias.js";
 import { NOTIF_INICIAL } from "./avisos.js";
 
-export const VERSION = 7;
+export const VERSION = 8;
 
 // Nombre de cada lista guardada y su clave.
 export const LISTAS = { movs: "id", dias: "fecha", presupuestos: "id", metas: "id", deudas: "id", fijos: "id", grupos: "id", cotizaciones: "id", tarjetas: "id", compras: "id" };
@@ -45,6 +45,15 @@ const MIGRACIONES = [
   (d) => ({ ...d, config: { ...d.config, medios: (d.config?.medios || []).map((m) => (m.id === "mp" && m.nombre === "Mercado Pago" ? { ...m, nombre: "Billetera virtual" } : m)) } }),
   // 6 → 7: compras en cuotas y tarjetas.
   (d) => ({ ...d, tarjetas: d.tarjetas || [], compras: d.compras || [] }),
+  // 7 → 8: tomar alcohol pasa de Comer afuera a Salidas. Lo ya anotado queda como está, y lo que la persona corrigió a mano se sigue respetando.
+  (d) => {
+    const gasto = d.config?.categorias?.gasto;
+    if (!gasto) return d;
+    const pasan = ["bar", "birra", "cerveza"];
+    return { ...d, config: { ...d.config, categorias: { ...d.config.categorias, gasto: gasto.map((c) =>
+      c.id === "comida" ? { ...c, claves: c.claves.filter((k) => !pasan.includes(k)) } :
+      c.id === "salidas" ? { ...c, claves: [...c.claves, ...pasan.filter((k) => !c.claves.includes(k))] } : c) } } };
+  },
 ];
 
 export function migrar(datos) {

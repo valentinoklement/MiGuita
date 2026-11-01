@@ -1,4 +1,6 @@
 // Pantallas de MiGuita. Cada función devuelve HTML; los textos de la persona pasan siempre por esc().
+import { AYUDAS } from "./ayuda.js";
+import { puedeGrabar } from "./voz.js";
 import { Art } from "../art/art.js";
 import { formatear, evaluar } from "../logic/dinero.js";
 import { RESPALDO, BILLETERAS, BILLETERA_GENERAL } from "../logic/categorias.js";
@@ -33,7 +35,8 @@ export function crearVistas(st, hoy) {
   }
 
   const back = (t) => `<button class="back" data-act="volver">‹ ${esc(t)}</button>`;
-  const hdr = (small, titulo, estado) => `<div class="top"><div><small>${small}</small><h1>${titulo}</h1></div>${estado ? Art.miguita(estado) : ""}</div>`;
+  const preg = (clave) => `<button class="preg" data-act="ayuda" data-v="${clave}" aria-label="¿Cómo funciona esto?">?</button>`;
+  const hdr = (small, titulo, estado, ayuda) => `<div class="top"><div><small>${small}</small><h1>${titulo}${ayuda ? preg(ayuda) : ""}</h1></div>${estado ? Art.miguita(estado) : ""}</div>`;
   const lbl = (t) => `<div class="sec">${t}</div>`;
   const crd = (inner, cls = "") => `<div class="card pp ${cls}">${inner}</div>`;
   const mesNav = () => `<button class="mbtn" data-act="mes" data-v="-1" aria-label="Mes anterior">‹</button>${mesTexto(st.mes)}<button class="mbtn" data-act="mes" data-v="1" aria-label="Mes siguiente">›</button>`;
@@ -64,6 +67,8 @@ export function crearVistas(st, hoy) {
   const motivosApretado = () => apretado(st.movs, hoy, st.presupuestos,
     resumenDeudas(st.deudas, hoy).activas.filter((d) => d.tipo === "debo").map((d) => ({ restante: restante(d) })), nombreCat);
 
+  const MIC = '<path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>';
+
   /* ---------- Inicio ---------- */
   function inicio() {
     const actual = st.mes === hoy.slice(0, 7);
@@ -71,16 +76,18 @@ export function crearVistas(st, hoy) {
     const movs = porDiaAgrupado(delMes(st.movs, st.mes)).flatMap((g) => g.movs);
     const ra = infoRacha(st.movs, st.dias, hoy);
     const nombre = (st.cfg.nombre || "").trim();
+    const guiando = st.guiaPaso !== null && st.guiaPaso !== undefined;
+    const sinIngreso = r.ingresos === 0;
     let h = `<div class="top"><div><small>${mesNav()}` +
       `<button class="eyeb" data-act="ocultar" aria-pressed="${st.cfg.ocultar}" aria-label="${st.cfg.ocultar ? "Mostrar montos" : "Ocultar montos"}">${Art.icono(st.cfg.ocultar ? Art.OJO_TAPADO : Art.OJO)}</button></small>` +
-      `<h1>Hola${nombre ? ", " + esc(nombre) : ""}</h1>` +
+      `<h1>Hola${nombre ? ", " + esc(nombre) : ""}${guiando ? "" : preg("inicio")}</h1>` +
       `<button class="racha" data-act="abrir" data-v="racha" aria-label="Ver tu racha">${Art.minion()}<span>${ra.actual ? ra.actual + (ra.actual === 1 ? " día" : " días") + (ra.hoyHecho ? "" : " · salvala hoy") : "Empezá tu racha"}</span></button>` +
       `</div><button class="miguita-toque${st.chiste ? " salta" + (st.chiste.n % 2) + (st.chiste.giro ? " gira" : "") : ""}" data-act="tocarMiguita" aria-label="Tocar a Miguita">` +
       `${Art.miguita(estadoDelMes(st.mes, r))}${st.chiste ? `<span class="globo" role="status">${esc(st.chiste.texto)}</span>` : ""}</button></div>`;
 
     const peor = actual && estadoPresupuestos(st.presupuestos, st.movs, st.mes).find((p) => p.nivel !== "ok");
     if (peor) h += `<button class="card pp tecard" data-act="verPlan" data-v="presupuesto">` +
-      `<span class="msg">${peor.nivel === "pasado" ? "Te pasaste del presupuesto de " : "Estás llegando al tope de "}${esc(nombreCat(peor.categoria))}.</span>` +
+      `<span class="msg">${peor.nivel === "pasado" ? "Te pasaste del tope de " : "Estás llegando al tope de "}${esc(nombreCat(peor.categoria))}.</span>` +
       `<span class="sub">Gastaste ${plata(peor.gastado)} de ${plata(peor.tope)}.</span></button>`;
 
     if (!st.persistente) h += crd(`<div class="msg" role="alert">Este navegador no deja guardar: lo que anotes se pierde al cerrar.</div>`);
@@ -96,14 +103,19 @@ export function crearVistas(st, hoy) {
       h += crd(`<b class="pregunta">¿En qué categoría va «${esc(st.dudaCat.detalle)}»?</b><div class="sub">La anoté en Otros. Si me decís, la próxima vez ya lo sé.</div><div class="chips">` +
         lista.map((c) => `<button class="pp" data-act="dudaCatSel" data-v="${esc(c.id)}">${esc(c.nombre)}</button>`).join("") + `<button class="pp" data-act="dudaCatSel" data-v="">Dejar en Otros</button></div>`, "aviso");
     }
-    // Un solo cartel de bienvenida por vez, para no llenar la pantalla.
-    if (EN_PRUEBA && !st.cfg.pruebaVisto)
+    // Un solo cartel de bienvenida por vez, para no llenar la pantalla. Lo que cobrás y tu nombre se piden acá, sin obligar.
+    const reales = st.movs.filter((m) => !m.id.startsWith("ej_")).length;
+    if (guiando) { /* mientras dura la guía, nada más */ }
+    else if (actual && sinIngreso && reales && !st.cfg.ingresoVisto)
+      h += crd(`<b class="pregunta">¿Querés saber cuánto te queda este mes?</b><div class="sub">Cargá lo que cobrás y te lo digo. Es opcional.</div><div class="chips"><button class="pp" data-act="cargarIngreso" aria-pressed="true">Cargar</button><button class="pp" data-act="cerrarCartel" data-v="ingresoVisto">Ahora no</button></div>`, "aviso");
+    else if (EN_PRUEBA && !st.cfg.pruebaVisto)
       h += crd(`<b class="pregunta">Estás probando MiGuita antes que nadie</b><div class="sub">La estamos probando en un grupo chico de amigos. Si algo anda mal o se te ocurre una idea, mandala: a fin de mes, el aporte más útil se lleva un six pack.</div>` +
         `<div class="chips"><button class="pp" data-act="abrirComentario" aria-pressed="true">Mandar un comentario</button><button class="pp" data-act="cerrarCartel" data-v="pruebaVisto">Después</button></div>`, "aviso");
-    else if (!st.cfg.tutorialVisto)
-      h += crd(`<b class="pregunta">¿Te muestro todo lo que hace?</b><div class="sub">Lleva un minuto.</div><div class="chips"><button class="pp" data-act="verTutorial" aria-pressed="true">Dale</button><button class="pp" data-act="cerrarCartel" data-v="tutorialVisto">Ahora no</button></div>`, "aviso");
     else if (!(matchMedia("(display-mode: standalone)").matches || navigator.standalone) && !st.cfg.instalarVisto && st.movs.length)
       h += crd(`<b class="pregunta">Tenela a mano en tu celu</b><div class="sub">Instalala y se abre desde un ícono, como cualquier app.</div><div class="chips"><button class="pp" data-act="abrir" data-v="instalar" aria-pressed="true">Ver cómo</button><button class="pp" data-act="cerrarCartel" data-v="instalarVisto">Ahora no</button></div>`, "aviso");
+
+    if (!guiando && reales >= 3 && !nombre && !st.cfg.nombreVisto && !(actual && sinIngreso && !st.cfg.ingresoVisto))
+      h += crd(`<b class="pregunta">¿Cómo te llamás?</b><div class="sub">Es para saludarte. Es opcional.</div><div class="quick"><div class="pp"><input class="field" data-act="nombre" value="" placeholder="Tu nombre" aria-label="Tu nombre" maxlength="30" autocomplete="given-name"></div></div><div class="chips"><button class="pp" data-act="cerrarCartel" data-v="nombreVisto" aria-pressed="true">Listo</button></div>`, "aviso");
 
     const cerrado = actual && mesParaMostrar(st.movs, hoy, st.cfg.mesVisto || "");
     if (cerrado) h += crd(`<b class="pregunta">Ya está tu mes de ${mesTexto(cerrado).toLowerCase()}</b><div class="sub">Miguita te armó una tarjeta para compartir: en qué se te fue la plata, tu racha y un chiste.</div>` +
@@ -131,20 +143,53 @@ export function crearVistas(st, hoy) {
         `<div class="chips"><button class="pp" data-act="abrir" data-v="copias" aria-pressed="true">Hacer una copia</button><button class="pp" data-act="posponerCopia">Ahora no</button></div>`, "aviso");
 
     // Sin ingresos cargados no tiene sentido decir "te queda menos tanto".
-    const sinIngreso = r.ingresos === 0;
     h += `<button class="card pp hr tecard" data-act="abrir" data-v="resumen" aria-label="Ver el resumen del mes">${Art.pan(r.queda)}<span class="ht"><span class="sub">${sinIngreso ? "Gastaste" : "Te queda"}</span>` +
       `<span class="big std">${plata(sinIngreso ? r.gastos : r.teQueda)}</span>` +
       `<span class="sub">${sinIngreso ? "Tocá para ver en qué se fue" : actual ? "Podés gastar " + plata(r.porDia) + " por día" : "Gastaste " + plata(r.gastos)}</span></span></button>`;
 
-    h += (sinIngreso && actual ? `<div class="chips"><button class="pp" data-act="cargarIngreso">+ Cargar lo que cobrás</button></div>` : "") + `<form class="quick" data-form="rapido"><div class="pp${st.error ? " err" : ""}"><input id="rapido" placeholder="10 lucas nafta" aria-label="Anotar un gasto" autocomplete="off" enterkeyhint="done" maxlength="120"></div>` +
-      `<button class="btn pp" type="submit">Anotar</button></form>` +
+    const conMic = !guiando && puedeGrabar();
+    h += (sinIngreso && actual && !guiando && (st.cfg.ingresoVisto || !reales) ? `<div class="chips"><button class="pp" data-act="cargarIngreso">+ Cargar lo que cobrás</button></div>` : "") + `<form class="quick" data-form="rapido"><div class="pp${st.error ? " err" : ""}"><input id="rapido" placeholder="15mil nafta" aria-label="Anotar un gasto" autocomplete="off" enterkeyhint="done" maxlength="300"></div>` +
+      (conMic ? `<button class="btn pp mic" type="button" data-act="hablar" aria-label="Hablar: decí tus gastos con la voz">${Art.icono(MIC)}</button>` : "") +
+      `<button class="btn pp anotar" type="submit">Anotar</button></form>` +
+      (conMic && !st.cfg.vozAviso ? `<div class="nuevo-mic">Nuevo: tocá el micrófono y decí varios gastos juntos</div>` : "") +
       (st.error ? `<div class="msg" role="alert">${esc(st.error)}</div>` : "") +
-      `<button class="traer" data-act="abrir" data-v="importar"><span aria-hidden="true">${Art.icono(ICONO_BILLETERA)}</span><span>¿Usás Mercado Pago? <b>Traé tus gastos solos</b></span><span class="chev" aria-hidden="true">›</span></button>`;
+      (guiando ? "" : `<button class="traer" data-act="abrir" data-v="importar"><span aria-hidden="true">${Art.icono(ICONO_BILLETERA)}</span><span>¿Usás Mercado Pago? <b>Traé tus gastos solos</b></span><span class="chev" aria-hidden="true">›</span></button>`);
 
-    h += crd(`<div class="sec secrow"><span>Últimos movimientos</span>${movs.length ? `<button class="link" data-act="abrir" data-v="movimientos">Ver todos ›</button>` : ""}</div>` +
+    h += crd(`<div class="sec secrow" data-guia="mov"><span>Últimos movimientos</span>${movs.length ? `<button class="link" data-act="abrir" data-v="movimientos">Ver todos ›</button>` : ""}</div>` +
       (movs.length ? movs.slice(0, 5).map((x, i) => fila(x, i === 0, subInicio)).join("") :
-        `<div class="empty"><b>Todavía no anotaste nada</b><span>Escribí «café 3800» arriba y listo.</span></div>`));
+        `<div class="empty"><b>Todavía no anotaste nada</b><span>Escribí «15mil nafta» arriba y listo.</span></div>`));
+    if (!st.movs.length && !guiando) h += `<button class="link chico" data-act="yaUsoMiguita">¿Ya usás MiGuita en otro celu? Conectalo</button><button class="link chico" data-act="tengoCopia">Tengo una copia de seguridad</button>`;
     return h;
+  }
+
+  /* ---------- la guía de la primera vez: se hace usando la app de verdad ---------- */
+  function guia() {
+    const p = st.guiaPaso;
+    const globo = (titulo, texto, boton = "") => `<div class="guia-globo"><div class="gcab">${Art.miguita("ok").replace("<svg", '<svg style="width:62px"')}<b>${titulo}</b></div><div class="gtxt">${texto}</div>${boton ? `<button class="btn pp w guia-sig" data-act="guiaSig">${boton}</button>` : ""}<div class="dots" role="img" aria-label="Paso ${p + 1} de 3">${[0, 1, 2].map((i) => `<i class="${i === p ? "on" : ""}"></i>`).join("")}</div></div>`;
+    const saltar = p < 2 ? `<button class="guia-saltar" data-act="guiaFin">Saltear</button>` : "";
+    let texto = "";
+    if (p === 1) {
+      const nuevos = st.movs.length - st.guiaBase, m = [...st.movs].sort((a, b) => b.ts - a.ts)[0];
+      const que = m?.detalle ? " de " + esc(m.detalle.toLowerCase()) : "";
+      texto = nuevos > 1 ? `Anoté tus ${nuevos} gastos y a cada uno le puse su categoría. Si algo está mal, lo tocás y lo cambiás.` :
+        m?.tipo === "ingreso" ? `Entendí que entraron ${plata(m.monto)}${que} y lo puse en ${esc(nombreCat(m.categoria))}. Si algo está mal, lo tocás y lo cambiás.` :
+        `Entendí que son ${plata(m?.monto || 0)}${que} y lo puse en ${esc(nombreCat(m?.categoria))}. Si algo está mal, lo tocás y lo cambiás.`;
+    }
+    return `<div class="guia-fondo"></div>` + saltar + (
+      p === 0 ? globo("Empecemos", "Escribí lo último que gastaste. Por ejemplo: <b>10 lucas birra</b>. Después tocá <b>Anotar</b>.") :
+      p === 1 ? globo("¡Anotado!", texto, "Seguir") :
+      globo("Abajo está lo demás", `<div class="g3"><b>Grupos</b> Dividí gastos con amigos.</div><div class="g3"><b>Mis cuentas</b> Cuotas, metas, deudas y gastos fijos.</div><div class="g3"><b>Ajustes</b> Avisos, personalización y PIN.</div>`, "¡A usarla!"));
+  }
+
+  /* ---------- la ventanita del signo de pregunta ---------- */
+  function ayudaHoja(contenido) {
+    return `<div class="sheet-bg" data-act="cerrarAyuda"><div class="sheet" role="dialog" aria-modal="true" data-act="nada"><div class="grab"></div>${contenido}</div></div>`;
+  }
+  function ayuda(clave) {
+    const a = AYUDAS[clave];
+    if (!a) return "";
+    const paso = (t, i) => `<div class="srow paso-i${i ? "" : " f"}"><span class="stn">${i + 1}</span><span class="rt">${t}</span></div>`;
+    return ayudaHoja(`<b class="ayuda-t">${a.t}</b>${a.x ? `<span class="ayuda-x">${a.x}</span>` : ""}${(a.pasos || []).map(paso).join("")}<button class="btn pp w" data-act="cerrarAyuda">Entendido</button>`);
   }
 
   /* ---------- Movimientos ---------- */
@@ -157,7 +202,7 @@ export function crearVistas(st, hoy) {
       (!f.cat || x.categoria === f.cat) &&
       (!texto || (x.detalle + " " + nombreCat(x.categoria) + " " + nombreMedio(x.medio)).toLowerCase().includes(texto)));
     const cats = [...st.cfg.categorias.gasto, ...st.cfg.categorias.ingreso];
-    return back("Inicio") + hdr(mesNav(), "Movimientos") +
+    return back("Inicio") + hdr(mesNav(), "Movimientos", "", "movimientos") +
       `<div class="quick"><div class="pp"><input id="buscar" data-act="buscar" value="${esc(f.texto)}" placeholder="Buscar un gasto" aria-label="Buscar" autocomplete="off" maxlength="60"></div></div>` +
       chips("filtro", [["todos", "Todos"], ["gastos", "Gastos"], ["ingresos", "Ingresos"]], f.tipo, "Filtrar") +
       (texto ? `<div class="hint">Buscando en todos los meses.</div>` : "") +
@@ -176,7 +221,7 @@ export function crearVistas(st, hoy) {
     const pc = gastosPor(st.movs, st.mes, "categoria"), pm = gastosPor(st.movs, st.mes, "medio");
     const dias = gastosPorDia(st.movs, st.mes);
     const max = Math.max(...dias), diaMax = dias.indexOf(max);
-    let h = back("Inicio") + hdr(mesNav(), "Resumen", estadoDelMes(st.mes, r)) +
+    let h = back("Inicio") + hdr(mesNav(), "Resumen", estadoDelMes(st.mes, r), "resumen") +
       crd(`<div class="stats"><div><div class="sub">Ingresos</div><b class="pos">${plata(r.ingresos)}</b></div><div><div class="sub">Gastos</div><b class="neg">${plata(r.gastos)}</b></div><div><div class="sub">Queda</div><b>${plata(r.teQueda)}</b></div></div>` +
         (() => { const d = dolarDe(referencia(st.mes, hoy)); return d && r.gastos ? `<div class="sub">≈ ${formatear(Math.round(r.gastos * 100 / d.valor), { moneda: "US$ ", oculto: st.cfg.ocultar }).replace(/,\d\d$/, "")} gastados · dólar ${nombreTipo(st.cfg.dolar.tipo).toLowerCase()} ${formatear(d.valor)}</div>` : ""; })());
     if (!r.gastos) return h + crd(`<div class="empty"><b>Sin gastos este mes</b><span>Cuando anotes, acá vas a ver en qué se te va la plata.</span></div>`);
@@ -211,7 +256,7 @@ export function crearVistas(st, hoy) {
     }
     const iProx = Art.PREMIOS.findIndex((p) => p.dias === ra.proximo);
     const motivos = motivosApretado();
-    return back("Inicio") + hdr("Tu racha", ra.actual + (ra.actual === 1 ? " día" : " días"), "ok") +
+    return back("Inicio") + hdr("Tu racha", ra.actual + (ra.actual === 1 ? " día" : " días"), "ok", "racha") +
       crd(lbl("Ingredientes de esta semana") + `<div class="ings">${[0, 1, 2, 3, 4, 5, 6].map((i) => Art.ingrediente(i, i < enSemana)).join("")}</div>` +
         `<div class="sub">${ra.hoyHecho ? "Hoy ya sumaste tu ingrediente." : "Anotá tus gastos del día y se suma un ingrediente."}</div>`) +
       (ra.proximo ? crd(lbl("Próximo premio") + `<div class="crow">${iProx >= 0 ? Art.premio(iProx).replace("<svg", '<svg class="st"') : ""}<div class="cr"><div class="row f" style="padding:0 0 3px;min-height:0"><span>${PREMIO_TEXTO[ra.proximo].replace(/^(un|una) /, "").replace(/^./, (c) => c.toUpperCase())} · ${ra.proximo} días</span><span>faltan ${ra.proximo - ra.actual}</span></div>${Art.barra(ra.actual / ra.proximo)}</div></div>`) : "") +
@@ -231,7 +276,7 @@ export function crearVistas(st, hoy) {
       `<button class="btn pp w" data-act="cerrarFestejo">Seguir</button></div>`;
   }
 
-  /* ---------- Más ---------- */
+  /* ---------- Ajustes ---------- */
   function billetera() {
     const n = st.cfg.medios.find((m) => m.id === "mp")?.nombre || BILLETERA_GENERAL;
     const otra = n !== BILLETERA_GENERAL && !BILLETERAS.includes(n);
@@ -244,12 +289,13 @@ export function crearVistas(st, hoy) {
     const ej = hayEjemplo();
     const n = st.cfg.notif, d = dolarDe(hoy), cp = st.cfg.copias;
     const ir = (v, t, sub, i, primera) => `<button class="srow rowb${primera ? " f" : ""}" data-act="abrir" data-v="${v}" style="width:100%;text-align:left"><span class="ri">${Art.icono(i)}</span><span class="rt"><b>${t}</b><small>${esc(sub)}</small></span><span class="chev" aria-hidden="true">›</span></button>`;
-    return hdr("Ajustes y copias", "Más", "ok") +
+    return hdr("Tu app", "Ajustes", "ok") +
       crd(ir("notif", "Notificaciones", n.cantidad ? n.cantidad + (n.cantidad === 1 ? " aviso" : " avisos") + " por día · " + (n.forma === "sonido" ? "con sonido" : "en silencio") : "Sin avisos", '<path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20h4"/>', true) +
         ir("seguridad", "Seguridad", st.seguridad ? (st.seguridad.modo === "clave" ? "Contraseña" : "PIN") + (st.seguridad.huella ? " y huella" : "") + " · datos cifrados" : "Sin PIN", '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/>') +
         ir("dolar", "Dólar", nombreTipo(st.cfg.dolar.tipo) + (d ? " · " + formatear(d.valor) : " · sin valor") + (st.cfg.dolar.fuente === "manual" || st.cfg.dolar.tipo === "fijo" ? " · a mano" : " · se actualiza solo"), '<circle cx="12" cy="12" r="9"/><path d="M12 7v10M15 9.5c0-2-6-2-6 0s6 2 6 4.5-6 2.5-6 0"/>') +
         (matchMedia("(display-mode: standalone)").matches || navigator.standalone ? "" : ir("instalar", "Instalar MiGuita", "Para tenerla en la pantalla de inicio", '<rect x="6" y="2" width="12" height="20" rx="3"/><path d="M12 8v7m0 0l-3-3m3 3l3-3"/>')) +
         ir("tutorial", "Cómo usar MiGuita", "Todo lo que podés hacer, en un minuto", '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 0 1 5 .5c0 1.5-2.5 2-2.5 3.5M12 17h0"/>') +
+        `<button class="srow rowb" data-act="repetirGuia" style="width:100%;text-align:left"><span class="ri">${Art.icono('<path d="M4 12a8 8 0 1 0 2.5-5.8M4 4v4h4"/>')}</span><span class="rt"><b>Repetir la guía</b><small>La de la primera vez, en Inicio</small></span><span class="chev" aria-hidden="true">›</span></button>` +
         ir("dispositivos", "Usar en otro dispositivo", st.cfg.vinculo ? (st.cfg.vinculo.error ? "Conectado · sin conexión" : "Conectado · todo al día") : "Celu y compu con los mismos datos", '<rect x="2" y="5" width="13" height="10" rx="2"/><path d="M5 19h7"/><rect x="17" y="9" width="5" height="10" rx="1.5"/>') +
         (EN_PRUEBA ? `<button class="srow rowb" data-act="abrirComentario" style="width:100%;text-align:left"><span class="ri">${Art.icono('<path d="M4 5h16v11H9l-5 4z"/>')}</span><span class="rt"><b>Mandar un comentario</b><small>Una idea o algo que anda mal</small></span><span class="chev" aria-hidden="true">›</span></button>` : "") +
         ir("privacidad", "Privacidad", "Qué se guarda y dónde", '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>') +
@@ -273,7 +319,7 @@ export function crearVistas(st, hoy) {
   function categorias() {
     const t = st.catTab;
     const items = t === "medios" ? st.cfg.medios : st.cfg.categorias[t];
-    return back("Más") + hdr("Ajustes", "Categorías y medios") +
+    return back("Ajustes") + hdr("Ajustes", "Categorías y medios") +
       chips("catTab", [["gasto", "Gastos"], ["ingreso", "Ingresos"], ["medios", "Medios de pago"]], t, "Lista") +
       crd(items.map((c, i) => {
         const oculto = c.oculta || c.oculto;
@@ -344,5 +390,6 @@ export function crearVistas(st, hoy) {
   }
 
   return { inicio, movimientos, resumen, racha, festejo, mas, categorias, editarCat, hoja, nombreCat, nombreMedio, nombreDia, mesTexto, plata, motivosApretado, estadoDelMes,
-    ayudas: { back, hdr, lbl, crd, chips, interruptor } };
+    guia, ayuda, ayudaHoja,
+    ayudas: { back, hdr, lbl, crd, chips, interruptor, preg } };
 }

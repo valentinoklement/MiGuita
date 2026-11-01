@@ -55,7 +55,7 @@ export function apretado(movs, hoy, presupuestos = [], deudas = [], nombreDe = (
     if (g >= p.tope) pasado = pasado || p.categoria;
     else if (g >= p.tope * 0.8) cerca = cerca || p.categoria;
   }
-  if (pasado) motivos.push("te pasaste del presupuesto de " + nombreDe(pasado));
+  if (pasado) motivos.push("te pasaste del tope de " + nombreDe(pasado));
   else if (cerca) motivos.push("estás llegando al tope de " + nombreDe(cerca));
   if (ingresos > 0 && deudas.reduce((a, d) => a + d.restante, 0) >= ingresos) motivos.push("debés más de lo que cobrás en el mes");
   return motivos;

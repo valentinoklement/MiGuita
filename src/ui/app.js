@@ -1,7 +1,9 @@
 // MiGuita: estado, guardado y eventos. Las pantallas están en pantallas.js.
 import { Art } from "../art/art.js";
-import { evaluar, leerMonto, montoEnCampo } from "../logic/dinero.js";
-import { leerTexto, leerSinMonto, quedoSinCategoria, claveDe } from "../logic/anotar.js";
+import { evaluar, formatear, leerMonto, montoEnCampo } from "../logic/dinero.js";
+import { leerTexto, leerSinMonto, leerVarios, quedoSinCategoria, claveDe } from "../logic/anotar.js";
+import { pasarATexto, formatoDeAudio, MAX_SEGUNDOS } from "../logic/voz.js";
+import { DIRECCION } from "../logic/instalar.js";
 import { RESPALDO, ponerBilletera } from "../logic/categorias.js";
 import { fechaLocal, cambiarMes } from "../logic/mes.js";
 import { infoRacha, salvavidasPara, festejoDeHoy } from "../logic/racha.js";
@@ -36,13 +38,15 @@ import { migrar } from "../logic/migraciones.js";
 import { pantallaBloqueo } from "./bloqueo.js";
 import { crearVistasAjustes } from "./ajustes.js";
 import { hayHuella, registrarHuella } from "./huella.js";
-import { crearVistasPrimera, instalada } from "./primera.js";
+import { crearVistasPrimera, instalada, navegadorActual } from "./primera.js";
+import { crearVistasVoz } from "./voz.js";
 
-const PESTANAS = [["inicio", "Inicio"], ["grupos", "Grupos"], ["plan", "Plan"], ["mas", "Más"]];
+const PESTANAS = [["inicio", "Inicio"], ["grupos", "Grupos"], ["plan", "Mis cuentas"], ["mas", "Ajustes"]];
 const TAB_DE = { movimientos: "inicio", resumen: "inicio", racha: "inicio", tuMes: "inicio", categorias: "mas", editarCat: "mas", form: "plan",
   grupo: "grupos", juntada: "grupos", historial: "grupos", gform: "grupos", compartir: "grupos", unido: "grupos", quien: "grupos", whatsapp: "grupos",
-  notif: "mas", seguridad: "mas", dolar: "mas", copias: "mas", dispositivos: "mas", comentario: "mas", privacidad: "mas", instalar: "mas", tutorial: "mas", importar: "inicio" };
-const SIN_BARRA = ["bienvenida", "primerIngreso", "tutorial"];
+  notif: "mas", seguridad: "mas", dolar: "mas", copias: "mas", dispositivos: "mas", comentario: "mas", privacidad: "mas", instalar: "mas", yaInstalada: "mas", tutorial: "mas", importar: "inicio", grabar: "inicio", revisar: "inicio" };
+const SIN_BARRA = ["tutorial", "yaInstalada", "grabar", "revisar"];
+const RUEDITA = '<svg viewBox="0 0 24 24" aria-hidden="true" style="stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><circle cx="12" cy="12" r="3.2"/><circle cx="12" cy="12" r="6.8"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M18.5 5.5l-1.7 1.7M7.2 16.8l-1.7 1.7"/></svg>';
 const PLAN = ["presupuestos", "metas", "deudas", "fijos", "tarjetas", "compras"];
 const hoy = fechaLocal();
 const raiz = document.getElementById("app");
@@ -69,7 +73,12 @@ const st = {
   dolarError: "",
   dolarCargando: false,
   copiaFlujo: null,
-  primera: { nombre: "", monto: "", moneda: "ARS", error: "" },
+  guiaPaso: null, // la guía de la primera vez: 0 anotar, 1 lo que hizo, 2 lo demás
+  guiaBase: 0,
+  ayuda: "", // qué explicación del signo de pregunta está abierta
+  voz: null,
+  varios: null, // varios gastos para revisar antes de anotarlos
+  desdePrimera: false,
   tutorialPaso: 0,
   tutorialDesde: "", // a dónde se va al terminar el tutorial
   imp: { movs: [], elegidos: new Set(), soloGastos: true, sinTransf: false, medio: "mp", error: "", leyendo: false },
@@ -115,6 +124,7 @@ let apagarCamara = null, videoCamara = null;
 let timerAviso = 0;
 const VA = crearVistasAjustes(st, hoy, V);
 const VI = crearVistasPrimera(st, V);
+const VV = crearVistasVoz(st, V);
 const importarVista = crearVistaImportar(st, V);
 const tuMesVista = crearVistaTuMes(st, V);
 // Lo que se guarda (cifrado, si hay PIN) y lo que va en una copia.
@@ -352,7 +362,7 @@ async function avisarPresupuesto() {
   const ahora = new Date().toTimeString().slice(0, 5);
   if (!n.tipos.presupuesto || enNoMolestar(n.noMolestar, ahora) || globalThis.Notification?.permission !== "granted") return;
   const reg = await navigator.serviceWorker?.ready;
-  reg?.showNotification("MiGuita", { body: "Ya usaste el 90% del presupuesto de " + cats.map(V.nombreCat).join(" y ") + ".", tag: "presupuesto", silent: n.forma === "silencio" });
+  reg?.showNotification("MiGuita", { body: "Ya usaste el 90% del tope de " + cats.map(V.nombreCat).join(" y ") + ".", tag: "presupuesto", silent: n.forma === "silencio" });
 }
 
 function revisarFestejo(antes) {
@@ -373,7 +383,7 @@ function revisarSalvavidas() {
 }
 
 // Anota los gastos fijos que ya llegaron a su día.
-// El dólar guardado para una fecha (el tipo elegido en Más › Dólar), o null si todavía no hay.
+// El dólar guardado para una fecha (el tipo elegido en Ajustes › Dólar), o null si todavía no hay.
 function cotizar(fecha) {
   const d = st.cfg.dolar, c = valorPara(fecha, d.tipo, st.cotizaciones, d.manual);
   return c && { ...c, tipo: d.tipo };
@@ -420,7 +430,7 @@ function tarjetaElegida(id, nombreNuevo) {
   return st.tarjetas.some((t) => t.id === id) ? id : null;
 }
 
-/* ---------- formularios de Plan ---------- */
+/* ---------- formularios de Mis cuentas ---------- */
 const LISTA_DE = { presupuesto: "presupuestos", meta: "metas", deuda: "deudas", fijo: "fijos", ahorro: "metas", pago: "deudas", compra: "compras", tarjeta: "tarjetas" };
 const FORM_DE_TAB = { presupuesto: "presupuesto", metas: "meta", deudas: "deuda", fijos: "fijo", cuotas: "compra" };
 
@@ -458,7 +468,7 @@ function guardarForm() {
       const antes = st.presupuestos.find((p) => p.id === id);
       const p = { id: id || nuevoId(), categoria: v.categoria, tope: monto("tope", "el tope") };
       ponerItem("presupuestos", p);
-      mostrarAviso("Presupuesto de " + V.nombreCat(p.categoria) + ": " + V.plata(p.tope), deshacerItem("presupuestos", antes, p));
+      mostrarAviso("Tope de " + V.nombreCat(p.categoria) + ": " + V.plata(p.tope), deshacerItem("presupuestos", antes, p));
     } else if (tipo === "meta") {
       if (!v.nombre.trim()) throw "Poné para qué ahorrás.";
       const antes = st.metas.find((x) => x.id === id);
@@ -522,7 +532,7 @@ function guardarForm() {
       const $ = (n) => V.plata(n, { moneda: antes.moneda === "USD" ? "US$ " : "$" });
       if (c > restante(antes)) throw "Es más de lo que falta (" + $(restante(antes)) + ").";
       const cot = antes.moneda === "USD" && v.anotar ? cotizar(hoy) : null;
-      if (antes.moneda === "USD" && v.anotar && !cot) throw "Para anotarlo en pesos falta el valor del dólar. Cargalo en Más › Dólar o apagá «Anotarlo también».";
+      if (antes.moneda === "USD" && v.anotar && !cot) throw "Para anotarlo en pesos falta el valor del dólar. Cargalo en Ajustes › Dólar o apagá «Anotarlo también».";
       const d = { ...antes, pagado: antes.pagado + c };
       ponerItem("deudas", d);
       const me = d.tipo === "meDeben";
@@ -1015,7 +1025,8 @@ function cerrarHoja() {
   else { st.hoja = null; dibujar(); }
 }
 addEventListener("popstate", (e) => {
-  if (st.hoja) st.hoja = null;
+  if (st.ayuda) st.ayuda = "";
+  else if (st.hoja) st.hoja = null;
   else if (st.festejo) st.festejo = null;
   else st.pantalla = e.state?.p || "inicio";
   st.confirmar = "";
@@ -1054,13 +1065,16 @@ function dibujar() {
     dispositivos: VA.dispositivos,
     comentario: VA.comentario,
     privacidad: VA.privacidad,
-    bienvenida: VI.bienvenida,
-    primerIngreso: VI.primerIngreso,
     instalar: VI.instalar,
+    yaInstalada: VI.yaInstalada,
+    grabar: VV.grabar,
+    revisar: VV.revisar,
     tutorial: VI.tutorial,
     importar: importarVista,
   };
   if (st.pantalla !== "compartir" && apagarCamara) cerrarCamara();
+  if (st.pantalla !== "grabar" && grabacion) cortarGrabacion();
+  avanzarGuia();
   vigilar();
   const tab = TAB_DE[st.pantalla] || st.pantalla;
   const foco = document.activeElement?.dataset?.act;
@@ -1068,13 +1082,16 @@ function dibujar() {
   raiz.innerHTML = `<main class="scr" id="pantalla">` +
     (st.versionNueva ? `<div class="snack pp nueva" role="status"><span>Hay una versión nueva de MiGuita</span><button class="btnmini" data-act="actualizarApp">Actualizar</button></div>` : "") +
     `${P[st.pantalla]()}</main>` +
-    (SIN_BARRA.includes(st.pantalla) ? "" : `<nav class="nav" aria-label="Secciones">` + PESTANAS.map(([k, t]) =>
-      `<button data-act="ir" data-v="${k}"${k === tab ? ' aria-current="page"' : ""}>${Art.navIcon(k)}${t}</button>`).join("") + "</nav>") +
+    (SIN_BARRA.includes(st.pantalla) || (st.pantalla === "instalar" && st.desdePrimera) ? "" : `<nav class="nav" aria-label="Secciones">` + PESTANAS.map(([k, t]) =>
+      `<button data-act="ir" data-v="${k}"${k === tab ? ' aria-current="page"' : ""}>${k === "mas" ? RUEDITA : Art.navIcon(k)}${t}</button>`).join("") + "</nav>") +
     (st.hoja ? V.hoja() : "") +
+    (st.ayuda === "noEncuentro" ? V.ayudaHoja(VI.noEncuentro()) : st.ayuda ? V.ayuda(st.ayuda) : "") +
+    (guiaVisible() ? V.guia() : "") +
     (st.festejo ? V.festejo(st.festejo) : "") +
     (st.metaOk ? VP.metaLograda(st.metaOk) : "") +
-    (st.aviso && !st.hoja ? `<div class="snack pp" role="status"><span>${esc(st.aviso.texto)}</span>${st.aviso.deshacer ? `<button class="btnmini" data-act="deshacer">Deshacer</button>` : ""}</div>` : "");
+    (st.aviso && !st.hoja && !st.ayuda && !SIN_BARRA.includes(st.pantalla) ? `<div class="snack pp" role="status"><span>${esc(st.aviso.texto)}</span>${st.aviso.deshacer ? `<button class="btnmini" data-act="deshacer">Deshacer</button>` : ""}</div>` : "");
   raiz.querySelectorAll(".pp").forEach((e) => e.style.setProperty("--dl", (-Math.random() * 2.5).toFixed(2) + "s"));
+  ponerGuia();
   // La cámara sigue andando aunque se redibuje la pantalla.
   if (videoCamara) raiz.querySelector("video.cam")?.replaceWith(videoCamara);
   if (enCampo) {
@@ -1113,6 +1130,8 @@ raiz.addEventListener("submit", async (e) => {
   if (!txt) return abrirHoja();
   const aprendidas = st.cfg.aprendidas || {}, p = leerTexto(txt, st.cfg.categorias, aprendidas);
   st.error = ""; st.dudaMonto = null; st.dudaCat = null;
+  const varios = leerVarios(txt, st.cfg.categorias, aprendidas);
+  if (varios.length > 1) { st.varios = { items: varios, texto: txt, voz: false, editando: null, error: "" }; abrir("revisar"); return dibujar(); }
   // Sin monto: se abre la hoja con lo que escribió, para que solo ponga cuánto fue.
   if (!p) return abrirHoja(leerSinMonto(txt, st.cfg.categorias, aprendidas));
   if (p.opciones) { st.dudaMonto = { p, texto: txt }; return dibujar(); }
@@ -1120,12 +1139,105 @@ raiz.addEventListener("submit", async (e) => {
   dibujar();
 });
 
+/* ---------- la guía de la primera vez ---------- */
+const guiaVisible = () => st.guiaPaso !== null && st.pantalla === "inicio" && !st.hoja && !st.dudaMonto && !st.dudaCat && !st.ayuda;
+function terminarGuia() { st.guiaPaso = null; ponerConfig("guiaHecha", true); }
+// El paso 1 arranca solo cuando quedó anotado el primer gasto, de la forma que sea.
+function avanzarGuia() { if (st.guiaPaso === 0 && st.pantalla === "inicio" && !st.hoja && st.movs.length > st.guiaBase) st.guiaPaso = 1; }
+// Ilumina lo que se está explicando y pone el globo donde no lo tape. Con el teclado abierto, el globo sube.
+function ponerGuia() {
+  if (!guiaVisible()) return;
+  const objetivo = st.guiaPaso === 0 ? raiz.querySelector("[data-form=rapido]") : st.guiaPaso === 1 ? raiz.querySelector("[data-guia=mov]")?.closest(".card") : raiz.querySelector(".nav");
+  const globo = raiz.querySelector(".guia-globo");
+  if (!objetivo || !globo) return;
+  objetivo.classList.add("luz");
+  const acomodar = () => {
+    const r = objetivo.getBoundingClientRect(), alto = globo.offsetHeight, visible = visualViewport?.height || innerHeight;
+    const conTeclado = st.guiaPaso === 0 && document.activeElement?.id === "rapido";
+    globo.classList.toggle("sin-dibujo", conTeclado);
+    const debajo = r.bottom + 16, arriba = r.top - globo.offsetHeight - 16;
+    globo.style.top = Math.max(8, st.guiaPaso === 2 || conTeclado || debajo + alto > visible ? arriba : debajo) + "px";
+  };
+  acomodar();
+  raiz.querySelector("#rapido")?.addEventListener("focus", () => setTimeout(acomodar, 250));
+  raiz.querySelector("#rapido")?.addEventListener("blur", () => setTimeout(acomodar, 100));
+  visualViewport?.addEventListener("resize", acomodar, { once: true });
+}
+
+/* ---------- hablar en vez de escribir ---------- */
+let grabacion = null;
+function cortarGrabacion() { grabacion?.cortar(); grabacion = null; }
+async function grabarVoz() {
+  cortarGrabacion();
+  st.voz = { paso: "pidiendo" };
+  if (st.pantalla === "grabar") dibujar(); else { abrir("grabar"); dibujar(); }
+  let flujo;
+  try { flujo = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+  catch (e) {
+    if (st.pantalla !== "grabar") return;
+    st.voz = { paso: "error", error: e?.name === "NotAllowedError" ? "Necesito permiso para usar el micrófono. Podés darlo en los ajustes del navegador." : "No encontré el micrófono de este celu." };
+    return dibujar();
+  }
+  if (st.pantalla !== "grabar") { flujo.getTracks().forEach((t) => t.stop()); return; }
+  const mimeType = formatoDeAudio((f) => MediaRecorder.isTypeSupported(f));
+  let rec;
+  try { rec = new MediaRecorder(flujo, { ...(mimeType ? { mimeType } : {}), audioBitsPerSecond: 32000 }); }
+  catch { flujo.getTracks().forEach((t) => t.stop()); st.voz = { paso: "error", error: "Este navegador no deja grabar audio. Probá escribirlo." }; return dibujar(); }
+  const partes = [];
+  let cortado = false;
+  const reloj = setTimeout(() => rec.state === "recording" && rec.stop(), MAX_SEGUNDOS * 1000);
+  const apagar = () => { clearTimeout(reloj); flujo.getTracks().forEach((t) => t.stop()); };
+  grabacion = {
+    parar: () => { if (rec.state === "recording") rec.stop(); },
+    cortar: () => { cortado = true; apagar(); if (rec.state === "recording") rec.stop(); },
+  };
+  rec.ondataavailable = (e) => { if (e.data.size) partes.push(e.data); };
+  rec.onstop = async () => {
+    apagar();
+    grabacion = null;
+    if (cortado) return;
+    st.voz = { paso: "enviando" }; dibujar();
+    try {
+      const texto = await pasarATexto(new Blob(partes, { type: rec.mimeType || mimeType }));
+      if (st.pantalla !== "grabar") return;
+      const items = leerVarios(texto, st.cfg.categorias, st.cfg.aprendidas || {});
+      if (!items.length) { st.voz = { paso: "nada", texto }; return dibujar(); }
+      st.voz = null;
+      st.varios = { items, texto, voz: true, editando: null, error: "" };
+      history.replaceState({ p: "revisar" }, ""); st.pantalla = "revisar"; scrollTo(0, 0);
+    } catch (e) { st.voz = { paso: "error", error: e.message }; }
+    dibujar();
+  };
+  rec.start();
+  st.voz = { paso: "grabando" };
+  dibujar();
+}
+// Anota todo lo de la lista junto, con un solo deshacer.
+function anotarVarios() {
+  const r = st.varios, dolar = cotizar(hoy);
+  if (r.editando) { r.error = "Tocá «Listo» en el que estás cambiando."; return false; }
+  if (r.items.some((x) => x.moneda === "USD") && !dolar) { r.error = "Falta el valor del dólar. Cargalo en Ajustes › Dólar."; return false; }
+  const antes = infoRacha(st.movs, st.dias, hoy), ahora = Date.now();
+  const movs = r.items.map(({ moneda, revisar, ...p }, i) => {
+    const mov = { id: nuevoId(), ...p, medio: "", fecha: hoy, ts: ahora + i, mod: ahora };
+    if (moneda === "USD") { mov.usd = { monto: p.monto, valor: dolar.valor, fecha: dolar.fecha, tipo: dolar.tipo, fuente: dolar.fuente, estimado: dolar.estimado }; mov.monto = aPesos(p.monto, dolar.valor); }
+    return mov;
+  });
+  movs.forEach(guardarMov);
+  st.mes = hoy.slice(0, 7);
+  st.varios = null;
+  mostrarAviso(movs.length === 1 ? "Anotado" : "Anoté " + movs.length + " gastos", () => movs.forEach((m) => quitarMov(m.id)));
+  revisarFestejo(antes);
+  avisarPresupuesto();
+  return true;
+}
+
 // Guarda lo escrito en Inicio. Si no se supo la categoría, pregunta y la próxima vez ya la sabe.
 function anotarRapido({ opciones, moneda, ...p }) {
   const mov = { id: nuevoId(), ...p, medio: "", fecha: hoy, ts: Date.now(), mod: Date.now() };
   if (moneda === "USD") {
     const c = cotizar(hoy);
-    if (!c) return abrirHoja({ ...p, expr: String(p.monto / 100), moneda: "USD", error: "Falta el valor del dólar. Cargalo en Más › Dólar." });
+    if (!c) return abrirHoja({ ...p, expr: String(p.monto / 100), moneda: "USD", error: "Falta el valor del dólar. Cargalo en Ajustes › Dólar." });
     mov.usd = { monto: p.monto, valor: c.valor, fecha: c.fecha, tipo: c.tipo, fuente: c.fuente, estimado: c.estimado };
     mov.monto = aPesos(p.monto, c.valor);
   }
@@ -1460,42 +1572,51 @@ raiz.addEventListener("click", (e) => {
     /* primera vez */
     case "yaUsoMiguita":
       // Dispositivo nuevo de alguien que ya usa la app: directo a poner el código.
-      ponerConfig("primeraVez", hoy); ponerConfig("tutorialVisto", true);
+      ponerConfig("primeraVez", hoy); terminarGuia();
       irA("inicio"); st.vinc = { pegado: st.vinc?.pegado || "", error: "", trabajando: false, verCodigo: false }; abrir("dispositivos"); break;
-    case "empezar": irA("primerIngreso"); break;
     case "tutorialPaso": st.tutorialPaso = +v; break;
     case "saltarTutorial":
       ponerConfig("tutorialVisto", true);
       if (st.tutorialDesde) { irA(st.tutorialDesde); st.tutorialDesde = ""; break; }
       return volver();
-    case "conEjemplo": ponerConfig("primeraVez", hoy); cargarEjemplo(); irA("inicio"); break;
-    case "primeraMoneda": st.primera.moneda = v; break;
-    case "primeraSaltar": case "primeraSeguir": {
-      const pr = st.primera;
-      if (act === "primeraSeguir" && pr.monto.trim()) {
-        const c = leerMonto(pr.monto);
-        if (!c) { pr.error = "Escribilo con números, por ejemplo 620.000."; break; }
-        const mov = { id: nuevoId(), tipo: "ingreso", monto: c, detalle: "Ingreso del mes", categoria: "sueldo", medio: "", fecha: hoy, ts: Date.now(), mod: Date.now() };
-        if (pr.moneda === "USD") {
-          const d = st.cfg.dolar, cot = valorPara(hoy, d.tipo, st.cotizaciones, d.manual);
-          if (!cot) { pr.error = "Todavía no tengo el valor del dólar. Cargalo en pesos o probá en un rato."; break; }
-          mov.monto = aPesos(c, cot.valor);
-          mov.usd = { monto: c, valor: cot.valor, fecha: cot.fecha, tipo: d.tipo, fuente: cot.fuente, estimado: cot.estimado };
-        }
-        guardarMov(mov);
-      }
-      if (pr.nombre.trim()) ponerConfig("nombre", pr.nombre.trim().slice(0, 30));
-      ponerConfig("primeraVez", hoy);
-      irA("inicio");
-      break;
-    }
     case "actualizarApp": base.terminar().then(() => st.versionNueva.postMessage({ tipo: "actualizar" })); return;
     case "instalarYa":
       if (!pedidoInstalar) break;
       pedidoInstalar.prompt();
-      pedidoInstalar.userChoice.then((r) => { if (r.outcome === "accepted") { pedidoInstalar = null; st.puedeInstalar = false; } dibujar(); });
+      pedidoInstalar.userChoice.then((r) => { if (r.outcome === "accepted") { pedidoInstalar = null; st.puedeInstalar = false; irA("yaInstalada"); } dibujar(); });
       return;
-    case "listoInstalar": if (st.desdePrimera) { st.desdePrimera = false; irA("inicio"); break; } return volver();
+    case "seguirSinInstalar":
+      st.ayuda = "";
+      if (st.desdePrimera || st.pantalla === "yaInstalada") { st.desdePrimera = false; ponerConfig("primeraVez", hoy); irA("inicio"); break; }
+      return volver();
+    case "noEncuentro": history.pushState({ p: st.pantalla, hoja: 1 }, ""); st.ayuda = "noEncuentro"; break;
+    case "reinstalar": st.ayuda = ""; st.desdePrimera = true; irA("instalar"); break;
+    case "copiarDireccion": copiar("https://" + DIRECCION).then(() => mostrarAviso("Link copiado. Pegalo en Safari.")); break;
+    /* la guía */
+    case "guiaSig": st.guiaPaso++; if (st.guiaPaso > 2) terminarGuia(); scrollTo(0, 0); break;
+    case "guiaFin": terminarGuia(); break;
+    case "repetirGuia": st.guiaPaso = 0; st.guiaBase = st.movs.length; ponerConfig("guiaHecha", false); irA("inicio"); break;
+    /* el signo de pregunta */
+    case "ayuda": history.pushState({ p: st.pantalla, hoja: 1 }, ""); st.ayuda = v; break;
+    case "cerrarAyuda": st.ayuda = ""; if (history.state?.hoja) { history.back(); return; } break;
+    case "nada": return;
+    /* hablar */
+    case "hablar": if (!st.cfg.vozAviso) { st.voz = { paso: "aviso" }; abrir("grabar"); break; } grabarVoz(); return;
+    case "vozDale": ponerConfig("vozAviso", true); grabarVoz(); return;
+    case "vozListo": grabacion?.parar(); return;
+    case "vozCancelar": cortarGrabacion(); st.voz = null; return volver();
+    /* revisar varios gastos */
+    case "varioEditar": { const x = st.varios.items[+v]; st.varios.editando = { i: +v, detalle: x.detalle, monto: formatear(x.monto, { moneda: "" }), categoria: x.categoria, error: "" }; break; }
+    case "varioListo": {
+      const e = st.varios.editando, c = leerMonto(e.monto), x = st.varios.items[e.i];
+      if (!c) { e.error = "Revisá el monto: escribilo con números, por ejemplo 15.000."; break; }
+      if (e.categoria !== x.categoria && e.detalle.trim()) aprender(e.detalle, e.categoria);
+      st.varios.items[e.i] = { ...x, detalle: e.detalle.trim(), monto: c, categoria: e.categoria, revisar: false };
+      st.varios.editando = null; break;
+    }
+    case "varioQuitar": st.varios.items.splice(+v, 1); st.varios.editando = null; if (!st.varios.items.length) { st.varios = null; return volver(); } break;
+    case "variosAnotar": if (anotarVarios()) return volver(); break;
+    case "variosCancelar": { const voz = st.varios?.voz; st.varios = null; if (voz) { grabarVoz(); return; } return volver(); }
     case "verGrupo": st.grupoTab = "gastos"; irA("grupo"); break;
     case "elegirYo":
       st.yoElegido = v; st.errorQuien = "";
@@ -1546,9 +1667,8 @@ raiz.addEventListener("click", (e) => {
     }
     case "cargarIngreso": return abrirHoja({ tipo: "ingreso", categoria: "sueldo", medio: "transferencia", detalle: "" });
     case "cerrarCartel": ponerConfig(v, true); break;
-    case "verTutorial": ponerConfig("tutorialVisto", true); st.tutorialPaso = 0; st.tutorialDesde = ""; abrir("tutorial"); break;
     case "tengoCopia":
-      ponerConfig("primeraVez", hoy); ponerConfig("tutorialVisto", true);
+      ponerConfig("primeraVez", hoy); terminarGuia();
       irA("inicio"); st.copiaFlujo = { paso: "restaurar", c1: "", texto: "", error: "" }; abrir("copias"); break;
     case "comTipo": st.com.tipo = v; break;
     case "abrirComentario": st.com = { tipo: "idea", texto: "", nombre: st.cfg.nombre || "", error: "", enviando: false, listo: false }; abrir("comentario"); break;
@@ -1588,7 +1708,7 @@ raiz.addEventListener("click", (e) => {
       if (!f) break;
       if (act === "confirmarFijo") {
         const mov = movimientoDeFijo(f, mes, cotizar);
-        if (!mov) { mostrarAviso("Falta el valor del dólar para anotarlo. Cargalo en Más › Dólar."); break; }
+        if (!mov) { mostrarAviso("Falta el valor del dólar para anotarlo. Cargalo en Ajustes › Dólar."); break; }
         if (!st.movs.some((x) => x.id === mov.id)) guardarMov(mov);
         mostrarAviso((f.tipo === "ingreso" ? "Anotado: cobraste " : "Anotado: pagaste ") + f.nombre + " " + V.plata(mov.monto), () => { quitarMov(mov.id); ponerItem("fijos", f); });
       } else mostrarAviso("Listo, este mes no se anota " + f.nombre + ".", () => ponerItem("fijos", f));
@@ -1658,7 +1778,7 @@ raiz.addEventListener("click", (e) => {
       if (s.enCuotas && s.tipo === "gasto" && s.modo !== "editar") {
         if (!s.nCuotas) { s.error = "Elegí en cuántas cuotas."; break; }
         if (total < s.nCuotas) { s.error = "El monto es muy chico para tantas cuotas."; break; }
-        if (s.moneda === "USD" && !cotizar(hoy)) { s.error = "Falta el valor del dólar. Cargalo en Más › Dólar."; break; }
+        if (s.moneda === "USD" && !cotizar(hoy)) { s.error = "Falta el valor del dólar. Cargalo en Ajustes › Dólar."; break; }
         const tarjeta = tarjetaElegida(s.tarjeta, s.tarjetaNueva);
         if (!tarjeta) { s.error = "Elegí la tarjeta o escribí una nueva."; break; }
         const mesCompra = s.fecha.slice(0, 7), segun = primeraCuota(s.fecha, st.tarjetas.find((t) => t.id === tarjeta));
@@ -1679,7 +1799,7 @@ raiz.addEventListener("click", (e) => {
       if (s.moneda === "USD") {
         // Se guarda el monto en dólares, la cotización usada (fecha y fuente) y el monto en pesos.
         const d = st.cfg.dolar, c = valorPara(d.conversion === "hoy" ? hoy : s.fecha, d.tipo, st.cotizaciones, d.manual);
-        if (!c) { s.error = "Falta el valor del dólar. Cargalo en Más › Dólar."; break; }
+        if (!c) { s.error = "Falta el valor del dólar. Cargalo en Ajustes › Dólar."; break; }
         mov.monto = aPesos(total, c.valor);
         mov.usd = { monto: total, valor: c.valor, fecha: c.fecha, tipo: d.tipo, fuente: c.fuente, estimado: c.estimado };
       }
@@ -1712,6 +1832,7 @@ raiz.addEventListener("input", (e) => {
   if (act === "detalle") st.hoja.detalle = val;
   else if (act === "buscar") { st.filtro.texto = val; dibujar(); }
   else if (act === "nombre") st.cfg.nombre = val;
+  else if (act === "varioCampo") { st.varios.editando[e.target.dataset.k] = val; st.varios.editando.error = ""; }
   else if (act === "catNombre") itemCat().nombre = val;
   else if (act === "gcampo") { st.gform.vals[e.target.dataset.k] = val; st.gform.error = ""; dibujar(); }
   else if (act === "gPersona") st.gform.vals.miembros[+e.target.dataset.i][e.target.dataset.k] = val;
@@ -1725,8 +1846,6 @@ raiz.addEventListener("input", (e) => {
   else if (act === "nombreNuevo") st.nombreNuevo = val;
   else if (act === "aliasQuien") { st.aliasQuien = val; st.errorQuien = ""; }
   else if (act === "miAlias") { st.errorAlias = ""; }
-  else if (act === "primeraNombre") st.primera.nombre = val;
-  else if (act === "primeraMonto") { st.primera.monto = val; st.primera.error = ""; }
   else if (act === "copiaC1") st.copiaFlujo.c1 = val;
   else if (act === "copiaC2") st.copiaFlujo.c2 = val;
   else if (act === "campo") { st.form.vals[e.target.dataset.k] = val; st.form.error = ""; dibujar(); }
@@ -1738,6 +1857,7 @@ raiz.addEventListener("change", (e) => {
   else if (act === "filtroCat") { st.filtro.cat = e.target.value; dibujar(); }
   else if (act === "campoSel" || act === "campoFecha") { st.form.vals[e.target.dataset.k] = e.target.value; dibujar(); }
   else if (act === "nombre") ponerConfig("nombre", e.target.value.trim());
+  else if (act === "varioCat") st.varios.editando.categoria = e.target.value;
   else if (act === "notifHora" && e.target.value) { st.cfg.notif.horas[+e.target.dataset.i] = e.target.value; ponerConfig("notif", st.cfg.notif); programarAvisos(); }
   else if ((act === "notifDesde" || act === "notifHasta") && e.target.value) { st.cfg.notif.noMolestar[act === "notifDesde" ? "desde" : "hasta"] = e.target.value; ponerConfig("notif", st.cfg.notif); programarAvisos(); }
   else if (act === "dolarHora" && e.target.value) { st.cfg.dolar.hora = e.target.value; ponerConfig("dolar", st.cfg.dolar); }
@@ -1792,8 +1912,12 @@ function cargarEjemplo() {
   PLAN.forEach((l) => plan[l].forEach((x) => { if (!st[l].some((i) => i.id === x.id)) ponerItem(l, x); }));
   if (!st.grupos.some((g) => g.id === "ej_g1")) guardarGrupo(grupoDeEjemplo(hoy));
 }
-// La primera vez: bienvenida (con la opción de mirar la app con datos de ejemplo).
-if (!st.cfg.primeraVez) irA("bienvenida");
+// La primera vez: en un celu, primero qué es la app y cómo instalarla. Instalada o en una compu, directo a Inicio.
+if (!st.cfg.primeraVez) {
+  if (instalada() || navegadorActual().so === "compu") ponerConfig("primeraVez", hoy);
+  else { st.desdePrimera = true; irA("instalar"); }
+}
+if (!st.cfg.guiaHecha && !st.movs.length) { st.guiaPaso = 0; st.guiaBase = 0; }
 revisarFijos();
 revisarCuotas();
 revisarSalvavidas();
@@ -1811,11 +1935,12 @@ function abrirLink(redibujar = true) {
   history.replaceState({ p: st.pantalla }, "", location.pathname + location.search);
   if (h.startsWith("#v=")) {
     st.vinc = { pegado: codigo, error: "", trabajando: false, verCodigo: false };
-    if (!st.cfg.primeraVez) { ponerConfig("primeraVez", hoy); ponerConfig("tutorialVisto", true); irA("inicio"); }
+    if (!st.cfg.primeraVez || st.desdePrimera) { st.desdePrimera = false; ponerConfig("primeraVez", hoy); terminarGuia(); irA("inicio"); }
     abrir("dispositivos"); prepararVinculo();
   } else {
     st.compartir = { codigo: "", svg: "", pegado: codigo, error: "", escaneando: false };
     st.grupoId = null;
+    if (!st.cfg.primeraVez || st.desdePrimera) { st.desdePrimera = false; ponerConfig("primeraVez", hoy); irA("inicio"); }
     abrir("compartir");
     unirCodigo(codigo);
   }
@@ -1826,7 +1951,7 @@ addEventListener("hashchange", () => abrirLink());
 // Instalar con un toque: Chrome avisa que se puede instalar y la app guarda ese pedido para el botón.
 let pedidoInstalar = null;
 addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); pedidoInstalar = e; st.puedeInstalar = true; if (st.pantalla === "instalar") dibujar(); });
-addEventListener("appinstalled", () => { pedidoInstalar = null; st.puedeInstalar = false; mostrarAviso("¡Listo! MiGuita quedó instalada. Abrila desde el ícono."); dibujar(); });
+addEventListener("appinstalled", () => { pedidoInstalar = null; st.puedeInstalar = false; if (st.pantalla === "instalar") irA("yaInstalada"); dibujar(); });
 // Tocar el aviso abre la hoja de anotar.
 const anotarDesdeAviso = () => { if (location.hash === "#anotar") { history.replaceState({ p: "inicio" }, "", location.pathname + location.search); abrirHoja(); } };
 addEventListener("hashchange", anotarDesdeAviso);

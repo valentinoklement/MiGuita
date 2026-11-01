@@ -1,62 +1,58 @@
-// Primera vez: bienvenida, primer ingreso e instrucciones para instalar la app.
+// Primera vez: qué es la app y cómo instalarla, más el tutorial que queda en Ajustes.
 import { Art } from "../art/art.js";
-import { esc } from "./pantallas.js";
+import { queNavegador, linkAChrome } from "../logic/instalar.js";
 
 export const instalada = () => matchMedia?.("(display-mode: standalone)").matches || navigator.standalone === true;
+export const navegadorActual = () => queNavegador(navigator.userAgent, navigator.maxTouchPoints, !!navigator.brave);
 
 export function crearVistasPrimera(st, V) {
-  const { hdr, lbl, crd, chips } = V.ayudas;
+  const { hdr, lbl, crd } = V.ayudas;
   const icono = (p) => `<span class="ri">${Art.icono(p)}</span>`;
+  const grande = (act, t) => `<button class="btn pp w grande" data-act="${act}">${t}</button>`;
+  const chico = (act, t) => `<button class="link chico" data-act="${act}">${t}</button>`;
+  const paso = (n, t, p) => `<div class="srow paso-i${n === 1 ? " f" : ""}"><span class="stn">${n}</span><span class="rt">${t}</span>${p ? icono(p) : ""}</div>`;
+  const cabeza = (ancho) => `<div class="hero-b entrada">${Art.miguita("ok").replace("<svg", `<svg style="width:${ancho}px"`)}<b>MiGuita</b>` +
+    `<strong class="gancho">¿En qué se te va la plata?</strong><span>Anotá tus gastos en segundos y enterate.</span></div>`;
+  const COMPARTIR = '<path d="M12 15V4M8 8l4-4 4 4M5 12v8h14v-8"/>';
+  const SUMAR = '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M12 8v8M8 12h8"/>';
 
-  function bienvenida() {
-    return `<div class="hero-b inicio-b">${Art.miguita("ok")}<b>MiGuita</b><span>Anotá lo que gastás en 10 segundos.</span></div>` +
-      `<button class="btn pp w" data-act="empezar">Empezar</button>` +
-      `<button class="btn pp w alt" data-act="conEjemplo">Mirar con datos de ejemplo</button>` +
-      `<button class="link" data-act="yaUsoMiguita" style="display:block;margin:6px auto 0">¿Ya usás MiGuita en otro dispositivo? Conectalo</button>` +
-      `<button class="link" data-act="tengoCopia" style="display:block;margin:0 auto 10px">Tengo una copia de seguridad</button>` +
-      `<div class="sub" style="text-align:center">Tus datos se guardan solo en este celu. Sin cuentas ni publicidad.</div>`;
-  }
-
-  function primerIngreso() {
-    const p = st.primera;
-    return hdr("Para empezar", "¿Cuánto cobrás por mes?", "ok") +
-      lbl("¿Cómo te llamás? (opcional)") + `<div class="quick"><div class="pp"><input class="field" data-act="primeraNombre" value="${esc(p.nombre)}" placeholder="Para saludarte" aria-label="Tu nombre" maxlength="30" autocomplete="given-name"></div></div>` +
-      lbl("Lo que cobrás este mes") + `<div class="quick"><div class="pp"><input class="field" data-act="primeraMonto" value="${esc(p.monto)}" placeholder="por ejemplo 620.000" inputmode="decimal" aria-label="Ingreso del mes" maxlength="16"></div></div>` +
-      chips("primeraMoneda", [["ARS", "Pesos"], ["USD", "Dólares"]], p.moneda, "Moneda") +
-      (p.error ? `<div class="msg" role="alert">${esc(p.error)}</div>` : "") +
-      `<button class="btn pp w" data-act="primeraSeguir">Seguir</button><button class="btn pp w alt" data-act="primeraSaltar">Ahora no</button>` +
-      `<div class="sub">Lo podés cambiar cuando quieras. Se anota como ingreso de hoy.</div>`;
-  }
-
-  // Cada celu ve solo sus pasos. En Android (y en compus con Chrome) hay un botón que abre la instalación del navegador.
+  // Cada celu ve solo lo suyo. Si el navegador deja instalar con un toque, alcanza con un botón, sea cual sea el navegador.
   function instalar() {
-    const paso = (n, t, p) => `<div class="srow${n === 1 ? " f" : ""}"><span class="stn">${n}</span><span class="rt"><b>${t}</b></span>${p ? icono(p) : ""}</div>`;
-    const ua = navigator.userAgent;
-    const iphone = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
-    const android = /Android/.test(ua);
-    const pasosIphone = crd(lbl("En iPhone, con Safari") + paso(1, "Tocá Compartir, abajo en el medio de Safari", '<path d="M12 15V4M8 8l4-4 4 4M5 12v8h14v-8"/>') +
-      paso(2, "Elegí «Agregar a pantalla de inicio»", '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M12 8v8M8 12h8"/>') + paso(3, "Abrí MiGuita desde el ícono nuevo"));
-    const pasosAndroid = crd(lbl("En Android, con Chrome") +
-      paso(1, "Tocá los tres puntos ⋮ de Chrome, arriba a la derecha (no los de MiGuita, abajo)", '<circle cx="12" cy="5" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="12" cy="19" r="1.4"/>') +
-      paso(2, "Elegí «Instalar app» o «Agregar a la pantalla principal»", '<path d="M12 4v10m0 0l-4-4m4 4l4-4M5 19h14"/>') + paso(3, "Abrí MiGuita desde el ícono nuevo"));
-    let h = hdr("Para tenerla a mano", "Instalar MiGuita", "ok");
-    if (instalada()) return h + crd(`<div class="empty"><b>Ya la estás usando instalada</b><span>Abrila siempre desde el ícono.</span></div>`) + `<button class="btn pp w" data-act="listoInstalar">Listo</button>`;
-    if (st.puedeInstalar) h += crd(`<b style="font:800 17px 'Bricolage Grotesque',sans-serif">Un toque y listo</b><div class="sub">Se agrega el ícono de MiGuita a tu celu, como cualquier app.</div>`) +
-      `<button class="btn pp w" data-act="instalarYa">Instalar MiGuita</button>` + `<div class="hint">Si no aparece la ventana para instalar, seguí estos pasos:</div>`;
-    h += iphone ? pasosIphone : android ? pasosAndroid : pasosIphone + pasosAndroid;
-    if (iphone) h += `<div class="sub">Los avisos y el bloqueo funcionan mejor con la app agregada a la pantalla de inicio. Lo que anotes en Safari y en la app instalada se guarda por separado: usá siempre el ícono.</div>`;
-    if (android) h += `<div class="sub">Si en el menú de Chrome dice «Abrir app», MiGuita ya está instalada: buscá el ícono en tu celu.</div>`;
-    return h + `<button class="btn pp w${st.puedeInstalar ? " alt" : ""}" data-act="listoInstalar">${st.puedeInstalar ? "Ahora no" : "Listo"}</button>`;
+    const n = navegadorActual();
+    const salir = chico("seguirSinInstalar", st.desdePrimera ? "Seguir sin instalar" : "Volver");
+    if (instalada()) return hdr("Para tenerla a mano", "Instalar MiGuita", "ok") + crd(`<div class="empty"><b>Ya la estás usando instalada</b><span>Abrila siempre desde el ícono.</span></div>`) + salir;
+    if (st.puedeInstalar) return cabeza(170) + `<div class="relleno"></div>` + grande("instalarYa", "Instalar en mi celu") + `<div class="sub centro">Es gratis y no te pide cuenta.</div>` + salir;
+    if (n.so === "iphone") {
+      if (n.interno) return cabeza(110) + crd(lbl("Abrila en Safari para instalarla") + paso(1, "Tocá el menú de esta ventana, los <b>···</b>") + paso(2, "Elegí «Abrir en Safari»")) +
+        `<button class="btn pp w alt" data-act="copiarDireccion">Copiar el link</button>` + salir;
+      return cabeza(110) + crd(lbl("Instalala en 3 pasos") + paso(1, "Tocá <b>Compartir</b>. Si no lo ves, tocá primero los <b>···</b>", COMPARTIR) + paso(2, "Elegí «Agregar a inicio»", SUMAR) + paso(3, "Arriba, tocá «Agregar»")) +
+        salir + (n.safari ? `<div class="flecha" aria-hidden="true">↓</div>` : "");
+    }
+    const aChrome = n.so === "android" && !n.chrome;
+    return cabeza(110) + (aChrome ? `<a class="btn pp w grande" href="${linkAChrome()}">Instalar con Chrome</a>` : "") +
+      crd(lbl(aChrome ? "O desde este navegador:" : "Instalala en 3 pasos") + paso(1, "Tocá el menú, los <b>⋮</b> o las <b>≡</b>") + paso(2, "Buscá «Instalar» o «Agregar a pantalla de inicio»") + paso(3, "Confirmá")) + salir;
   }
 
-  // Tutorial: qué se puede hacer con la app. Se puede saltear; después queda en Más › Cómo usar MiGuita.
+  function yaInstalada() {
+    return `<div class="hero-b entrada">${Art.miguita("ok").replace("<svg", '<svg style="width:150px"')}<b>¡Ya la tenés!</b><span>Cerrá esta ventana y buscá este ícono en tu celu:</span></div>` +
+      `<div class="ic-final"><img src="icons/icono-192.png" alt=""><span>MiGuita</span></div><div class="sub centro">Desde ahora abrila siempre desde ahí.</div><div class="relleno"></div>` +
+      chico("noEncuentro", "No lo encuentro");
+  }
+
+  function noEncuentro() {
+    return `<b class="ayuda-t">¿No encontrás el ícono?</b><span class="ayuda-x">A veces queda entre todas tus apps y no en la pantalla principal.</span>` +
+      paso(1, "Deslizá hasta el final de tus pantallas") + paso(2, "O escribí «MiGuita» en el buscador del celu") +
+      `<button class="btn pp w" data-act="reinstalar">Instalar de nuevo</button>` + chico("seguirSinInstalar", "Seguir acá por ahora");
+  }
+
+  // Tutorial: qué se puede hacer con la app. Se puede saltear; queda en Ajustes › Cómo usar MiGuita.
   const PASOS = [
-    () => [Art.miguita("ok"), "Anotá en 10 segundos", "Escribí «café 3800» o «10 lucas nafta» y listo: la app pone la categoría sola. Así llevás la cuenta de todo lo que gastás, aunque no cargues tu sueldo."],
+    () => [Art.miguita("ok"), "Anotá en 10 segundos", "Escribí «15mil nafta» o «10 lucas birra» y listo: la app pone la categoría sola. También podés tocar el micrófono y decir varios gastos juntos."],
     () => [Art.pan(0.6), "Mirá cuánto te queda", "Si cargás lo que cobrás, ves cuánto te queda del mes y cuánto podés gastar por día. Si te pasás, Miguita se empieza a poner fea."],
-    () => [Art.masa(0.6), "Ahorrá para algo", "En Plan ponés metas (un viaje, un fondo de emergencia), topes por categoría, deudas, gastos fijos y compras en cuotas que se anotan solos."],
+    () => [Art.masa(0.6), "Ahorrá para algo", "En Mis cuentas ponés metas (un viaje, un fondo de emergencia), topes por categoría, deudas, gastos fijos y compras en cuotas que se anotan solos."],
     () => [`<div class="crew">${["fact", "canon", "bola"].map((k) => Art.factura(k)).join("")}</div>`, "Dividí con amigos", "Armá el grupo una vez e invitalos con un link. En cada juntada marcan quién entra en qué (la comida, el fernet, la birra) y la app dice quién le pasa a quién, con el alias a mano."],
     () => [Art.masa(0.35), "Sumá días de racha", "Cada día que anotás suma un ingrediente a la receta. ¿Qué sale del horno a los 7 días? ¿Y a los 100? Para saberlo, hay que llegar."],
-    () => [Art.miguita("ok"), "Tus datos son tuyos", "Todo queda solo en tu celu. Podés cerrarla con PIN y hacer copias de seguridad desde Más."],
+    () => [Art.miguita("ok"), "Tus datos son tuyos", "Tus gastos quedan en tu celu. Podés cerrarla con PIN y hacer copias de seguridad desde Ajustes."],
   ];
   function tutorial() {
     const n = st.tutorialPaso, [dibujo, titulo, texto] = PASOS[n](), ultimo = n === PASOS.length - 1;
@@ -67,5 +63,5 @@ export function crearVistasPrimera(st, V) {
       `<button class="btn pp" data-act="${ultimo ? "saltarTutorial" : "tutorialPaso"}" data-v="${n + 1}">${ultimo ? "¡Empezar!" : "Siguiente"}</button></div>`;
   }
 
-  return { bienvenida, primerIngreso, instalar, tutorial };
+  return { instalar, yaInstalada, noEncuentro, tutorial };
 }

@@ -5,6 +5,7 @@
 //   PUT  /g/<id>      ← { v, datos }  v = versión que tenía quien manda; si no coincide → 409 con lo actual
 //   GET  /g/<id>/ws   WebSocket: avisa { v } cada vez que alguien guarda (no manda datos)
 // Buzón de comentarios de la prueba: POST /buzon ← { tipo, texto, nombre, version, aparato } · GET /buzon con la clave del dueño.
+// Audio a texto: POST /voz ← el audio tal cual → { texto }. Se pasa a texto en el momento y no se guarda en ningún lado.
 // Y los avisos con la app cerrada (la clave privada es un secreto de Cloudflare, nunca está en el repositorio):
 //   PUT    /a/<id>         ← { sub, zona, plan, anoto, silencio }  activa o pone al día los avisos de un dispositivo (ver avisos.js)
 //   POST   /a/<id>/probar  manda un aviso de prueba
@@ -16,6 +17,15 @@ import { validar, proximoAviso, queAvisar, mandar, DESCANSO } from "./avisos.js"
 const ORIGENES = ["https://valentinoklement.github.io", "http://localhost:8123", "http://127.0.0.1:8123"];
 const MAX_DATOS = 1_500_000; // ~1,5 MB por grupo
 const VENCE = 400 * 864e5;   // un grupo sin uso por más de ~13 meses se borra solo
+const MAX_AUDIO = 3_000_000; // ~3 MB: sobra para el minuto y medio que deja grabar la app
+// Le da pistas de cómo hablamos, para que escriba "lucas" y no otra cosa. No se manda a la persona ni se guarda.
+const PISTA = "Gasté 15 mil de nafta, 10 lucas de birra, un palo de alquiler, 8 mil en el súper, 500 pesos en el kiosco y 20 dólares en Netflix.";
+
+function aBase64(bytes) {
+  let s = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(s);
+}
 
 const cors = (origen) => ({
   "Access-Control-Allow-Origin": ORIGENES.includes(origen) ? origen : ORIGENES[0],
@@ -61,6 +71,19 @@ export default {
       if (t.length < 3) return json({ error: "mal formado" }, 400, origen);
       const ok = await buzon.guardar({ tipo: ["idea", "error", "otro"].includes(c.tipo) ? c.tipo : "otro", texto: t.slice(0, 1500), nombre: String(c.nombre ?? "").trim().slice(0, 40), version: String(c.version ?? "").slice(0, 30), aparato: String(c.aparato ?? "").slice(0, 120) });
       return json(ok ? {} : { error: "lleno" }, ok ? 200 : 507, origen);
+    }
+    if (ruta === "/voz") {
+      if (pedido.method !== "POST") return json({ error: "método" }, 405, origen);
+      if (!ORIGENES.includes(origen)) return json({ error: "origen" }, 403, origen);
+      if (env.LIMITE_VOZ && !(await env.LIMITE_VOZ.limit({ key: ip })).success) return json({ error: "demasiados" }, 429, origen);
+      if (Number(pedido.headers.get("Content-Length") || 0) > MAX_AUDIO) return json({ error: "demasiado grande" }, 413, origen);
+      const bytes = new Uint8Array(await pedido.arrayBuffer());
+      if (bytes.length > MAX_AUDIO) return json({ error: "demasiado grande" }, 413, origen);
+      if (bytes.length < 200) return json({ error: "mal formado" }, 400, origen);
+      try {
+        const r = await env.AI.run("@cf/openai/whisper-large-v3-turbo", { audio: aBase64(bytes), language: "es", task: "transcribe", initial_prompt: PISTA });
+        return json({ texto: String(r?.text ?? "").trim().slice(0, 2000) }, 200, origen);
+      } catch { return json({ error: "no se pudo" }, 503, origen); }
     }
     const a = /^\/a\/([0-9a-f]{32})(\/probar)?$/.exec(ruta);
     if (a) {

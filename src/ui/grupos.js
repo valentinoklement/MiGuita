@@ -38,13 +38,13 @@ export function crearVistasGrupos(st, hoy, V) {
   function encabezado(g, titulo) {
     const otros = vivos(g).filter((m) => m.id !== g.yo).slice(0, 4).map((m) => dibujo(g, m.id));
     const mitad = Math.floor(otros.length / 2);
-    return `<div class="top"><div><small>${vivos(g).length} integrantes</small><h1>${esc(titulo)}</h1></div></div>` +
+    return `<div class="top"><div><small>${vivos(g).length} integrantes</small><h1>${esc(titulo)}${V.ayudas.preg("grupo")}</h1></div></div>` +
       `<div class="crew" aria-hidden="true">${otros.slice(0, mitad).join("")}${g.yo ? Art.miguita("ok") : ""}${otros.slice(mitad).join("")}</div>`;
   }
 
   /* ---------- lista ---------- */
   function lista() {
-    let h = `<div class="top"><div><small>${st.grupos.length ? st.grupos.length + (st.grupos.length === 1 ? " grupo" : " grupos") : "Dividí gastos"}</small><h1>Grupos</h1></div></div>` +
+    let h = `<div class="top"><div><small>${st.grupos.length ? st.grupos.length + (st.grupos.length === 1 ? " grupo" : " grupos") : "Dividí gastos"}</small><h1>Grupos${V.ayudas.preg("grupos")}</h1></div></div>` +
       `<div class="crew" aria-hidden="true">${["luna", "fact", "canon", "bola"].map((k) => Art.factura(k)).join("")}</div>`;
     if (!st.grupos.length) h += comoFunciona();
     h += [...st.grupos].sort((a, b) => b.ts - a.ts).map((g) => {
@@ -52,18 +52,13 @@ export function crearVistasGrupos(st, hoy, V) {
       return `<button class="card pp gc" data-act="abrirGrupo" data-v="${esc(g.id)}"><span><b>${esc(g.nombre)}</b><small>${vivos(g).length} integrantes</small></span>` +
         `<span class="v ${s > 0 ? "pos" : s < 0 ? "neg" : ""}">${s ? plataG(g, s, { signo: true }) : "Saldado"}<small>${s > 0 ? "Te deben" : s < 0 ? "Debés" : "Todo al día"}</small></span></button>`;
     }).join("");
-    return h + btn("nuevoGrupo", "Nuevo grupo") + btn("unirme", "Unirme con un código", { alt: true });
+    return h + btn("nuevoGrupo", st.grupos.length ? "Nuevo grupo" : "+ Armar un grupo") + btn("unirme", "Unirme con un código", { alt: true });
   }
 
   /* ---------- un grupo ---------- */
-  // Explicación corta, para cuando todavía no hay nada.
+  // Para cuando todavía no hay nada. Los pasos están en el signo de pregunta.
   function comoFunciona() {
-    const paso = (n, t, s) => `<div class="paso"><span class="num">${n}</span><span><b>${t}</b><small>${s}</small></span></div>`;
-    return crd(lbl("Cómo funciona") +
-      paso(1, "Armá el grupo una vez", "Con tus amigos, tu pareja o los del depto.") +
-      paso(2, "Invitalos con el link", "Cada uno ve todo al instante y anota desde su celu.") +
-      paso(3, "Cada salida es una juntada", "Cargás qué se compró, quién lo pagó y quién entra en qué.") +
-      paso(4, "La app dice quién le pasa a quién", "Con el alias a mano y la menor cantidad de transferencias."));
+    return crd(`<div class="empty vacio-m"><b>Salen, pagan distinto y después ¿quién le debe a quién?</b><span>Anotá lo que pagó cada uno y MiGuita te dice quién le pasa a quién.</span></div>`);
   }
   const estadoSync = (g) => {
     const s = g.sync;
@@ -120,7 +115,7 @@ export function crearVistasGrupos(st, hoy, V) {
     const total = compras.reduce((a, x) => a + centavos(x.m), 0), ts = cuentas(g, jid), visto = st.vistoAntes || 0;
     const alias = (id) => g.miembros.find((m) => m.id === id)?.alias || "";
     let h = `<div class="secrow">${back(g.nombre)}${ju ? `<button class="link" data-act="editarJuntada">Editar</button>` : ""}</div>` +
-      `<div class="top"><div><small>${[ju && fecha(ju.f), gente.length + " personas", compras.length ? plataG(g, total) : ""].filter(Boolean).join(" · ")}</small><h1>${esc(ju ? ju.nombre : "Gastos sueltos")}</h1></div></div>`;
+      `<div class="top"><div><small>${[ju && fecha(ju.f), gente.length + " personas", compras.length ? plataG(g, total) : ""].filter(Boolean).join(" · ")}</small><h1>${esc(ju ? ju.nombre : "Gastos sueltos")}${V.ayudas.preg("juntada")}</h1></div></div>`;
 
     // Lo mío: a quién le paso, quién me pasa, y por qué.
     if (g.yo && gente.includes(g.yo) && compras.length) {

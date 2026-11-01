@@ -30,7 +30,7 @@ const SOLO_CON_NUMERO = new Set(["k", "palo", "palos", "palito", "palitos", "mil
 const PESOS = new Set(["peso", "pesos", "pe", "mango", "mangos", "mangazos", "morlaco", "morlacos", "pesitos", "ars"]);
 const DOLARES = new Set(["usd", "u$s", "us$", "dolar", "dolares", "verde", "verdes", "verdolagas", "dolarcitos"]);
 const CANTIDADES = new Set("kg kilo kilos g gr grs gramos l lt lts litro litros ml cc cm mts metro metros m2 unidad unidades u hs hora horas dia dias semana semanas mes meses año años cuota cuotas persona personas porcion porciones noches noche latas lata botellas botella packs pack docena docenas".split(" "));
-const FILLER = /^(gast[eé]|pagu[eé]|compr[eé]|me sali[oó]|sali[oó]|fueron|puse)\s+(en\s+|de\s+|por\s+)?/i;
+const FILLER = /^(me gast[eé]|gast[eé]|pagu[eé]|compr[eé]|me sali[oó]|sali[oó]|fueron|puse)\s+(en\s+|de\s+|por\s+)?((el|la|los|las)\s+)?/i;
 
 function numero(t, conMultiplicador) {
   const s = t.replace(/[.,]+$/, "");
@@ -145,13 +145,60 @@ export function leerTexto(texto, cats = POR_DEFECTO, aprendidas = {}) {
   if (!e) return null;
   let sin = s;
   for (const c of [...e.quitar].sort((a, b) => b.desde - a.desde)) sin = sin.slice(0, c.desde) + " " + sin.slice(c.hasta);
-  const resto = sin.replace(/\s+/g, " ").trim().replace(FILLER, "").replace(/^(en|de|por)\s+/i, "").replace(/\s+[-–−]$/, "").trim();
+  const resto = sin.replace(/\s+/g, " ").trim().replace(FILLER, "").replace(/^(en|de|por|del)\s+((el|la|los|las)\s+)?/i, "").replace(/\s+[-–−]$/, "").replace(/\s*[.,;:]+$/, "").trim();
   const norm = quitarAcentos(resto);
   const tipo = ES_INGRESO.test(norm) ? "ingreso" : "gasto";
   const r = { tipo, monto: Math.round(e.c.valor * 100), detalle: resto ? resto[0].toUpperCase() + resto.slice(1) : "", categoria: categoriaDe(resto, cats, tipo, aprendidas) };
   if (e.c.usd) r.moneda = "USD";
   if (e.opciones) r.opciones = e.opciones.map((v) => Math.round(v * 100));
   return r;
+}
+
+// Varios gastos dichos o escritos de corrido: "15 mil de nafta, 10 lucas de birra y 8 mil en el súper".
+// Primero corta por comas y palabras como "y" o "después"; si en un pedazo quedan varios montos, corta por los montos.
+const SEPARA = /[;\n]|[,.](?=\s|$)|\s+(?:y\s+)?(?:despues|tambien|ademas|luego|aparte|mas)\s+|\s+[ye]\s+/g;
+const COLA = /^[\s,.;:]+|[\s,.;:]+$/g;
+const ARRANQUE = /^(?:(?:y|e|despu[eé]s|tambi[eé]n|adem[aá]s|luego|aparte|m[aá]s|bueno|este|eh|che|hoy|ayer)[\s,]+)+/i;
+const esReal = (c) => c.fuerte || c.valor >= 100;
+
+export function leerVarios(texto, cats = POR_DEFECTO, aprendidas = {}) {
+  const s = String(texto).replace(/\s+/g, " ").trim(), plano = quitarAcentos(s);
+  const montos = buscarMontos(s).filter(esReal);
+  if (!montos.length) return [];
+  const dentro = (i) => montos.some((c) => i >= c.desde && i < c.hasta);
+  // Los cortes, como posiciones donde empieza cada pedazo.
+  const cortes = new Set([0]);
+  for (const m of plano.matchAll(SEPARA)) if (!dentro(m.index) && !dentro(m.index + m[0].length - 1)) cortes.add(m.index);
+  const orden = [...cortes].sort((a, b) => a - b);
+  let pedazos = orden.map((a, i) => [a, orden[i + 1] ?? s.length]);
+  // Un pedazo con varios montos: "super 15 mil nafta 20 mil" (el monto al final) o "15 mil nafta 20 mil birra" (al principio).
+  pedazos = pedazos.flatMap(([a, b]) => {
+    const suyos = montos.filter((c) => c.desde >= a && c.desde < b);
+    if (suyos.length < 2) return [[a, b]];
+    const antes = s.slice(a, suyos[0].desde).replace(/[\s,;.]/g, " ").trim().replace(ARRANQUE, "").replace(FILLER, "").trim();
+    const puntos = antes ? suyos.slice(0, -1).map((c) => c.hasta) : suyos.slice(1).map((c) => c.desde);
+    const lim = [a, ...puntos, b];
+    const partes = lim.slice(0, -1).map((x, i) => [x, lim[i + 1]]);
+    // Con el monto al final, lo que queda después del último monto se suma en el paso siguiente.
+    if (antes && suyos[suyos.length - 1].hasta < b) { partes[partes.length - 1] = [partes[partes.length - 1][0], suyos[suyos.length - 1].hasta]; partes.push([suyos[suyos.length - 1].hasta, b]); }
+    return partes;
+  });
+  // Lo que no tiene monto va con el pedazo de al lado: "15 mil nafta y birra", "2 cafés y una medialuna 5000".
+  const juntos = [];
+  for (const [a, b] of pedazos) {
+    const tiene = montos.some((c) => c.desde >= a && c.desde < b);
+    if (!tiene && juntos.length && juntos[juntos.length - 1].tiene) juntos[juntos.length - 1].b = b;
+    else if (juntos.length && !juntos[juntos.length - 1].tiene) { juntos[juntos.length - 1].b = b; juntos[juntos.length - 1].tiene = tiene; }
+    else juntos.push({ a, b, tiene });
+  }
+  return juntos.filter((x) => x.tiene).flatMap((x) => {
+    const frase = s.slice(x.a, x.b).replace(COLA, "").replace(ARRANQUE, "");
+    const r = leerTexto(frase, cats, aprendidas);
+    if (!r) return [];
+    if (!r.opciones) return [r];
+    const { opciones, ...resto } = r;
+    return [{ ...resto, monto: Math.max(...opciones), revisar: true }];
+  });
 }
 
 function categoriaDe(texto, cats, tipo, aprendidas) {

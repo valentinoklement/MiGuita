@@ -5,7 +5,7 @@ Anotá lo que gastás en 10 segundos. App web gratis e instalable (iPhone y Andr
 ## Qué hace
 - Anotar gastos e ingresos rápido ("nafta 20000"), en pesos o dólares.
 - Te queda, por día, resumen del mes y racha de días anotados.
-- Plan: presupuestos, metas de ahorro, deudas y gastos fijos que se anotan solos.
+- Mis cuentas: topes, metas de ahorro, deudas y gastos fijos que se anotan solos.
 - Grupos para dividir gastos con amigos: conectados con un código corto (todos ven lo mismo al instante) o con una copia por código o QR.
 - PIN o contraseña con los datos cifrados, copias de seguridad cifradas y avisos con la app cerrada.
 - Compras en cuotas con seguimiento por tarjeta, y «Tu mes en MiGuita» para compartir.

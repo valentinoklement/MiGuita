@@ -1,4 +1,4 @@
-// Pantallas de Más: avisos, seguridad (PIN, huella, bloqueo), dólar, copias de seguridad y mis dispositivos.
+// Pantallas de Ajustes: avisos, seguridad (PIN, huella, bloqueo), dólar, copias de seguridad y mis dispositivos.
 import { Art } from "../art/art.js";
 import { formatear } from "../logic/dinero.js";
 import { TIPOS, FUENTES, nombreTipo, valorPara } from "../logic/dolar.js";
@@ -19,7 +19,7 @@ export function crearVistasAjustes(st, hoy, V) {
     const n = st.cfg.notif;
     const permiso = !("Notification" in globalThis) || !("PushManager" in globalThis) ? "no" : Notification.permission;
     const activos = st.cfg.avisos && permiso === "granted";
-    return back("Más") + hdr("Ajustes", "Notificaciones") +
+    return back("Ajustes") + hdr("Ajustes", "Notificaciones", "", "notif") +
       (permiso === "no" ? "" : activos ?
         crd(`<div class="sub">● Activados en este dispositivo</div><b style="font:800 17px 'Bricolage Grotesque',sans-serif">Te avisamos aunque la app esté cerrada</b>` +
           `<div class="sub">Para eso, el servidor guarda solo a dónde mandar el aviso, tus horarios y el último día que anotaste algo. Nunca montos ni movimientos.</div>`) :
@@ -33,7 +33,7 @@ export function crearVistasAjustes(st, hoy, V) {
       crd(lbl("Qué avisos") +
         fila("Anotar los gastos del día", "A las horas de arriba", interruptor("notifTipo", n.tipos.dia, "Anotar los gastos del día", "dia"), true) +
         fila("Racha en riesgo", "A las 21:00 si tenés 3 días o más", interruptor("notifTipo", n.tipos.racha, "Racha en riesgo", "racha")) +
-        fila("Presupuesto por pasarse", "Una vez al llegar al 90%", interruptor("notifTipo", n.tipos.presupuesto, "Presupuesto por pasarse", "presupuesto"))) +
+        fila("Tope por pasarse", "Una vez al llegar al 90%", interruptor("notifTipo", n.tipos.presupuesto, "Tope por pasarse", "presupuesto"))) +
       crd(fila("No molestar", n.noMolestar.activo ? "Sin avisos en esa franja" : "Apagado", interruptor("notifNM", n.noMolestar.activo, "No molestar"), true) +
         (n.noMolestar.activo ? fila("Desde", "", hora("notifDesde", n.noMolestar.desde, "No molestar desde")) + fila("Hasta", "", hora("notifHasta", n.noMolestar.hasta, "No molestar hasta")) : "")) +
       (activos ? btn("probarAvisoServidor", "Mandarme un aviso de prueba", true) + `<button class="btn pp w alt del" data-act="apagarAvisos">${st.confirmar === "avisos" ? "Tocá de nuevo para apagarlos" : "Apagar los avisos"}</button>` : btn("probarAviso", "Probar un aviso", true)) +
@@ -45,7 +45,7 @@ export function crearVistasAjustes(st, hoy, V) {
   function seguridad() {
     const seg = st.seguridad;
     if (st.pinFlujo) return crearPin();
-    let h = back("Más") + hdr("Ajustes", "Seguridad", "ok");
+    let h = back("Ajustes") + hdr("Ajustes", "Seguridad", "ok", "seguridad");
     if (!seg) {
       h += crd(`<b style="font:800 17px 'Bricolage Grotesque',sans-serif">Cerrá MiGuita con un PIN</b><div class="sub">Tus datos se guardan cifrados: sin el PIN no se pueden leer.</div>`) +
         btn("ponerPin", "Poner un PIN", false, "pin") + btn("ponerPin", "Usar una contraseña larga", true, "clave");
@@ -80,7 +80,7 @@ export function crearVistasAjustes(st, hoy, V) {
     const d = st.cfg.dolar;
     const v = valorPara(hoy, d.tipo, st.cotizaciones, d.manual);
     const origen = v ? (v.fuente === "manual" ? "cargado a mano" : (FUENTES.find((x) => x[0] === v.fuente) || [, v.fuente])[1] + (v.fecha === hoy ? " · hoy" : " · del " + v.fecha.split("-").reverse().join("/"))) : "";
-    return back("Más") + hdr("Ajustes", "Dólar") +
+    return back("Ajustes") + hdr("Ajustes", "Dólar", "", "dolar") +
       crd(`<div class="sub">Dólar ${esc(nombreTipo(d.tipo).toLowerCase())}</div><div class="big std">${v ? formatear(v.valor) : "Sin valor"}</div><div class="sub">${v ? esc(origen) + (v.estimado ? " (estimado)" : "") : "Cargalo a mano o actualizá."}</div>` +
         (d.tipo !== "fijo" && d.fuente !== "manual" ? `<div class="chips"><button class="pp" data-act="actualizarDolar">${st.dolarCargando ? "Buscando…" : "Actualizar ahora"}</button></div>` : "")) +
       (st.dolarPendiente ? crd(`<div class="msg">El dólar saltó de ${formatear(st.dolarPendiente.anterior)} a ${formatear(st.dolarPendiente.valor)}.</div><div class="sub">Es más de 30% de diferencia. ¿Lo usamos?</div>` +
@@ -99,7 +99,7 @@ export function crearVistasAjustes(st, hoy, V) {
   function copias() {
     const c = st.cfg.copias, f = st.copiaFlujo;
     const ex = st.exportado;
-    let h = back("Más") + hdr("Ajustes", "Copias y Excel") +
+    let h = back("Ajustes") + hdr("Ajustes", "Copias y Excel", "", "copias") +
       crd(lbl("Para Excel") + `<div class="sub">Todos tus movimientos en una planilla que se abre con Excel o Google Sheets. No va cifrada: guardala donde nadie más la vea.</div>` +
         (ex ? `<div class="btnrow">${ex.compartible ? `<button class="btn pp" data-act="compartirExcel">Mandar</button>` : ""}<a class="btn pp${ex.compartible ? " alt" : ""}" href="${ex.url}" download="${esc(ex.nombre)}">Descargar</a></div>` :
           `<button class="btn pp w alt" data-act="exportarExcel">Exportar a Excel</button>`)) +
@@ -134,7 +134,7 @@ export function crearVistasAjustes(st, hoy, V) {
   /* ---------- mis dispositivos ---------- */
   function dispositivos() {
     const vin = st.cfg.vinculo, f = st.vinc || (st.vinc = { pegado: "", error: "", trabajando: false, verCodigo: false });
-    let h = back("Más") + hdr("Ajustes", "Usar en otro dispositivo");
+    let h = back("Ajustes") + hdr("Ajustes", "Usar en otro dispositivo", "", "dispositivos");
     if (!vin) {
       h += crd(`<b style="font:800 17px 'Bricolage Grotesque',sans-serif">Tus datos en el celu y en la compu</b>` +
           `<div class="sub">Conectá dos o más dispositivos y van a ver lo mismo: lo que anotás en uno aparece en los otros. Sin mail ni contraseña, con un código.</div>` +
@@ -163,7 +163,7 @@ export function crearVistasAjustes(st, hoy, V) {
       `<div class="sub">En este dispositivo hay ${cuenta} ${cuenta === 1 ? "movimiento" : "movimientos"}: en los otros tiene que decir lo mismo.</div>` +
       `<div class="chips"><button class="pp" data-act="sincronizarAhora">${f.trabajando ? "Sincronizando…" : "Sincronizar ahora"}</button></div>`) +
       crd(lbl("Para sumar otro dispositivo") +
-        `<div class="sub">En el otro: abrí MiGuita, andá a Más › Usar en otro dispositivo y poné este código.</div>` +
+        `<div class="sub">En el otro: abrí MiGuita, andá a Ajustes › Usar en otro dispositivo y poné este código.</div>` +
         (f.verCodigo ? `<div class="code corto">${esc(vin.codigo)}</div>` + (f.svg ? f.svg + `<div class="sub" style="text-align:center">O escanealo con la cámara del otro celu.</div>` : "") +
           `<div class="btnrow">${btn("copiarCodigoVinculo", "Copiar código")}${btn("verCodigoVinculo", "Ocultar", true)}</div>` :
           btn("verCodigoVinculo", "Mostrar el código")) +
@@ -177,7 +177,7 @@ export function crearVistasAjustes(st, hoy, V) {
   function comentario() {
     const c = st.com || (st.com = { tipo: "idea", texto: "", nombre: st.cfg.nombre || "", error: "", enviando: false, listo: false });
     const n = st.cfg.comentarios || 0;
-    return back("Más") + hdr("Estamos probando", "Mandar un comentario", "ok") +
+    return back("Ajustes") + hdr("Estamos probando", "Mandar un comentario", "ok") +
       `<div class="sub">Lo lee quien hace la app. A fin de mes, el aporte más útil se lleva un six pack.${n ? " Ya mandaste " + n + "." : ""}</div>` +
       lbl("¿Qué es?") + chips("comTipo", TIPOS_COMENTARIO, c.tipo, "Tipo de comentario") +
       lbl("Contanos") + `<div class="quick"><div class="pp"><textarea class="field" data-act="comTexto" rows="5" maxlength="${MAX_COMENTARIO}" aria-label="Tu comentario" placeholder="${c.tipo === "error" ? "Qué estabas haciendo y qué pasó" : "Qué cambiarías o qué le falta"}">${esc(c.texto)}</textarea></div></div>` +
@@ -191,13 +191,14 @@ export function crearVistasAjustes(st, hoy, V) {
   /* ---------- privacidad ---------- */
   function privacidad() {
     const p = (t, x) => crd(`<b style="font:800 16px 'Bricolage Grotesque',sans-serif">${t}</b><div class="sub">${x}</div>`);
-    return back("Más") + hdr("Tus datos", "Privacidad", "ok") +
+    return back("Ajustes") + hdr("Tus datos", "Privacidad", "ok") +
       p("Lo normal: nada sale de tu celu", "Tus gastos, categorías y planes se guardan en este dispositivo. No hay cuentas, publicidad ni seguimiento. Tampoco medimos cómo usás la app.") +
+      p("Si usás el micrófono", "Tu audio va a nuestro servidor (Cloudflare) solo para pasarlo a texto. No se guarda ni se usa para otra cosa. Separar los gastos y anotarlos se hace en tu celu. Si no tocás el micrófono, no sale nada.") +
       p("Si conectás tus dispositivos o un grupo", "Los datos pasan por nuestro servidor (Cloudflare) cifrados con una clave que sale de tu código. El servidor no los puede leer. Quien tenga el código sí puede verlos y cambiarlos. Lo que no se usa durante más de un año se borra solo.") +
       p("Si activás los avisos", "El servidor guarda a dónde mandar el aviso, tus horarios, tu zona horaria y el último día que anotaste algo. Nunca montos ni movimientos. Al apagarlos se borra todo.") +
       p("Si mandás un comentario", "Se guarda lo que escribís, tu nombre y el tipo de celu, sin cifrar, para poder leerlo. No pongas datos privados.") +
       p("El precio del dólar", "La app lo pide a DolarApi o Bluelytics. Esos servicios no reciben ningún dato tuyo de gastos.") +
-      p("Borrar todo", "En Más › Borrar todo se elimina lo de este dispositivo y se apagan los avisos. Las copias que hayas guardado son tuyas: van cifradas con tu contraseña.");
+      p("Borrar todo", "En Ajustes › Borrar todo se elimina lo de este dispositivo y se apagan los avisos. Las copias que hayas guardado son tuyas: van cifradas con tu contraseña.");
   }
 
   return { notif, seguridad, dolar, copias, dispositivos, comentario, privacidad };

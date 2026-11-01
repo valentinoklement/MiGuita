@@ -1,0 +1,21 @@
+// Las explicaciones del signo de pregunta. Cortas y con ejemplos: se leen en cualquier momento, sin perder lo que estabas haciendo.
+// Cada una tiene un título y un texto (x), pasos numerados o las dos cosas.
+export const AYUDAS = {
+  inicio: { t: "¿Cómo se usa?", pasos: ["<b>Escribí lo que gastaste</b>, como te salga: «15mil nafta» o «10 lucas birra». Tocá Anotar y listo.", "<b>O tocá el micrófono</b> y decí varios gastos juntos. Se separan solos.", "<b>Para corregir</b>, tocá el gasto en la lista y cambialo.", "<b>Si no aclarás la moneda, son pesos.</b> Para dólares, escribí «100 dólares hotel»."] },
+  movimientos: { t: "Movimientos", x: "Todo lo que anotaste. Podés buscar por palabra, filtrar por categoría y cambiar de mes con las flechas. Tocá uno para corregirlo o borrarlo." },
+  resumen: { t: "Resumen", x: "En qué se te fue la plata este mes: por categoría, por forma de pago y por día. Si cargaste lo que cobrás, también ves cuánto te queda." },
+  racha: { t: "¿Qué es la racha?", x: "Los días seguidos que anotaste algo. Cada día suma un ingrediente, y cada tanto sale un premio del horno. Si un día no gastaste, tocá «No gasté hoy» y la racha sigue." },
+  grupos: { t: "¿Cómo funcionan los grupos?", pasos: ["<b>Armá el grupo</b> con tus amigos e invitalos con un link. Se hace una sola vez.", "<b>Creá una juntada</b> cada vez que salen: el asado, el viaje.", "<b>Anotá quién pagó qué</b> y quién entra en cada cosa.", "<b>MiGuita saca la cuenta:</b> quién le pasa a quién y cuánto, con el alias a mano."] },
+  grupo: { t: "Este grupo", pasos: ["<b>Cada salida es una juntada.</b> Tocá «Nueva juntada» y ponele nombre.", "<b>Adentro cargás las compras:</b> qué se compró y quién lo pagó.", "<b>Invitá a los demás</b> con el link: cada uno ve todo y anota desde su celu."] },
+  juntada: { t: "Cómo se divide", pasos: ["<b>Sumá cada compra</b> y marcá quién la pagó.", "<b>Marcá quién entra en cada cosa.</b> Si alguien no tomó fernet, no paga fernet.", "<b>Mirá quién le pasa a quién.</b> Es la menor cantidad de transferencias posible.", "<b>Cuando alguien te pague</b>, tocá «Ya le pagué» y se tacha."] },
+  presupuesto: { t: "¿Qué es un tope?", x: "Lo máximo que querés gastar por mes en una categoría. Por ejemplo, $50.000 en Salidas. Cuando te vas acercando, Miguita te avisa." },
+  metas: { t: "¿Qué es una meta?", x: "Algo para lo que estás juntando plata, como un viaje. Ponés cuánto necesitás y, si querés, para cuándo. Te dice cuánto guardar por mes, y vos vas sumando lo que ahorrás." },
+  deudas: { t: "Deudas", x: "Lo que le debés a alguien y lo que te deben a vos. Cada vez que se paga una parte, la registrás y ves cuánto falta." },
+  fijos: { t: "¿Qué es un gasto fijo?", x: "Algo que pagás o cobrás todos los meses, como el alquiler, Netflix o el sueldo. Lo cargás una vez y se anota solo el día que elijas. Si el monto cambia, podés pedir que te pregunte antes." },
+  cuotas: { t: "¿Cómo funcionan las cuotas?", pasos: ["<b>Cargá la compra</b>, en cuántas cuotas y con qué tarjeta.", "<b>Cada cuota se anota sola</b> cuando llega su mes. No cuenta toda de golpe.", "<b>Acá ves cuánto te falta pagar</b> en cada tarjeta y lo que tenés comprometido para los próximos meses."] },
+  notif: { t: "Avisos", x: "Un recordatorio para anotar tus gastos, a la hora que elijas. Nunca dice cuánto gastaste ni en qué." },
+  seguridad: { t: "Seguridad", x: "Podés poner un PIN para que nadie más abra la app. Si te lo olvidás, no hay forma de recuperarlo: por eso conviene tener una copia de seguridad." },
+  dolar: { t: "El dólar", x: "Elegí qué dólar usar. Cuando anotás algo en dólares, se pasa a pesos con el valor de ese día. Se actualiza solo con internet, o lo podés poner a mano." },
+  copias: { t: "Copias de seguridad", x: "Tus datos están solo en este celu. Una copia es un archivo con todo, protegido con tu contraseña, para que no pierdas nada si cambiás de celu o se borra la app." },
+  dispositivos: { t: "Usar en otro dispositivo", x: "Para tener los mismos datos en el celu y en la compu. En uno aparece un código, lo ponés en el otro, y quedan conectados." },
+};
