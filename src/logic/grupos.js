@@ -2,7 +2,7 @@
 // las funciones de reparto, saldos, saldar, fusión y limpieza son las mismas, con nombres en castellano.
 //
 // Grupo: { id, nombre, moneda: "ARS"|"USD", ts, miembros, gastos, pagos, juntadas, yo?, loc?, sync? }
-//   miembro: { id, nombre, alias?, ts, x? }
+//   miembro: { id, nombre, alias?, ts, x?, pj? (personaje elegido: -1 Miguita, 0 a 63 los amigos de la panadería) }
 //   gasto:   { id, t (qué fue), m (monto en pesos, con decimales), p (quién pagó), a: [entre quiénes],
 //              sp: "eq"|"sh"|"pc"|"ex" (parejo, partes, porcentaje, montos), w: {id: valor}, f, ts, x?, por,
 //              j? (juntada), pp? ({id: pesos} si pagaron varios) }
@@ -131,7 +131,9 @@ export function limpiar(o) {
   (Array.isArray(o.miembros) ? o.miembros : []).slice(0, MAX_MIEMBROS).forEach((m) => {
     const i = okId(m && m.id); if (!i) return;
     const al = validarAlias(m.alias);
-    g.miembros.push({ id: i, nombre: s(m.nombre, 40).trim() || "?", alias: al.ok ? al.alias : "", ts: num(m.ts), x: !!m.x });
+    const miembro = { id: i, nombre: s(m.nombre, 40).trim() || "?", alias: al.ok ? al.alias : "", ts: num(m.ts), x: !!m.x };
+    if (Number.isInteger(m.pj) && m.pj >= -1 && m.pj < 64) miembro.pj = m.pj; // personaje elegido (-1 = Miguita)
+    g.miembros.push(miembro);
   });
   (Array.isArray(o.gastos) ? o.gastos : []).slice(0, MAX_REGISTROS).forEach((x) => {
     const i = okId(x && x.id), p = okId(x && x.p); if (!i || !p) return;

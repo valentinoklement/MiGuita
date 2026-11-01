@@ -89,3 +89,7 @@ export function amigo(i) {
   return `<svg class="fr" viewBox="${e ? "0 -24 80 104" : "0 0 80 80"}" aria-hidden="true">${F(fl)}${L(ln)}</svg>`;
 }
 export const CANTIDAD_DISTINTOS = (VIEJOS.length + NUEVOS.length) * EXTRAS.length;
+// Para elegir personaje: los 16 de base (el número es el que va a amigo()) y los detalles que se le pueden sumar.
+export const BASES = ["Cañoncito", "Bola de fraile", "Factura", "Medialuna", ...NUEVOS.map((p) => p.nombre[0].toUpperCase() + p.nombre.slice(1))];
+export const DETALLES = ["Nada", "Gorro", "Anteojos", "Moño"];
+export const MIGUITA = -1; // el sanguchito también se puede elegir

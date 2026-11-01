@@ -4,6 +4,7 @@ import { formatear } from "../logic/dinero.js";
 import { TIPOS, FUENTES, nombreTipo, valorPara } from "../logic/dolar.js";
 import { esc } from "./pantallas.js";
 import { tecladoPin, puntos } from "./bloqueo.js";
+import { leerCodigoVinculo } from "../logic/vinculo.js";
 
 export function crearVistasAjustes(st, hoy, V) {
   const { back, hdr, lbl, crd, chips, interruptor } = V.ayudas;
@@ -143,14 +144,24 @@ export function crearVistasAjustes(st, hoy, V) {
     }
     const estado = vin.error === "version" ? "Otro dispositivo tiene una versión más nueva: actualizá MiGuita acá." :
       vin.error === "codigo" ? "El código ya no funciona." : vin.error === "red" || navigator.onLine === false ? "Sin conexión: se manda cuando vuelva internet." :
-      vin.ultimo ? "Al día · " + fechaHora(vin.ultimo) : "Conectando…";
-    h += crd(`<div class="sub">${vin.error ? "" : "● "}Conectado con tus otros dispositivos</div><b style="font:800 17px 'Bricolage Grotesque',sans-serif">${esc(estado)}</b>`) +
+      vin.ultimo ? "Todo al día · " + fechaHora(vin.ultimo) : "Conectando…";
+    const otro = leerCodigoVinculo(f.pegado);
+    // Se abrió el link (o el QR) de otro código: ofrecer pasarse a ese.
+    if (otro && otro !== vin.codigo)
+      h += crd(`<b style="font:800 16px 'Bricolage Grotesque',sans-serif">Abriste otro código</b>` +
+        `<div class="sub">Este dispositivo ya estaba conectado con otro código (${esc(vin.codigo.slice(0, 4))}…). Para verse con el dispositivo que te mostró el código nuevo, pasate a ese: lo de acá se junta con lo de allá.</div>` +
+        (f.error ? `<div class="msg" role="alert">${esc(f.error)}</div>` : "") +
+        btn("cambiarVinculo", f.trabajando ? "Conectando…" : "Conectarme con el código nuevo"), "aviso");
+    const cuenta = st.movs.filter((x) => !x.id.startsWith("ej_")).length;
+    h += crd(`<div class="sub">${vin.error ? "" : "● "}Conectado con tus otros dispositivos</div><b style="font:800 17px 'Bricolage Grotesque',sans-serif">${esc(estado)}</b>` +
+      `<div class="sub">En este dispositivo hay ${cuenta} ${cuenta === 1 ? "movimiento" : "movimientos"}: en los otros tiene que decir lo mismo.</div>` +
+      `<div class="chips"><button class="pp" data-act="sincronizarAhora">${f.trabajando ? "Sincronizando…" : "Sincronizar ahora"}</button></div>`) +
       crd(lbl("Para sumar otro dispositivo") +
         `<div class="sub">En el otro: abrí MiGuita, andá a Más › Usar en otro dispositivo y poné este código.</div>` +
         (f.verCodigo ? `<div class="code corto">${esc(vin.codigo)}</div>` + (f.svg ? f.svg + `<div class="sub" style="text-align:center">O escanealo con la cámara del otro celu.</div>` : "") +
           `<div class="btnrow">${btn("copiarCodigoVinculo", "Copiar código")}${btn("verCodigoVinculo", "Ocultar", true)}</div>` :
           btn("verCodigoVinculo", "Mostrar el código")) +
-        `<div class="msg">Quien tenga este código ve y cambia todos tus datos. No se lo mandes a nadie.</div>`) +
+        `<div class="sub nota">Quien tenga este código puede ver y cambiar tus datos. Compartilo con criterio: solo para tus dispositivos.</div>`) +
       `<button class="btn pp w alt del" data-act="desconectarVinculo">${st.confirmar === "vinculo" ? "Tocá de nuevo para desconectar" : "Desconectar este dispositivo"}</button>` +
       `<div class="hint">Si desconectás, tus datos quedan en este dispositivo pero dejan de actualizarse con los otros.</div>`;
     return h;

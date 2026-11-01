@@ -1,5 +1,5 @@
 // Guarda la app para que funcione sin internet. Subir VERSION cada vez que cambia un archivo.
-const VERSION = "miguita-e11-2";
+const VERSION = "miguita-e12-1";
 const ARCHIVOS = [
   "./", "./index.html", "./manifest.webmanifest",
   "./src/ui/styles.css", "./src/ui/app.js", "./src/ui/pantallas.js", "./src/ui/plan.js", "./src/ui/grupos.js", "./src/ui/qr.js", "./src/ui/ajustes.js", "./src/ui/bloqueo.js", "./src/ui/huella.js", "./src/ui/primera.js", "./src/ui/importar.js", "./src/ui/chistes.js", "./src/ui/pdf.js", "./src/vendor/qrcode.js", "./src/vendor/jsQR.js", "./src/ui/ejemplo.js", "./src/art/art.js", "./src/art/amigos.js", "./src/data/db.js",

@@ -695,6 +695,7 @@ function guardarGForm() {
     if (!id && g.miembros.filter((m) => !m.x).length >= 50) return "Un grupo puede tener hasta 50 personas.";
     const mid = id || nuevoId();
     const m = { ...(g.miembros.find((y) => y.id === mid) || { x: false }), id: mid, nombre: nombre.slice(0, 40), alias: al.alias, ts: ahora };
+    if (Number.isInteger(v.pj)) m.pj = v.pj; else delete m.pj;
     const nuevo = { ...g, miembros: [...g.miembros.filter((y) => y.id !== mid), m] };
     if (v.soyYo) nuevo.yo = mid; else if (g.yo === mid) delete nuevo.yo;
     guardarGrupo(nuevo);
@@ -1084,6 +1085,15 @@ raiz.addEventListener("click", (e) => {
     case "unirVinculo": unirVinculo(); return;
     case "verCodigoVinculo": st.vinc.verCodigo = !st.vinc.verCodigo; break;
     case "copiarCodigoVinculo": copiar(st.cfg.vinculo.codigo); mostrarAviso("Código copiado. Pegalo solo en tus dispositivos."); break;
+    case "cambiarVinculo":
+      // Ya estaba conectado con otro código: se pasa al nuevo, con todo lo de este dispositivo.
+      escuchaVinculo?.cortar?.(); escuchaVinculo = null;
+      ponerConfig("vinculo", null);
+      unirVinculo(); return;
+    case "sincronizarAhora":
+      st.vinc.trabajando = true; dibujar();
+      sincronizarVinculo().then(() => { st.vinc.trabajando = false; mostrarAviso(st.cfg.vinculo?.error ? "No se pudo: revisá internet." : "Listo, está todo al día."); dibujar(); });
+      return;
     case "desconectarVinculo": {
       if (st.confirmar !== "vinculo") { st.confirmar = "vinculo"; break; }
       st.confirmar = "";
@@ -1103,8 +1113,10 @@ raiz.addEventListener("click", (e) => {
       abrirGForm("pago", null, { de, a, m: m ? montoEnCampo(+m) : "", f: hoy }); break;
     }
     case "editarPagoG": { const p = grupoActual().pagos.find((x) => x.id === v); abrirGForm("pago", v, { de: p.de, a: p.a, m: montoEnCampo(centavos(p.m)), f: p.f || hoy }); break; }
-    case "editarPersona": { const g = grupoActual(), m = g.miembros.find((x) => x.id === v); abrirGForm("persona", v, { nombre: m.nombre, alias: m.alias || "", soyYo: g.yo === v }); break; }
-    case "nuevaPersona": abrirGForm("persona", null, { nombre: "", alias: "", soyYo: false }); break;
+    case "editarPersona": { const g = grupoActual(), m = g.miembros.find((x) => x.id === v); abrirGForm("persona", v, { nombre: m.nombre, alias: m.alias || "", soyYo: g.yo === v, pj: m.pj ?? null }); break; }
+    case "nuevaPersona": abrirGForm("persona", null, { nombre: "", alias: "", soyYo: false, pj: null }); break;
+    case "gPj": st.gform.vals.pj = v === "" ? null : +v; break;
+    case "gPjDetalle": { const pj = st.gform.vals.pj; if (Number.isInteger(pj) && pj >= 0) st.gform.vals.pj = (pj % 16) + 16 * +v; break; }
     case "gSoyYo": st.gform.vals.soyYo = !st.gform.vals.soyYo; break;
     case "grupoLoc": {
       const g = grupoActual();
@@ -1433,7 +1445,7 @@ raiz.addEventListener("click", (e) => {
     default: return;
   }
   dibujar();
-  if (["tecla", "cat", "medio", "fecha", "tipo", "filtro", "catTab", "tema", "borrarMov", "borrarTodo", "planTab", "formSel", "formSwitch", "fijoActivo", "borrarPlan", "grupoTab", "gSel", "gEntre", "gGente", "gPaga", "celda", "columna", "gSoyYo", "grupoLoc", "elegirYo", "borrarG", "monedaHoja", "notifCant", "notifForma", "notifTipo", "notifNM", "pinNuevo", "tapar", "dolarTipo", "dolarFuente", "dolarConv", "copiaAuto", "copiaCada", "quitarPin", "aplicarCopia"].includes(act))
+  if (["tecla", "cat", "medio", "fecha", "tipo", "filtro", "catTab", "tema", "borrarMov", "borrarTodo", "planTab", "formSel", "formSwitch", "fijoActivo", "borrarPlan", "grupoTab", "gSel", "gEntre", "gPj", "gPjDetalle", "gGente", "gPaga", "celda", "columna", "gSoyYo", "grupoLoc", "elegirYo", "borrarG", "monedaHoja", "notifCant", "notifForma", "notifTipo", "notifNM", "pinNuevo", "tapar", "dolarTipo", "dolarFuente", "dolarConv", "copiaAuto", "copiaCada", "quitarPin", "aplicarCopia"].includes(act))
     raiz.querySelector(`[data-act="${act}"]${b.dataset.k ? `[data-k="${CSS.escape(b.dataset.k)}"]` : ""}${v ? `[data-v="${CSS.escape(v)}"]` : ""}`)?.focus();
 });
 
@@ -1528,22 +1540,27 @@ sincronizarTodos();
 sincronizarVinculo();
 vigilarVinculo();
 // Link para conectar este dispositivo: ...#v=<código>
-if (location.hash.startsWith("#v=")) {
-  const codigo = decodeURIComponent(location.hash.slice(3));
-  history.replaceState({ p: "inicio" }, "", location.pathname + location.search);
-  st.vinc = { pegado: codigo, error: "", trabajando: false, verCodigo: false };
-  if (!st.cfg.primeraVez) { ponerConfig("primeraVez", hoy); ponerConfig("tutorialVisto", true); irA("inicio"); }
-  abrir("dispositivos");
-}
 // Link para unirse a un grupo: ...#g=<código largo> o ...#u=<código corto>
-if (location.hash.startsWith("#g=") || location.hash.startsWith("#u=")) {
-  const codigo = decodeURIComponent(location.hash.slice(3));
-  history.replaceState({ p: "inicio" }, "", location.pathname + location.search);
-  st.compartir = { codigo: "", svg: "", pegado: codigo, error: "", escaneando: false };
-  st.grupoId = null;
-  abrir("compartir");
-  unirCodigo(codigo);
+// Se atienden al abrir la app y también si la app ya estaba abierta (el link solo cambia el final de la dirección).
+function abrirLink(redibujar = true) {
+  const h = location.hash;
+  if (!/^#[vgu]=/.test(h)) return;
+  const codigo = decodeURIComponent(h.slice(3));
+  history.replaceState({ p: st.pantalla }, "", location.pathname + location.search);
+  if (h.startsWith("#v=")) {
+    st.vinc = { pegado: codigo, error: "", trabajando: false, verCodigo: false };
+    if (!st.cfg.primeraVez) { ponerConfig("primeraVez", hoy); ponerConfig("tutorialVisto", true); irA("inicio"); }
+    abrir("dispositivos"); prepararVinculo();
+  } else {
+    st.compartir = { codigo: "", svg: "", pegado: codigo, error: "", escaneando: false };
+    st.grupoId = null;
+    abrir("compartir");
+    unirCodigo(codigo);
+  }
+  if (redibujar) dibujar();
 }
+abrirLink(false);
+addEventListener("hashchange", () => abrirLink());
 // Instalar con un toque: Chrome avisa que se puede instalar y la app guarda ese pedido para el botón.
 let pedidoInstalar = null;
 addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); pedidoInstalar = e; st.puedeInstalar = true; if (st.pantalla === "instalar") dibujar(); });

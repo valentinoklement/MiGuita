@@ -1,7 +1,7 @@
 // Pantallas de Grupos: lista, un grupo (tu situación y sus juntadas), una juntada (compras, quién entra en qué
 // y cómo quedar a mano), formularios, compartir, unir y WhatsApp.
 import { Art } from "../art/art.js";
-import { amigo } from "../art/amigos.js";
+import { amigo, BASES, DETALLES, MIGUITA } from "../art/amigos.js";
 import { formatear, leerMonto } from "../logic/dinero.js";
 import { centavos, repartir, saldos, saldar, miParte, textoWhatsApp, juntadasVivas, gastosDe, pagosDe, haySueltos, cuentas, detalleDe, miSituacion, pagadores } from "../logic/grupos.js";
 import { sumarDias } from "../logic/mes.js";
@@ -26,6 +26,9 @@ export function crearVistasGrupos(st, hoy, V) {
   const plataG = (g, c, o = {}) => formatear(c, { ...o, oculto: st.cfg.ocultar, moneda: g.moneda === "USD" ? "US$ " : "$" });
   const nombre = (g, id) => (id === g.yo ? "Vos" : g.miembros.find((m) => m.id === id)?.nombre || "?");
   const dibujo = (g, id) => {
+    const pj = g.miembros.find((m) => m.id === id)?.pj;
+    if (pj === MIGUITA) return Art.miguita("ok");
+    if (Number.isInteger(pj)) return amigo(pj);
     if (id === g.yo) return Art.miguita("ok");
     const i = vivos(g).filter((m) => m.id !== g.yo).findIndex((m) => m.id === id);
     return amigo(i);
@@ -259,12 +262,24 @@ export function crearVistasGrupos(st, hoy, V) {
       return back(g.nombre) + hdr(g.nombre, f().id ? "Editar persona" : "Sumar integrante") +
         campo("nombre", "Nombre", { max: 40 }) +
         campo("alias", "Alias para cobrar (opcional)", { ph: "solo alias, nunca el CBU", max: 22 }) +
+        personajes() +
         crd(`<div class="srow f"><span class="rt"><b>Soy yo</b><small>Marca cuál sos en este grupo (solo en este celu)</small></span>${interruptor("gSoyYo", !!f().vals.soyYo, "Soy yo")}</div>`) +
         pie("Guardar", f().id && !usado ? "Quitar persona" : "") +
         (usado ? crd(`<div class="sub">${esc(nombre(g, f().id))} tiene gastos o pagos. Para quitarlo, primero cambialos o borralos.</div>`) : "");
     },
   };
   const formulario = () => FORMS[st.gform.tipo]();
+
+  // Elegir el personaje que te representa en el grupo (un chiche: si no elegís, se reparte solo).
+  function personajes() {
+    const v = f().vals, pj = v.pj, base = Number.isInteger(pj) && pj >= 0 ? pj % 16 : pj, detalle = Number.isInteger(pj) && pj >= 0 ? Math.floor(pj / 16) : 0;
+    const opcion = (valor, dib, nombre) => `<button class="pj pp" data-act="gPj" data-v="${valor}" aria-pressed="${base === valor}" aria-label="${esc(nombre)}">${dib}</button>`;
+    return crd(lbl("Personaje") + `<div class="pjs" role="group" aria-label="Personaje">` +
+      opcion(MIGUITA, Art.miguita("ok"), "Miguita") + BASES.map((n, i) => opcion(i, amigo(i), n)).join("") + "</div>" +
+      (Number.isInteger(base) && base >= 0 ? `<div class="chips" role="group" aria-label="Detalle">` + DETALLES.map((n, k) =>
+        `<button class="pp" data-act="gPjDetalle" data-v="${k}" aria-pressed="${detalle === k}">${n}</button>`).join("") + "</div>" : "") +
+      `<div class="sub">${pj == null ? "Si no elegís, la app te asigna uno." : "Así aparece en el grupo."}${pj != null ? ` <button class="link" data-act="gPj" data-v="">Que lo elija la app</button>` : ""}</div>`);
+  }
 
   /* ---------- compartir, unir y WhatsApp ---------- */
   function compartir() {
