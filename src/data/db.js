@@ -23,9 +23,15 @@ function abrirIDB() {
     req.onupgradeneeded = () => {
       for (const [t, clave] of Object.entries(TIENDAS)) if (!req.result.objectStoreNames.contains(t)) req.result.createObjectStore(t, { keyPath: clave });
     };
-    req.onsuccess = () => ok(req.result);
+    req.onsuccess = () => {
+      globalThis.__miguitaDesbloqueo?.();
+      // Si otra ventana trae una versión nueva de la base, esta le deja lugar y se recarga.
+      req.result.onversionchange = () => { req.result.close(); location.reload(); };
+      ok(req.result);
+    };
     req.onerror = () => mal(req.error);
-    req.onblocked = () => mal(new Error("base bloqueada"));
+    // Otra ventana vieja la tiene tomada: se espera (no se sigue "en memoria", porque parecería que no hay datos y lo anotado se perdería).
+    req.onblocked = () => globalThis.__miguitaBloqueo?.();
   });
 }
 
@@ -57,7 +63,12 @@ async function leerUno(idb, tienda, k) {
 
 export async function abrirBase() {
   let idb = null;
-  try { idb = await abrirIDB(); } catch { /* sigue en memoria */ }
+  try { idb = await abrirIDB(); }
+  catch (e) {
+    // Datos de una versión más nueva: mejor frenar y avisar que mostrar la app vacía.
+    if (e?.name === "VersionError") throw e;
+    /* navegador sin base (modo privado): sigue en memoria y lo avisa en Inicio */
+  }
   let seg = idb ? (await leerUno(idb, "config", "seguridad"))?.v || null : null;
   let clave = null, crudo = null, timer = 0, pendiente = null;
 

@@ -1,3 +1,4 @@
+import { montoEnPalabras } from "./anotar.js";
 // Dinero siempre en centavos enteros. Formato argentino: $184.300 o $13.733,34.
 
 export function aCentavos(pesos) {
@@ -18,7 +19,7 @@ export function formatear(centavos, { signo = false, oculto = false, moneda = "$
 // Monto escrito en un formulario: "70.000", "$ 1.200.000,50", "35000". Devuelve centavos o null.
 export function leerMonto(texto) {
   const s = String(texto ?? "").replace(/[$\s]/g, "");
-  if (!/^\d[\d.]*(,\d{1,2})?$/.test(s)) return null;
+  if (!/^\d[\d.]*(,\d{1,2})?$/.test(s)) return /^[\d.,]+$/.test(s) ? null : montoEnPalabras(texto); // "20 mil", "dos lucas"
   return Math.round(parseFloat(s.replace(/\./g, "").replace(",", ".")) * 100);
 }
 

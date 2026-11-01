@@ -242,7 +242,7 @@ export function crearVistasGrupos(st, hoy, V) {
           (v.sp === "eq" ? "" : `<input class="field mini" data-act="gPeso" data-k="${esc(i)}" value="${esc(v.w[i] ?? "")}" inputmode="decimal" aria-label="${v.sp === "pc" ? "Porcentaje" : v.sp === "sh" ? "Partes" : "Monto"} de ${esc(nombre(g, i))}" placeholder="${v.sp === "pc" ? "%" : v.sp === "sh" ? "1" : "$"}" maxlength="12">`) +
           `<span>${plataG(g, r[i] || 0)}</span></div>`).join("") + `<div class="sub">${{ eq: "Los centavos se reparten exactos.", sh: "Por ejemplo, 2 partes paga el doble que 1.", pc: "Los porcentajes tienen que sumar 100.", ex: "Los montos tienen que sumar el total." }[v.sp]}</div>`);
       }
-      return back(g.nombre) + hdr(g.nombre, f().id ? "Editar gasto" : "Sumar gasto") +
+      return back(g.nombre) + hdr(esc(g.nombre), f().id ? "Editar gasto" : "Sumar gasto") +
         campo("t", "Qué fue", { ph: "por ejemplo: carne y chorizos", max: 80 }) +
         campo("m", "Monto", { ph: "por ejemplo 41.200", modo: "monto", max: 16 }) +
         lbl("Pagó") + elegir("p", vivos(g).map((m) => [m.id, nombre(g, m.id)]), "Quién pagó") +
@@ -257,7 +257,7 @@ export function crearVistasGrupos(st, hoy, V) {
       const gente = vivos(g).filter((m) => (ju ? ju.gente.includes(m.id) : true));
       const opciones = (k, act) => `<div class="chips" role="group">` + gente.map((m) =>
         `<button class="pp" data-act="${act}" data-v="${esc(m.id)}" aria-pressed="${v[k].includes(m.id)}">${v[k].includes(m.id) ? "✓ " : ""}${esc(nombre(g, m.id))}</button>`).join("") + "</div>";
-      return back(ju ? ju.nombre : g.nombre) + hdr(ju ? ju.nombre : g.nombre, f().id ? "Editar compra" : "Sumar compra") +
+      return back(ju ? ju.nombre : g.nombre) + hdr(esc(ju ? ju.nombre : g.nombre), f().id ? "Editar compra" : "Sumar compra") +
         campo("t", "Qué se compró", { ph: "por ejemplo: fernet", max: 80 }) +
         campo("m", "Cuánto salió", { ph: "por ejemplo 30.000", modo: "monto", max: 16 }) +
         lbl("¿Quién pagó?") + opciones("pagan", "gPaga") +
@@ -270,7 +270,7 @@ export function crearVistasGrupos(st, hoy, V) {
     },
     juntada() {
       const g = grupo(), v = f().vals;
-      return back(g.nombre) + hdr(g.nombre, f().id ? "Editar juntada" : "Nueva juntada") +
+      return back(g.nombre) + hdr(esc(g.nombre), f().id ? "Editar juntada" : "Nueva juntada") +
         campo("nombre", "¿Qué fue?", { ph: "por ejemplo: asado del sábado", max: 60 }) +
         lbl("¿Cuándo?") + elegir("f", [[hoy, "Hoy"], [ayer, "Ayer"]].concat(v.f !== hoy && v.f !== ayer ? [[v.f, fecha(v.f)]] : []), "Fecha") +
         lbl("¿Quiénes fueron?") + `<div class="chips" role="group" aria-label="Quiénes fueron">` + vivos(g).map((m) =>
@@ -281,7 +281,7 @@ export function crearVistasGrupos(st, hoy, V) {
     },
     pago() {
       const g = grupo(), v = f().vals;
-      return back(g.nombre) + hdr(g.nombre, f().id ? "Editar pago" : "Registrar un pago") +
+      return back(g.nombre) + hdr(esc(g.nombre), f().id ? "Editar pago" : "Registrar un pago") +
         lbl("Quién paga") + elegir("de", vivos(g).map((m) => [m.id, nombre(g, m.id)]), "Quién paga") +
         lbl("A quién") + elegir("a", vivos(g).map((m) => [m.id, nombre(g, m.id)]), "A quién") +
         campo("m", "Monto", { modo: "monto", max: 16 }) +
@@ -291,7 +291,7 @@ export function crearVistasGrupos(st, hoy, V) {
     persona() {
       const g = grupo();
       const usado = f().id && (g.gastos.some((x) => !x.x && (x.p === f().id || x.a.includes(f().id))) || g.pagos.some((p) => !p.x && (p.de === f().id || p.a === f().id)));
-      return back(g.nombre) + hdr(g.nombre, f().id ? "Editar persona" : "Sumar integrante") +
+      return back(g.nombre) + hdr(esc(g.nombre), f().id ? "Editar persona" : "Sumar integrante") +
         campo("nombre", "Nombre", { max: 40 }) +
         campo("alias", "Alias para cobrar (opcional)", { ph: "solo alias, nunca el CBU", max: 22 }) +
         personajes() +
@@ -366,7 +366,7 @@ export function crearVistasGrupos(st, hoy, V) {
     const g = st.pendiente;
     const opcion = (id, texto, dib) => `<button class="card pp qs" data-act="elegirYo" data-v="${esc(id)}" aria-pressed="${st.yoElegido === id}"><span class="rd${st.yoElegido === id ? " on" : ""}"></span>${dib}<b>${esc(texto)}</b></button>`;
     // Cada uno se pone su nombre: si ya estaba en la lista lo elige (y lo puede corregir); si no, se suma.
-    return hdr(g.nombre, "¿Quién sos en este grupo?") +
+    return hdr(esc(g.nombre), "¿Quién sos en este grupo?") +
       opcion("_otra", "No estoy en la lista: sumarme", Art.miguita("ok")) +
       (vivos(g).length ? `<div class="sub" style="margin:4px 2px">O si ya te anotaron, elegite:</div>` : "") +
       vivos(g).map((m, i) => opcion(m.id, m.nombre, amigo(i))).join("") +
@@ -382,7 +382,7 @@ export function crearVistasGrupos(st, hoy, V) {
     const g = grupo();
     const ju = st.whatsJ !== undefined ? (g.juntadas || []).find((x) => x.id === st.whatsJ) : null;
     const texto = textoWhatsApp(g, (c) => formatear(c, { moneda: g.moneda === "USD" ? "US$ " : "$" }), st.whatsJ);
-    return back(ju ? ju.nombre : g.nombre) + hdr(g.nombre, "Resumen para WhatsApp") + crd(`<div class="wa">${esc(texto)}</div>`) +
+    return back(ju ? ju.nombre : g.nombre) + hdr(esc(g.nombre), "Resumen para WhatsApp") + crd(`<div class="wa">${esc(texto)}</div>`) +
       `<div class="btnrow">${btn("copiarResumen", "Copiar resumen")}<a class="btn pp alt" href="https://wa.me/?text=${encodeURIComponent(texto)}" target="_blank" rel="noopener noreferrer">Abrir WhatsApp</a></div>` +
       `<div class="sub">Se ve el alias de quien cobra en cada pago.</div>`;
   }

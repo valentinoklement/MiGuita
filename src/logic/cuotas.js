@@ -79,3 +79,10 @@ export function resumenCuotas(compras, tarjetas, hoy, meses = 6) {
   lista.forEach((t) => t.compras.sort((a, b) => a.info.proxima.localeCompare(b.info.proxima) || a.ts - b.ts));
   return { total, meses: filas, tarjetas: lista, terminadas: lista.reduce((a, t) => a + t.terminadas.length, 0) };
 }
+
+// Con cierre y vencimiento de la tarjeta se sabe cuándo cae la primera cuota: lo comprado después del cierre va al resumen siguiente.
+export function primeraCuota(fecha, t) {
+  if (!t?.cierre || !t?.vence) return null;
+  const mes = fecha.slice(0, 7), cierra = Number(fecha.slice(8, 10)) <= t.cierre ? mes : cambiarMes(mes, 1);
+  return { desde: t.vence > t.cierre ? cierra : cambiarMes(cierra, 1), dia: t.vence };
+}

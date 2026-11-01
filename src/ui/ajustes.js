@@ -5,6 +5,7 @@ import { TIPOS, FUENTES, nombreTipo, valorPara } from "../logic/dolar.js";
 import { esc } from "./pantallas.js";
 import { tecladoPin, puntos } from "./bloqueo.js";
 import { leerCodigoVinculo } from "../logic/vinculo.js";
+import { TIPOS_COMENTARIO, MAX_COMENTARIO } from "../logic/buzon.js";
 
 export function crearVistasAjustes(st, hoy, V) {
   const { back, hdr, lbl, crd, chips, interruptor } = V.ayudas;
@@ -172,5 +173,32 @@ export function crearVistasAjustes(st, hoy, V) {
     return h;
   }
 
-  return { notif, seguridad, dolar, copias, dispositivos };
+  /* ---------- comentarios de la prueba ---------- */
+  function comentario() {
+    const c = st.com || (st.com = { tipo: "idea", texto: "", nombre: st.cfg.nombre || "", error: "", enviando: false, listo: false });
+    const n = st.cfg.comentarios || 0;
+    return back("Más") + hdr("Estamos probando", "Mandar un comentario", "ok") +
+      `<div class="sub">Lo lee quien hace la app. A fin de mes, el aporte más útil se lleva un six pack.${n ? " Ya mandaste " + n + "." : ""}</div>` +
+      lbl("¿Qué es?") + chips("comTipo", TIPOS_COMENTARIO, c.tipo, "Tipo de comentario") +
+      lbl("Contanos") + `<div class="quick"><div class="pp"><textarea class="field" data-act="comTexto" rows="5" maxlength="${MAX_COMENTARIO}" aria-label="Tu comentario" placeholder="${c.tipo === "error" ? "Qué estabas haciendo y qué pasó" : "Qué cambiarías o qué le falta"}">${esc(c.texto)}</textarea></div></div>` +
+      lbl("Tu nombre (para el six pack)") + `<div class="quick"><div class="pp"><input class="field" data-act="comNombre" value="${esc(c.nombre)}" maxlength="40" aria-label="Tu nombre" autocomplete="given-name"></div></div>` +
+      (c.error ? `<div class="msg" role="alert">${esc(c.error)}</div>` : "") +
+      (c.listo ? `<div class="msg" role="status">¡Gracias! Ya llegó.</div>` : "") +
+      btn("mandarComentario", c.enviando ? "Mandando…" : "Mandar") +
+      `<div class="hint">Se manda lo que escribís, tu nombre y el tipo de celu. No pongas montos ni datos privados. Tus gastos no se mandan.</div>`;
+  }
+
+  /* ---------- privacidad ---------- */
+  function privacidad() {
+    const p = (t, x) => crd(`<b style="font:800 16px 'Bricolage Grotesque',sans-serif">${t}</b><div class="sub">${x}</div>`);
+    return back("Más") + hdr("Tus datos", "Privacidad", "ok") +
+      p("Lo normal: nada sale de tu celu", "Tus gastos, categorías y planes se guardan en este dispositivo. No hay cuentas, publicidad ni seguimiento. Tampoco medimos cómo usás la app.") +
+      p("Si conectás tus dispositivos o un grupo", "Los datos pasan por nuestro servidor (Cloudflare) cifrados con una clave que sale de tu código. El servidor no los puede leer. Quien tenga el código sí puede verlos y cambiarlos. Lo que no se usa durante más de un año se borra solo.") +
+      p("Si activás los avisos", "El servidor guarda a dónde mandar el aviso, tus horarios, tu zona horaria y el último día que anotaste algo. Nunca montos ni movimientos. Al apagarlos se borra todo.") +
+      p("Si mandás un comentario", "Se guarda lo que escribís, tu nombre y el tipo de celu, sin cifrar, para poder leerlo. No pongas datos privados.") +
+      p("El precio del dólar", "La app lo pide a DolarApi o Bluelytics. Esos servicios no reciben ningún dato tuyo de gastos.") +
+      p("Borrar todo", "En Más › Borrar todo se elimina lo de este dispositivo y se apagan los avisos. Las copias que hayas guardado son tuyas: van cifradas con tu contraseña.");
+  }
+
+  return { notif, seguridad, dolar, copias, dispositivos, comentario, privacidad };
 }

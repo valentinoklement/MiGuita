@@ -85,7 +85,7 @@ export function crearVistasPlan(st, hoy, V) {
   }
 
   function cuotas() {
-    if (!st.compras.length && !st.tarjetas.length) return vacio("Sin cuotas", "Anotá lo que compraste en cuotas y con qué tarjeta. Cada cuota se anota sola en su mes, y acá ves cuánto debés en cada tarjeta.") + nuevo("compra", "+ Nueva compra en cuotas");
+    if (!st.compras.length && !st.tarjetas.length) return vacio("Sin cuotas", "Anotá lo que compraste en cuotas y con qué tarjeta. Cada cuota se anota sola en su mes, y acá ves cuánto debés en cada tarjeta.") + nuevo("compra", "+ Nueva compra en cuotas") + nuevo("tarjeta", "+ Nueva tarjeta").replace("btn pp w", "btn pp w alt");
     const r = resumenCuotas(st.compras, st.tarjetas, hoy);
     const $$ = (t) => [t.pesos || !t.usd ? plata(t.pesos) : "", t.usd ? dinero(t.usd, "USD") : ""].filter(Boolean).join(" + ");
     const mesCorto = (m) => V.mesTexto(m) + (m.slice(0, 4) === hoy.slice(0, 4) ? "" : " " + m.slice(0, 4));
@@ -98,7 +98,7 @@ export function crearVistasPlan(st, hoy, V) {
     return crd(`<div class="stats"><div><div class="sub">Falta pagar</div><b class="neg">${$$(r.total)}</b></div><div><div class="sub">Este mes</div><b>${$$(r.meses[0])}</b></div></div>` +
         lbl("Lo que ya tenés comprometido") + (proximos.length ? proximos.map((m, i) => `<div class="row${i ? "" : " f"}"><span>${mesCorto(m.mes)}</span><span>${$$(m)}</span></div>`).join("") : `<div class="sub">Nada para los próximos meses.</div>`)) +
       r.tarjetas.map((t) => crd(`<div class="secrow"><b style="font:800 17px 'Bricolage Grotesque',sans-serif">${esc(t.nombre)}</b>${t.id ? `<button class="link" data-act="editarTarjeta" data-v="${esc(t.id)}">Editar</button>` : ""}</div>` +
-        `<div class="sub">Debés ${$$(t.debe)} · este mes ${$$(t.esteMes)}</div>` +
+        `<div class="sub">Debés ${$$(t.debe)} · este mes ${$$(t.esteMes)}${(() => { const x = st.tarjetas.find((y) => y.id === t.id); return x?.cierre ? " · cierra el " + x.cierre + ", vence el " + x.vence : ""; })()}</div>` +
         (t.compras.length ? t.compras.map(fila).join("") : `<div class="sub">No tiene cuotas pendientes.</div>`) +
         (st.verTerminadas && t.terminadas.length ? lbl("Terminadas") + t.terminadas.map(fila).join("") : ""))).join("") +
       nuevo("compra", "+ Nueva compra en cuotas") + nuevo("tarjeta", "+ Nueva tarjeta").replace("btn pp w", "btn pp w alt") +
@@ -204,6 +204,9 @@ export function crearVistasPlan(st, hoy, V) {
       const id = st.form.id, deCompras = id ? st.compras.filter((c) => c.tarjeta === id).length : 0;
       return back("Plan") + hdr("Cuotas", id ? "Editar tarjeta" : "Nueva tarjeta") +
         campo("nombre", "Nombre", { ph: "por ejemplo: Visa", max: 30 }) +
+        campo("cierre", "Día de cierre (opcional)", { ph: "1 a 31", modo: "num", max: 2 }) +
+        campo("vence", "Día de vencimiento (opcional)", { ph: "1 a 31", modo: "num", max: 2 }) +
+        `<div class="hint">Con estos días, lo que compres después del cierre pasa solo al resumen siguiente y cada cuota cae en el vencimiento.</div>` +
         (deCompras ? `<div class="hint">Si la borrás, sus ${deCompras} ${deCompras === 1 ? "compra queda" : "compras quedan"} como «${SIN_TARJETA}»: no se pierde nada.</div>` : "") +
         pie("Guardar");
     },

@@ -15,6 +15,7 @@ Anotá lo que gastás en 10 segundos. App web gratis e instalable (iPhone y Andr
 - La app se conecta a internet para consultar el dólar (dolarapi.com y api.bluelytics.com.ar), sin mandar ningún dato personal.
 - Los grupos conectados pasan por un servidor propio en Cloudflare (su código está en la carpeta `servidor/`). Viajan y se guardan cifrados (AES-GCM) con una clave que sale del código del grupo: el servidor no puede leerlos. Quien tenga el código puede ver y anotar en el grupo. Un grupo sin uso por más de 13 meses se borra del servidor.
 - Los avisos con la app cerrada son opcionales. Si se activan, el servidor guarda solo a dónde mandar el aviso (la dirección que da el navegador), los horarios elegidos, la zona horaria y el último día que se anotó algo, para no avisar si ya anotaste. Nunca montos ni movimientos, y el texto del aviso va cifrado para ese celu. Al apagarlos se borra todo.
+- Los comentarios que se mandan desde la app se guardan sin cifrar en el mismo servidor: el texto, el nombre que se ponga y el tipo de celu.
 - «Usar en otro dispositivo» es opcional: conecta el celu y la compu con un código de 16 letras, sin mail ni contraseña. Los datos viajan por el mismo servidor, cifrados con una clave que sale de ese código. El tema, el PIN y los avisos quedan en cada dispositivo.
 - Con PIN, los datos se cifran con AES-GCM; la clave sale del PIN con PBKDF2-SHA256 de 600.000 vueltas. Si se olvida el PIN y no hay copia, no hay forma de recuperarlos.
 

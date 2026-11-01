@@ -4,6 +4,7 @@
 //   GET  /g/<id>      → { v, datos }  (404 si no existe)        pide "Authorization: Bearer <token>"
 //   PUT  /g/<id>      ← { v, datos }  v = versión que tenía quien manda; si no coincide → 409 con lo actual
 //   GET  /g/<id>/ws   WebSocket: avisa { v } cada vez que alguien guarda (no manda datos)
+// Buzón de comentarios de la prueba: POST /buzon ← { tipo, texto, nombre, version, aparato } · GET /buzon con la clave del dueño.
 // Y los avisos con la app cerrada (la clave privada es un secreto de Cloudflare, nunca está en el repositorio):
 //   PUT    /a/<id>         ← { sub, zona, plan, anoto, silencio }  activa o pone al día los avisos de un dispositivo (ver avisos.js)
 //   POST   /a/<id>/probar  manda un aviso de prueba
@@ -40,7 +41,28 @@ export default {
   async fetch(pedido, env) {
     const origen = pedido.headers.get("Origin") || "";
     if (pedido.method === "OPTIONS") return new Response(null, { status: 204, headers: cors(origen) });
-    const ruta = new URL(pedido.url).pathname, a = /^\/a\/([0-9a-f]{32})(\/probar)?$/.exec(ruta);
+    const ruta = new URL(pedido.url).pathname;
+    // Tope por conexión: frena a quien quiera agotar el servidor. Es holgado para el uso normal.
+    const ip = pedido.headers.get("CF-Connecting-IP") || "";
+    if (env.LIMITE && !(await env.LIMITE.limit({ key: ip })).success) return json({ error: "demasiados pedidos" }, 429, origen);
+    if (ruta === "/buzon") {
+      const buzon = env.BUZON.get(env.BUZON.idFromName("principal"));
+      if (pedido.method === "GET") {
+        const t = /^Bearer (.+)$/.exec(pedido.headers.get("Authorization") || "")?.[1];
+        if (!env.BUZON_CLAVE || !iguales(t || "", env.BUZON_CLAVE)) return json({ error: "falta el permiso" }, 401, origen);
+        return json({ comentarios: await buzon.todos() }, 200, origen);
+      }
+      if (pedido.method !== "POST") return json({ error: "método" }, 405, origen);
+      if (env.LIMITE_BUZON && !(await env.LIMITE_BUZON.limit({ key: ip })).success) return json({ error: "demasiados" }, 429, origen);
+      const texto = await pedido.text();
+      if (texto.length > 4000) return json({ error: "demasiado grande" }, 413, origen);
+      let c = null; try { c = JSON.parse(texto); } catch { /* queda null */ }
+      const t = String(c?.texto ?? "").trim();
+      if (t.length < 3) return json({ error: "mal formado" }, 400, origen);
+      const ok = await buzon.guardar({ tipo: ["idea", "error", "otro"].includes(c.tipo) ? c.tipo : "otro", texto: t.slice(0, 1500), nombre: String(c.nombre ?? "").trim().slice(0, 40), version: String(c.version ?? "").slice(0, 30), aparato: String(c.aparato ?? "").slice(0, 120) });
+      return json(ok ? {} : { error: "lleno" }, ok ? 200 : 507, origen);
+    }
+    const a = /^\/a\/([0-9a-f]{32})(\/probar)?$/.exec(ruta);
     if (a) {
       const metodo = a[2] ? "POST" : pedido.method;
       if (pedido.method !== metodo || !["PUT", "POST", "DELETE"].includes(metodo)) return json({ error: "método" }, 405, origen);
@@ -149,4 +171,15 @@ export class Aviso extends DurableObject {
     try { if (texto && await this.enviar(e, texto) === 410) return; } catch { /* sigue: ya llegará el próximo */ }
     if (await this.ctx.storage.get("e")) await this.programar(e);
   }
+}
+
+// Los comentarios de la prueba. Sin direcciones de internet ni datos de la cuenta: solo lo que la persona mandó.
+export class Buzon extends DurableObject {
+  async guardar(c) {
+    const s = this.ctx.storage, n = (await s.get("n")) || 0;
+    if (n >= 5000) return false;
+    await s.put({ n: n + 1, ["c" + String(n).padStart(6, "0")]: { ...c, ts: Date.now() } });
+    return true;
+  }
+  async todos() { return [...(await this.ctx.storage.list({ prefix: "c" })).values()]; }
 }
