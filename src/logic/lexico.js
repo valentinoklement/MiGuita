@@ -31,8 +31,9 @@ export const LEXICO_INGRESO = {
 
 // Palabras que dicen que entró plata.
 const P = (t) => new RegExp("(^|[^a-zñ])(" + t + ")($|[^a-zñ])");
-export const ES_INGRESO = P("sueldo|salario|aguinaldo|jubilacion|cobr[eo]|cobramos|ingreso|ingresaron|recibi|recibimos|gane|ganamos|entro|entraron|me entro|me entraron|me pagaron|me pago|me depositaron|me deposito|me transfirieron|me transfirio|me pasaron|me paso|me devolvieron|me devolvio|me regalaron|me regalo|me dio|me dieron|me mando|me mandaron|me giro|me giraron|me presto|me prestaron|regalo recibido|recibi de regalo|changa|changuita|vendi|vendimos|reintegro|propina|propinas|quincena");
+export const ES_SUMAR = P("sumame|sumale|sumar|suma|sumemos|ingresame|ingresa|acreditame|acredita|cargame plata");
+export const ES_INGRESO = P("sumame|sumale|sumar|suma|sumemos|ingresame|ingresa|acreditame|acredita|cargame plata|sueldo|salario|aguinaldo|jubilacion|cobr[eo]|cobramos|ingreso|ingresaron|recibi|recibimos|gane|ganamos|entro|entraron|me entro|me entraron|me pagaron|me pago|me depositaron|me deposito|me transfirieron|me transfirio|me pasaron|me paso|me devolvieron|me devolvio|me regalaron|me regalo|me dio|me dieron|me mando|me mandaron|me giro|me giraron|me presto|me prestaron|regalo recibido|recibi de regalo|changa|changuita|vendi|vendimos|reintegro|propina|propinas|quincena");
 // Palabras que dicen que salió plata. Se miran primero: "me cobró el plomero" y "le pasé a mi hermana" son gastos.
-export const ES_GASTO = P("me cobr(o|aron)|me sacaron|me debitaron|me descontaron|le (pase|pague|di|dimos|dio|transferi|mande|deposite|preste|devolvi|gire|compre|regale)|gaste|gastamos|me gaste|pague|pagamos|compre|compramos|deje|saque|aboné|abone|perdi");
+export const ES_GASTO = P("restame|restale|restar|resta|sacame|sacale|descontame|descontale|quitame|me cobr(o|aron)|me sacaron|me debitaron|me descontaron|le (pase|pague|di|dimos|dio|transferi|mande|deposite|preste|devolvi|gire|compre|regale)|gaste|gastamos|me gaste|pague|pagamos|compre|compramos|deje|saque|aboné|abone|perdi");
 // Si entró o salió plata, según cómo está dicho. Sin ninguna pista, es un gasto.
 export const tipoDe = (plano) => (ES_GASTO.test(plano) ? "gasto" : ES_INGRESO.test(plano) ? "ingreso" : "gasto");

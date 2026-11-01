@@ -3,7 +3,7 @@
 // Si de verdad no se puede saber ("super 1500 verdu 2000", "nafta 20"), devuelve duda: la app le pregunta a la persona.
 // Ojo, documentado y probado: "1.5" se lee como 15 (el punto siempre es de miles); para decimales va la coma. Con "lucas", "1.5 lucas" son 1.500.
 import { categoriasIniciales, paraAdivinar, RESPALDO } from "./categorias.js";
-import { LEXICO_GASTO, LEXICO_INGRESO, ES_GASTO, tipoDe, quitarAcentos } from "./lexico.js";
+import { LEXICO_GASTO, LEXICO_INGRESO, ES_GASTO, ES_SUMAR, tipoDe, quitarAcentos } from "./lexico.js";
 
 const escapar = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const POR_DEFECTO = categoriasIniciales();
@@ -25,12 +25,12 @@ const UNIDADES = "cero un dos tres cuatro cinco seis siete ocho nueve diez once 
 const PALABRAS = Object.fromEntries(UNIDADES.map((p, i) => [p, i]));
 Object.assign(PALABRAS, { uno: 1, una: 1, veintiun: 21, treinta: 30, cuarenta: 40, cincuenta: 50, sesenta: 60, setenta: 70, ochenta: 80, noventa: 90, cien: 100, ciento: 100, doscientos: 200, doscientas: 200, trescientos: 300, trescientas: 300, cuatrocientos: 400, cuatrocientas: 400, quinientos: 500, quinientas: 500, seiscientos: 600, seiscientas: 600, setecientos: 700, setecientas: 700, ochocientos: 800, ochocientas: 800, novecientos: 900, novecientas: 900 });
 delete PALABRAS.cero;
-const POR = { k: 1e3, mil: 1e3, miles: 1e3, luca: 1e3, lucas: 1e3, luka: 1e3, lukas: 1e3, lukitas: 1e3, luquitas: 1e3, luquita: 1e3, lks: 1e3, palo: 1e6, palos: 1e6, palito: 1e6, palitos: 1e6, millon: 1e6, millones: 1e6, gamba: 100, gambas: 100, gambita: 100, quina: 500, quinas: 500 };
+const POR = { k: 1e3, mil: 1e3, miles: 1e3, luca: 1e3, lucas: 1e3, luka: 1e3, lukas: 1e3, lukitas: 1e3, lukita: 1e3, luquitas: 1e3, luquita: 1e3, lucitas: 1e3, lucita: 1e3, luquis: 1e3, luqui: 1e3, lks: 1e3, palo: 1e6, palos: 1e6, palito: 1e6, palitos: 1e6, millon: 1e6, millones: 1e6, gamba: 100, gambas: 100, gambita: 100, quina: 500, quinas: 500 };
 const SOLO_CON_NUMERO = new Set(["k", "palo", "palos", "palito", "palitos", "millon", "millones", "miles", "gamba", "gambita", "quina"]);
 const PESOS = new Set(["peso", "pesos", "pe", "mango", "mangos", "mangazos", "morlaco", "morlacos", "pesitos", "ars"]);
 const DOLARES = new Set(["usd", "u$s", "us$", "dolar", "dolares", "verde", "verdes", "verdolagas", "dolarcitos"]);
 const CANTIDADES = new Set("kg kilo kilos g gr grs gramos l lt lts litro litros ml cc cm mts metro metros m2 unidad unidades u hs hora horas dia dias semana semanas mes meses año años cuota cuotas persona personas porcion porciones noches noche latas lata botellas botella packs pack docena docenas".split(" "));
-const FILLER = /^(me gast[eé]|gast[eé]|pagu[eé]|compr[eé]|cobr[eé]|me sali[oó]|sali[oó]|fueron|puse)\s+(en\s+|de\s+|del\s+|por\s+)?((el|la|los|las)\s+)?/i;
+const FILLER = /^(s[uú]mame|s[uú]male|sumar|sum[aá]|r[eé]stame|r[eé]stale|restar|rest[aá]|s[aá]came|desc[oó]ntame|qu[ií]tame|ingr[eé]same|acr[eé]ditame|me gast[eé]|gast[eé]|pagu[eé]|compr[eé]|cobr[eé]|me sali[oó]|sali[oó]|fueron|puse)(\s+|$)(en\s+|de\s+|del\s+|por\s+)?((el|la|los|las)\s+)?/i;
 
 function numero(t, conMultiplicador) {
   const s = t.replace(/[.,]+$/, "");
@@ -145,8 +145,11 @@ export function leerTexto(texto, cats = POR_DEFECTO, aprendidas = {}) {
   if (!e) return null;
   let sin = s;
   for (const c of [...e.quitar].sort((a, b) => b.desde - a.desde)) sin = sin.slice(0, c.desde) + " " + sin.slice(c.hasta);
-  const resto = sin.replace(/\s+/g, " ").trim().replace(FILLER, "").replace(/^(en|de|por|del)\s+((el|la|los|las)\s+)?/i, "").replace(/\s+[-–−]$/, "").replace(/\s*[.,;:]+$/, "").trim();
-  const tipo = tipoDe(quitarAcentos(s));
+  const resto = sin.replace(/\s+/g, " ").trim().replace(/^[+\-−¡¿]\s*/, "").replace(/\s*[!?]+$/, "").replace(FILLER, "").replace(/^(en|de|por|del)\s+((el|la|los|las)\s+)?/i, "").replace(/\s+[-–−]$/, "").replace(/\s*[.,;:]+$/, "").trim();
+  const plano = quitarAcentos(s);
+  let tipo = /^\+/.test(s) ? "ingreso" : tipoDe(plano);
+  // "Sumame 10 lucas" es plata que entró; "sumame 10 lucas de nafta" es un gasto más para la cuenta.
+  if (tipo === "ingreso" && ES_SUMAR.test(plano) && categoriaDe(resto, cats, "gasto", aprendidas) !== RESPALDO.gasto) tipo = "gasto";
   const r = { tipo, monto: Math.round(e.c.valor * 100), detalle: resto ? resto[0].toUpperCase() + resto.slice(1) : "", categoria: categoriaDe(resto, cats, tipo, aprendidas) };
   if (e.c.usd) r.moneda = "USD";
   if (e.opciones) r.opciones = e.opciones.map((v) => Math.round(v * 100));

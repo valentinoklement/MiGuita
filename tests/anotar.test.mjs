@@ -119,6 +119,23 @@ test("se da cuenta si la plata entró o salió", () => {
   for (const t of ["le pasé 10 lucas a Juan", "le pagué 8 mil a Ana", "le transferí 20 mil a mi hermana", "le presté 50 lucas a Pedro", "me cobró 20 mil el plomero", "me cobraron 5 mil de luz", "gasté 3 mil", "pagué 10 mil de gas", "compré un regalo 15 mil", "le devolví 5 mil a Ana", "dejé propina 2 mil", "nafta 15 mil", "me descontaron 4 mil"]) assert.equal(tipo(t), "gasto", t);
 });
 
+test("sumame y restame: órdenes directas", () => {
+  const ver = (t) => { const r = leerTexto(t); return [r.tipo, r.monto / 100, r.detalle]; };
+  assert.deepEqual(ver("sumame 10 lucas"), ["ingreso", 10000, ""]);
+  assert.deepEqual(ver("Súmame 10 luquitas."), ["ingreso", 10000, ""]);
+  assert.deepEqual(ver("sumá 5000"), ["ingreso", 5000, ""]);
+  assert.deepEqual(ver("¡Súmame 10 lucitas!"), ["ingreso", 10000, ""]);
+  assert.deepEqual(leerVarios("¡Súmame 10 lucitas!").map((r) => [r.tipo, r.monto / 100, r.detalle]), [["ingreso", 10000, ""]]);
+  assert.deepEqual(ver("sumame 10 lucas del laburo"), ["ingreso", 10000, "Laburo"]);
+  assert.deepEqual(ver("sumame 10 lucas de nafta"), ["gasto", 10000, "Nafta"]);
+  assert.deepEqual(ver("Réstame 5 mil"), ["gasto", 5000, ""]);
+  assert.deepEqual(ver("restá 5000"), ["gasto", 5000, ""]);
+  assert.deepEqual(ver("sacame 3 lucas"), ["gasto", 3000, ""]);
+  assert.deepEqual(ver("+5000"), ["ingreso", 5000, ""]);
+  assert.deepEqual(leerVarios("Súmame 10 lucas y réstame 5 mil").map((r) => [r.tipo, r.monto / 100]), [["ingreso", 10000], ["gasto", 5000]]);
+  assert.equal(leerTexto("sumame 10 lucas").categoria, "otros_in");
+});
+
 test("cada plata que entra va a una categoría de ingreso", () => {
   const cat = (t) => leerTexto(t).categoria;
   assert.equal(cat("me depositaron el sueldo 900 mil"), "sueldo");

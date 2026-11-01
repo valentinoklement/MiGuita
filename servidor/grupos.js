@@ -19,7 +19,7 @@ const MAX_DATOS = 1_500_000; // ~1,5 MB por grupo
 const VENCE = 400 * 864e5;   // un grupo sin uso por más de ~13 meses se borra solo
 const MAX_AUDIO = 3_000_000; // ~3 MB: sobra para el minuto y medio que deja grabar la app
 // Le da pistas de cómo hablamos, para que escriba "lucas" y no otra cosa. No se manda a la persona ni se guarda.
-const PISTA = "Gasté 15 mil de nafta, 10 lucas de birra, un palo de alquiler, 8 mil en el súper y 20 dólares en Netflix. Me pasaron 20 lucas, cobré el sueldo y le transferí 5 mil a mi hermana.";
+const PISTA = "Gasté 15 mil de nafta, 10 lucas de birra, un palo de alquiler, 8 mil en el súper y 20 dólares en Netflix. Me pasaron 20 lucas, cobré el sueldo y le transferí 5 mil a mi hermana. Sumame 10 luquitas y restame 3 lucas.";
 
 function aBase64(bytes) {
   let s = "";

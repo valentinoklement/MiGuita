@@ -109,7 +109,7 @@ export function crearVistas(st, hoy) {
     else if (actual && sinIngreso && reales && !st.cfg.ingresoVisto)
       h += crd(`<b class="pregunta">¿Querés saber cuánto te queda este mes?</b><div class="sub">Cargá lo que cobrás y te lo digo. Es opcional.</div><div class="chips"><button class="pp" data-act="cargarIngreso" aria-pressed="true">Cargar</button><button class="pp" data-act="cerrarCartel" data-v="ingresoVisto">Ahora no</button></div>`, "aviso");
     else if (EN_PRUEBA && !st.cfg.pruebaVisto)
-      h += crd(`<b class="pregunta">Estás probando MiGuita antes que nadie</b><div class="sub">La estamos probando en un grupo chico de amigos. Si algo anda mal o se te ocurre una idea, mandala: a fin de mes, el aporte más útil se lleva un six pack.</div>` +
+      h += crd(`<b class="pregunta">Estás probando MiGuita antes que nadie</b><div class="sub">La estamos probando en un grupo chico de amigos. Si algo anda mal o se te ocurre una idea, mandala: a fin de mes, el aporte más útil se lleva una birra.</div>` +
         `<div class="chips"><button class="pp" data-act="abrirComentario" aria-pressed="true">Mandar un comentario</button><button class="pp" data-act="cerrarCartel" data-v="pruebaVisto">Después</button></div>`, "aviso");
     else if (!(matchMedia("(display-mode: standalone)").matches || navigator.standalone) && !st.cfg.instalarVisto && st.movs.length)
       h += crd(`<b class="pregunta">Tenela a mano en tu celu</b><div class="sub">Instalala y se abre desde un ícono, como cualquier app.</div><div class="chips"><button class="pp" data-act="abrir" data-v="instalar" aria-pressed="true">Ver cómo</button><button class="pp" data-act="cerrarCartel" data-v="instalarVisto">Ahora no</button></div>`, "aviso");
