@@ -23,6 +23,7 @@ import { movimientosCSV } from "../logic/exportar.js";
 import { leerCSV, leerXLSX, armarMovimientos, filasDesdePDF, claveComercio } from "../logic/importar.js";
 import { textoDePDF } from "./pdf.js";
 import { crearVistaImportar } from "./importar.js";
+import { CHISTES, ESPECIALES } from "./chistes.js";
 import { migrar } from "../logic/migraciones.js";
 import { pantallaBloqueo } from "./bloqueo.js";
 import { crearVistasAjustes } from "./ajustes.js";
@@ -188,8 +189,13 @@ function revisarSalvavidas() {
 }
 
 // Anota los gastos fijos que ya llegaron a su día.
+// El dólar guardado para una fecha (el tipo elegido en Más › Dólar), o null si todavía no hay.
+function cotizar(fecha) {
+  const d = st.cfg.dolar, c = valorPara(fecha, d.tipo, st.cotizaciones, d.manual);
+  return c && { ...c, tipo: d.tipo };
+}
 function revisarFijos() {
-  const { nuevos, cambiados } = correrFijos(st.fijos, st.movs, hoy);
+  const { nuevos, cambiados } = correrFijos(st.fijos, st.movs, hoy, cotizar);
   nuevos.forEach(guardarMov);
   cambiados.forEach((f) => ponerItem("fijos", f));
   if (nuevos.length === 1) mostrarAviso("Se anotó solo: " + nuevos[0].detalle + " " + V.plata(nuevos[0].monto));
@@ -208,8 +214,8 @@ function abrirForm(tipo, id) {
   const vals = {
     presupuesto: () => x ? { categoria: x.categoria, tope: m(x.tope) } : { categoria: (st.cfg.categorias.gasto.find((c) => !c.oculta && !usadas.has(c.id)) || {}).id || "otros", tope: "" },
     meta: () => x ? { nombre: x.nombre, icono: x.icono, moneda: x.moneda, objetivo: m(x.objetivo), ahorrado: m(x.ahorrado), fecha: x.fecha || "" } : { nombre: "", icono: "meta", moneda: "ARS", objetivo: "", ahorrado: "", fecha: "" },
-    deuda: () => x ? { tipo: x.tipo, quien: x.quien, concepto: x.concepto, total: m(x.total), pagado: m(x.pagado), vence: x.vence || "" } : { tipo: "debo", quien: "", concepto: "", total: "", pagado: "", vence: "" },
-    fijo: () => x ? { tipo: x.tipo || "gasto", modo: x.modo || "auto", nombre: x.nombre, monto: m(x.monto), categoria: x.categoria, dia: String(x.dia), medio: x.medio, activo: x.activo } : { tipo: "gasto", modo: "auto", nombre: "", monto: "", categoria: "servicios", dia: "", medio: "", activo: true },
+    deuda: () => x ? { tipo: x.tipo, quien: x.quien, concepto: x.concepto, moneda: x.moneda || "ARS", total: m(x.total), pagado: m(x.pagado), vence: x.vence || "" } : { tipo: "debo", quien: "", concepto: "", moneda: "ARS", total: "", pagado: "", vence: "" },
+    fijo: () => x ? { tipo: x.tipo || "gasto", modo: x.modo || "auto", nombre: x.nombre, moneda: x.moneda || "ARS", monto: m(x.monto), categoria: x.categoria, dia: String(x.dia), medio: x.medio, activo: x.activo } : { tipo: "gasto", modo: "auto", nombre: "", moneda: "ARS", monto: "", categoria: "servicios", dia: "", medio: "", activo: true },
     ahorro: () => ({ monto: "" }),
     pago: () => ({ monto: m(restante(x)), anotar: true }),
   }[tipo]();
@@ -241,7 +247,7 @@ function guardarForm() {
     } else if (tipo === "deuda") {
       if (!v.quien.trim() && !v.concepto.trim()) throw "Poné quién o por qué.";
       const antes = st.deudas.find((x) => x.id === id);
-      const d = { id: id || nuevoId(), tipo: v.tipo, quien: v.quien.trim(), concepto: v.concepto.trim(), total: monto("total", "el monto total"), pagado: monto("pagado", "lo pagado", { cero: true }), vence: v.vence || "", ts: antes?.ts || Date.now() };
+      const d = { id: id || nuevoId(), tipo: v.tipo, quien: v.quien.trim(), concepto: v.concepto.trim(), moneda: v.moneda, total: monto("total", "el monto total"), pagado: monto("pagado", "lo pagado", { cero: true }), vence: v.vence || "", ts: antes?.ts || Date.now() };
       if (d.pagado > d.total) throw "Lo pagado no puede ser más que el total.";
       ponerItem("deudas", d);
       mostrarAviso("Deuda guardada", deshacerItem("deudas", antes, d));
@@ -251,7 +257,7 @@ function guardarForm() {
       if (!Number.isInteger(dia) || dia < 1 || dia > 31) throw "El día tiene que ser un número del 1 al 31.";
       const antes = st.fijos.find((x) => x.id === id);
       const reactivado = v.activo && (!antes || !antes.activo);
-      const f = { id: id || nuevoId(), tipo: v.tipo, modo: v.modo, nombre: v.nombre.trim(), monto: monto("monto", "el monto"), categoria: v.categoria, medio: v.medio, dia, activo: !!v.activo,
+      const f = { id: id || nuevoId(), tipo: v.tipo, modo: v.modo, nombre: v.nombre.trim(), moneda: v.moneda, monto: monto("monto", "el monto"), categoria: v.categoria, medio: v.medio, dia, activo: !!v.activo,
         desde: reactivado || !antes ? mesDeInicio(dia, hoy) : antes.desde, hechos: antes?.hechos || [] };
       ponerItem("fijos", f);
       mostrarAviso("Fijo guardado. " + (f.activo ? (f.desde === hoy.slice(0, 7) ? "Empieza este mes." : "Empieza el mes que viene.") : "Está pausado."), deshacerItem("fijos", antes, f));
@@ -265,16 +271,20 @@ function guardarForm() {
     } else if (tipo === "pago") {
       const antes = st.deudas.find((x) => x.id === id);
       const c = monto("monto", "el monto");
-      if (c > restante(antes)) throw "Es más de lo que falta (" + V.plata(restante(antes)) + ").";
+      const $ = (n) => V.plata(n, { moneda: antes.moneda === "USD" ? "US$ " : "$" });
+      if (c > restante(antes)) throw "Es más de lo que falta (" + $(restante(antes)) + ").";
+      const cot = antes.moneda === "USD" && v.anotar ? cotizar(hoy) : null;
+      if (antes.moneda === "USD" && v.anotar && !cot) throw "Para anotarlo en pesos falta el valor del dólar. Cargalo en Más › Dólar o apagá «Anotarlo también».";
       const d = { ...antes, pagado: antes.pagado + c };
       ponerItem("deudas", d);
       const me = d.tipo === "meDeben";
       let mov = null;
       if (v.anotar) {
         mov = { id: nuevoId(), tipo: me ? "ingreso" : "gasto", monto: c, detalle: (me ? "Cobro: " : "Pago: ") + (d.concepto || d.quien), categoria: me ? "otros_in" : "deudas", medio: "", fecha: hoy, ts: Date.now(), mod: Date.now() };
+        if (cot) { mov.monto = aPesos(c, cot.valor); mov.usd = { monto: c, valor: cot.valor, fecha: cot.fecha, tipo: cot.tipo, fuente: cot.fuente, estimado: cot.estimado }; }
         guardarMov(mov);
       }
-      mostrarAviso((me ? "Cobraste " : "Pagaste ") + V.plata(c) + (restante(d) ? "" : ". ¡Saldada!"), () => { ponerItem("deudas", antes); if (mov) quitarMov(mov.id); });
+      mostrarAviso((me ? "Cobraste " : "Pagaste ") + $(c) + (restante(d) ? "" : ". ¡Saldada!"), () => { ponerItem("deudas", antes); if (mov) quitarMov(mov.id); });
     }
   } catch (e) {
     if (typeof e === "string") return e;
@@ -443,7 +453,9 @@ function entrarAGrupo(g) {
     irA("unido");
   } else {
     st.pendiente = g;
-    st.yoElegido = ""; st.errorQuien = ""; st.nombreNuevo = st.cfg.nombre || ""; st.aliasQuien = st.cfg.alias || "";
+    st.errorQuien = ""; st.nombreNuevo = st.cfg.nombre || ""; st.aliasQuien = st.cfg.alias || "";
+    // Si el grupo lo armó alguien solo, lo normal es sumarse; si ya hay más gente anotada, que elija.
+    st.yoElegido = g.miembros.filter((m) => !m.x).length <= 1 ? "_otra" : "";
     irA("quien");
   }
   dibujar();
@@ -482,7 +494,7 @@ function guardarGForm() {
     const nombre = v.nombre.trim();
     if (!nombre) return "Ponele un nombre al grupo.";
     const filas = v.miembros.map((m, i) => ({ nombre: m.nombre.trim() || (i ? "" : st.cfg.nombre || "Yo"), alias: m.alias })).filter((m) => m.nombre);
-    if (filas.length < 2) return "Sumá al menos a otra persona.";
+    if (!filas.length) return "Poné tu nombre.";
     const miembros = [];
     for (const m of filas) {
       const al = validarAlias(m.alias);
@@ -644,6 +656,7 @@ async function terminarPin(secreto) {
 
 // Al volver a la app: se tapa en multitarea y se bloquea según lo elegido.
 let ocultaDesde = 0;
+let toques = 0, chisteTimer = 0, toquesTimer = 0;
 document.addEventListener("visibilitychange", async () => {
   if (document.hidden) {
     ocultaDesde = Date.now();
@@ -777,7 +790,26 @@ function dibujar() {
     const el = raiz.querySelector(`[data-act="${enCampo.act}"]${enCampo.k ? `[data-k="${CSS.escape(enCampo.k)}"]` : ""}${enCampo.i ? `[data-i="${enCampo.i}"]` : ""}`);
     if (el) { el.focus(); try { el.setSelectionRange(enCampo.pos, enCampo.pos); } catch { /* fecha */ } }
   }
+  ponerSiguiente();
 }
+
+// Teclado del celu: "Siguiente" pasa al próximo campo de la pantalla y en el último dice "Listo" y lo cierra.
+// (Los formularios con botón propio, como Anotar o el PIN, se mandan con Enter como siempre.)
+function camposDeTexto() {
+  return [...raiz.querySelectorAll("input, textarea")].filter((el) => !el.disabled && !el.readOnly && !el.closest("form") &&
+    !["hidden", "file", "checkbox", "radio", "date", "range"].includes(el.type) && el.offsetParent !== null);
+}
+function ponerSiguiente() {
+  const cs = camposDeTexto();
+  cs.forEach((el, i) => { if (el.tagName === "INPUT") el.enterKeyHint = i < cs.length - 1 ? "next" : "done"; });
+}
+raiz.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" || e.target.tagName !== "INPUT" || e.target.closest("form") || e.isComposing) return;
+  const cs = camposDeTexto(), i = cs.indexOf(e.target);
+  if (i < 0) return;
+  e.preventDefault();
+  if (cs[i + 1]) cs[i + 1].focus(); else e.target.blur();
+});
 
 /* ---------- eventos ---------- */
 raiz.addEventListener("submit", async (e) => {
@@ -909,6 +941,17 @@ raiz.addEventListener("click", (e) => {
       guardarGrupo({ ...g, pagos: [...g.pagos, p] });
       marcarVisto();
       mostrarAviso("Anotado: " + nombre(de) + " le pasó " + V.plata(+m) + " a " + nombre(a) + ".", () => restaurarGrupo(antes)); break;
+    }
+    case "tocarMiguita": {
+      // Easter egg: cada toque, un chiste; tocándola muchas veces seguidas salen los especiales.
+      clearTimeout(chisteTimer); clearTimeout(toquesTimer);
+      toques++;
+      let texto = ESPECIALES[toques];
+      if (!texto) { let i; do i = Math.floor(Math.random() * CHISTES.length); while (CHISTES.length > 1 && CHISTES[i] === st.chiste?.texto); texto = CHISTES[i]; }
+      st.chiste = { n: toques, texto, giro: !!ESPECIALES[toques] };
+      chisteTimer = setTimeout(() => { st.chiste = null; if (st.pantalla === "inicio") dibujar(); }, 4500);
+      toquesTimer = setTimeout(() => { toques = 0; }, 20000);
+      break;
     }
     case "copiarAlias": copiar(v); mostrarAviso("Alias copiado. Pegalo en Mercado Pago."); break;
     case "whatsJuntada": st.whatsJ = st.juntadaId ?? ""; abrir("whatsapp"); break;
@@ -1099,7 +1142,10 @@ raiz.addEventListener("click", (e) => {
       return;
     case "listoInstalar": if (st.desdePrimera) { st.desdePrimera = false; irA("inicio"); break; } return volver();
     case "verGrupo": st.grupoTab = "gastos"; irA("grupo"); break;
-    case "elegirYo": st.yoElegido = v; st.errorQuien = ""; break;
+    case "elegirYo":
+      st.yoElegido = v; st.errorQuien = "";
+      st.nombreNuevo = v === "_otra" ? st.cfg.nombre || "" : st.pendiente.miembros.find((m) => m.id === v)?.nombre || "";
+      break;
     case "listoQuien": {
       let g = structuredClone(st.pendiente);
       if (!st.yoElegido) { st.errorQuien = "Elegí quién sos."; break; }
@@ -1112,8 +1158,15 @@ raiz.addEventListener("click", (e) => {
         if (!nombre) { st.errorQuien = "Poné tu nombre."; break; }
         const m = { id: nuevoId(), nombre: nombre.slice(0, 40), alias: al.alias, ts: Date.now(), x: false };
         g.miembros.push(m); g.yo = m.id;
-      } else { g.yo = st.yoElegido; g = conMiAlias(g, al.alias); }
+      } else {
+        g.yo = st.yoElegido; g = conMiAlias(g, al.alias);
+        // Si corrigió su nombre, queda el que puso él.
+        const nombre = st.nombreNuevo.trim().slice(0, 40);
+        if (nombre && nombre !== g.miembros.find((m) => m.id === g.yo)?.nombre)
+          g = { ...g, miembros: g.miembros.map((m) => (m.id === g.yo ? { ...m, nombre, ts: Date.now() } : m)) };
+      }
       g.loc = false;
+      if (!st.cfg.nombre && st.nombreNuevo.trim()) ponerConfig("nombre", st.nombreNuevo.trim().slice(0, 30));
       guardarGrupo(g);
       st.pendiente = null; st.grupoId = g.id; st.grupoTab = "gastos";
       mostrarAviso("Te sumaste a " + g.nombre + ".");
@@ -1142,18 +1195,19 @@ raiz.addEventListener("click", (e) => {
       const f = st.fijos.find((x) => x.id === v), mes = hoy.slice(0, 7);
       if (!f) break;
       if (act === "confirmarFijo") {
-        const mov = movimientoDeFijo(f, mes);
+        const mov = movimientoDeFijo(f, mes, cotizar);
+        if (!mov) { mostrarAviso("Falta el valor del dólar para anotarlo. Cargalo en Más › Dólar."); break; }
         if (!st.movs.some((x) => x.id === mov.id)) guardarMov(mov);
-        mostrarAviso((f.tipo === "ingreso" ? "Anotado: cobraste " : "Anotado: pagaste ") + f.nombre + " " + V.plata(f.monto), () => { quitarMov(mov.id); ponerItem("fijos", f); });
+        mostrarAviso((f.tipo === "ingreso" ? "Anotado: cobraste " : "Anotado: pagaste ") + f.nombre + " " + V.plata(mov.monto), () => { quitarMov(mov.id); ponerItem("fijos", f); });
       } else mostrarAviso("Listo, este mes no se anota " + f.nombre + ".", () => ponerItem("fijos", f));
       ponerItem("fijos", { ...f, hechos: [...(f.hechos || []), mes].slice(-24) });
       break;
     }
     case "cambiarFijo": {
       // Confirmar con otro monto: se abre la hoja de anotar con los datos del fijo.
-      const f = st.fijos.find((x) => x.id === v), mov = movimientoDeFijo(f, hoy.slice(0, 7));
+      const f = st.fijos.find((x) => x.id === v), mov = movimientoDeFijo({ ...f, moneda: "ARS" }, hoy.slice(0, 7));
       ponerItem("fijos", { ...f, hechos: [...(f.hechos || []), hoy.slice(0, 7)].slice(-24) });
-      return abrirHoja({ tipo: mov.tipo, expr: f.monto % 100 ? "" : String(f.monto / 100), tocada: false, centavos: f.monto, categoria: mov.categoria, medio: mov.medio, fecha: mov.fecha, detalle: f.nombre });
+      return abrirHoja({ tipo: mov.tipo, moneda: f.moneda === "USD" ? "USD" : "ARS", expr: f.monto % 100 ? "" : String(f.monto / 100), tocada: false, centavos: f.monto, categoria: mov.categoria, medio: mov.medio, fecha: mov.fecha, detalle: f.nombre });
     }
     case "formSwitch": st.form.vals[v] = !st.form.vals[v]; break;
     case "guardarPlan": {

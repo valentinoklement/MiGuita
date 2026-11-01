@@ -73,7 +73,8 @@ export function crearVistas(st, hoy) {
       `<button class="eyeb" data-act="ocultar" aria-pressed="${st.cfg.ocultar}" aria-label="${st.cfg.ocultar ? "Mostrar montos" : "Ocultar montos"}">${Art.icono(st.cfg.ocultar ? Art.OJO_TAPADO : Art.OJO)}</button></small>` +
       `<h1>Hola${nombre ? ", " + esc(nombre) : ""}</h1>` +
       `<button class="racha" data-act="abrir" data-v="racha" aria-label="Ver tu racha">${Art.minion()}<span>${ra.actual ? ra.actual + (ra.actual === 1 ? " día" : " días") + (ra.hoyHecho ? "" : " · salvala hoy") : "Empezá tu racha"}</span></button>` +
-      `</div>${Art.miguita(estadoDelMes(st.mes, r))}</div>`;
+      `</div><button class="miguita-toque${st.chiste ? " salta" + (st.chiste.n % 2) + (st.chiste.giro ? " gira" : "") : ""}" data-act="tocarMiguita" aria-label="Tocar a Miguita">` +
+      `${Art.miguita(estadoDelMes(st.mes, r))}${st.chiste ? `<span class="globo" role="status">${esc(st.chiste.texto)}</span>` : ""}</button></div>`;
 
     const peor = actual && estadoPresupuestos(st.presupuestos, st.movs, st.mes).find((p) => p.nivel !== "ok");
     if (peor) h += `<button class="card pp tecard" data-act="verPlan" data-v="presupuesto">` +
@@ -90,7 +91,7 @@ export function crearVistas(st, hoy) {
     // Fijos que preguntan antes de anotarse.
     if (actual) for (const f of fijosPorConfirmar(st.fijos, hoy)) {
       const ing = f.tipo === "ingreso";
-      h += crd(`<div class="sec">${ing ? "Ingreso fijo" : "Gasto fijo"} · día ${f.dia}</div><b class="pregunta">${ing ? "¿Ya cobraste " : "¿Ya pagaste "}${esc(f.nombre)}?</b><div class="sub">${plata(f.monto)}</div>` +
+      h += crd(`<div class="sec">${ing ? "Ingreso fijo" : "Gasto fijo"} · día ${f.dia}</div><b class="pregunta">${ing ? "¿Ya cobraste " : "¿Ya pagaste "}${esc(f.nombre)}?</b><div class="sub">${plata(f.monto, f.moneda === "USD" ? { moneda: "US$ " } : {})}</div>` +
         `<div class="chips"><button class="pp" data-act="confirmarFijo" data-v="${esc(f.id)}" aria-pressed="true">Sí, anotar</button><button class="pp" data-act="cambiarFijo" data-v="${esc(f.id)}">Otro monto</button><button class="pp" data-act="saltearFijo" data-v="${esc(f.id)}">Este mes no</button></div>`, "aviso");
     }
     const c = st.cfg.copias;

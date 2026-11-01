@@ -50,14 +50,16 @@ export function crearVistasPlan(st, hoy, V) {
     const r = resumenDeudas(st.deudas, hoy);
     const tarjeta = (d) => {
       const me = d.tipo === "meDeben", falta = restante(d);
-      return crd(`<button class="rowb tecard" data-act="editarPlan" data-v="${esc(d.id)}"><span class="drow"><b>${esc(d.concepto || d.quien)}</b><span class="${falta ? (me ? "pos" : "") : ""}">${falta ? plata(falta) : "Saldada ✓"}</span></span>` +
+      const $ = (c) => dinero(c, d.moneda);
+      return crd(`<button class="rowb tecard" data-act="editarPlan" data-v="${esc(d.id)}"><span class="drow"><b>${esc(d.concepto || d.quien)}</b><span class="${falta ? (me ? "pos" : "") : ""}">${falta ? $(falta) : "Saldada ✓"}</span></span>` +
         Art.barra(d.total ? d.pagado / d.total : 1) +
-        `<span class="sub">${me ? "Te debe " : "Le debés a "}${esc(d.quien || "alguien")} · ${me ? "cobraste" : "pagaste"} ${plata(d.pagado)} de ${plata(d.total)}` +
+        `<span class="sub">${me ? "Te debe " : "Le debés a "}${esc(d.quien || "alguien")} · ${me ? "cobraste" : "pagaste"} ${$(d.pagado)} de ${$(d.total)}` +
         (d.vence && falta ? (r.vencida(d) ? ` · <span class="neg">venció el ${fecha(d.vence)}</span>` : ` · vence el ${fecha(d.vence)}`) : "") + `</span></button>` +
         (falta ? `<div class="chips"><button class="pp" data-act="pagarDeuda" data-v="${esc(d.id)}">${me ? "Registrar cobro" : "Registrar pago"}</button></div>` : ""));
     };
     if (!st.deudas.length) return vacio("Sin deudas", "Anotá lo que debés o lo que te deben y andá tachando.") + nuevo("deuda", "+ Nueva deuda");
-    return crd(`<div class="stats"><div><div class="sub">Debés</div><b class="neg">${plata(r.debo)}</b></div><div><div class="sub">Te deben</div><b class="pos">${plata(r.meDeben)}</b></div></div>`) +
+    const usd = (c) => (c ? `<small style="display:block">+ ${dinero(c, "USD")}</small>` : "");
+    return crd(`<div class="stats"><div><div class="sub">Debés</div><b class="neg">${plata(r.debo)}${usd(r.deboUsd)}</b></div><div><div class="sub">Te deben</div><b class="pos">${plata(r.meDeben)}${usd(r.meDebenUsd)}</b></div></div>`) +
       r.activas.map(tarjeta).join("") + nuevo("deuda", "+ Nueva deuda") +
       (r.saldadas.length ? `<div class="chips"><button class="pp" data-act="verSaldadas" aria-pressed="${st.verSaldadas}">${st.verSaldadas ? "Ocultar" : "Ver"} saldadas (${r.saldadas.length})</button></div>` +
         (st.verSaldadas ? r.saldadas.map(tarjeta).join("") : "") : "");
@@ -66,7 +68,7 @@ export function crearVistasPlan(st, hoy, V) {
   function fijos() {
     if (!st.fijos.length) return vacio("Sin fijos", "Cargá lo que pagás o cobrás todos los meses, como el alquiler o el sueldo. Se anotan solos el día que elijas, o te preguntamos antes.") + nuevo("fijo", "+ Nuevo fijo");
     const activos = st.fijos.filter((f) => f.activo);
-    const suma = (t) => activos.filter((f) => (f.tipo || "gasto") === t).reduce((a, f) => a + f.monto, 0);
+    const suma = (t) => activos.filter((f) => (f.tipo || "gasto") === t && f.moneda !== "USD").reduce((a, f) => a + f.monto, 0);
     const gastos = suma("gasto"), ingresosFijos = suma("ingreso");
     const ingresos = resumenMes(st.movs, hoy).ingresos;
     const lista = (t, titulo) => {
@@ -74,7 +76,7 @@ export function crearVistasPlan(st, hoy, V) {
       return fs.length ? crd(lbl(titulo) + fs.map((f, i) =>
         `<div class="srow${i ? "" : " f"}"><button class="rt rowb" data-act="editarPlan" data-v="${esc(f.id)}" style="text-align:left"><b>${esc(f.nombre)}</b>` +
         `<small>${f.activo ? "Día " + f.dia + " · " + (f.modo === "recordar" ? "te preguntamos" : "se anota solo") + ((f.hechos || []).includes(mes) ? " · listo este mes ✓" : "") : "Pausado"}</small></button>` +
-        `<span class="amt${t === "ingreso" ? " pos" : ""}">${plata(f.monto)}</span>${interruptor("fijoActivo", f.activo, (f.activo ? "Pausar " : "Activar ") + f.nombre, f.id)}</div>`).join("")) : "";
+        `<span class="amt${t === "ingreso" ? " pos" : ""}">${dinero(f.monto, f.moneda)}</span>${interruptor("fijoActivo", f.activo, (f.activo ? "Pausar " : "Activar ") + f.nombre, f.id)}</div>`).join("")) : "";
     };
     return crd(`<div class="stats"><div><div class="sub">Gastos fijos por mes</div><b>${plata(gastos)}</b></div>` +
         (ingresosFijos ? `<div><div class="sub">Ingresos fijos</div><b class="pos">${plata(ingresosFijos)}</b></div>` : ingresos ? `<div><div class="sub">De tus ingresos del mes</div><b>${Math.round(gastos / ingresos * 100)}%</b></div>` : "") + `</div>`) +
@@ -110,7 +112,7 @@ export function crearVistasPlan(st, hoy, V) {
       const gastado = delMes(st.movs, mes).filter((x) => x.tipo !== "ingreso" && x.categoria === v.categoria).reduce((a, x) => a + x.monto, 0);
       return back("Plan") + hdr("Presupuesto", st.form.id ? "Editar presupuesto" : "Nuevo presupuesto") +
         selector("categoria", "Categoría", catsGasto(v.categoria).filter((c) => !usadas.has(c.id)).map((c) => [c.id, c.nombre])) +
-        campo("tope", "Tope del mes", { ph: "por ejemplo 90.000", modo: "monto", max: 16 }) +
+        campo("tope", "Tope del mes, en pesos", { ph: "por ejemplo 90.000", modo: "monto", max: 16 }) +
         crd(`<div class="sub">Este mes gastaste ${plata(gastado)} en ${esc(nombreCat(v.categoria))}.${tope ? (tope >= gastado ? " Con este tope te quedarían " + plata(tope - gastado) + "." : " Con este tope ya te pasaste " + plata(gastado - tope) + ".") : ""}</div>`) +
         pie("Guardar presupuesto");
     },
@@ -135,7 +137,8 @@ export function crearVistasPlan(st, hoy, V) {
         lbl("¿Qué tipo es?") + opcion("tipo", [["debo", "Yo debo"], ["meDeben", "Me deben"]], "Tipo de deuda") +
         campo("quien", me ? "¿Quién te debe?" : "¿A quién le debés?", { max: 40 }) +
         campo("concepto", "¿Por qué?", { ph: "por ejemplo: un préstamo", max: 60 }) +
-        campo("total", "Monto total", { modo: "monto", max: 16 }) +
+        lbl("Moneda") + opcion("moneda", [["ARS", "Pesos"], ["USD", "Dólares"]], "Moneda") +
+        campo("total", st.form.vals.moneda === "USD" ? "Monto total, en dólares" : "Monto total, en pesos", { modo: "monto", max: 16 }) +
         campo("pagado", me ? "Ya cobrado" : "Ya pagado", { ph: "0", modo: "monto", max: 16 }) +
         campoFecha("vence", "Fecha límite (opcional)") +
         pie("Guardar deuda");
@@ -146,7 +149,9 @@ export function crearVistasPlan(st, hoy, V) {
       return back("Plan") + hdr("Fijos", st.form.id ? "Editar fijo" : "Nuevo fijo") +
         lbl("¿Qué es?") + opcion("tipo", [["gasto", "Un gasto"], ["ingreso", "Un ingreso"]], "Tipo") +
         campo("nombre", "Nombre", { ph: ing ? "por ejemplo: sueldo" : "por ejemplo: alquiler", max: 40 }) +
-        campo("monto", "Monto por mes", { modo: "monto", max: 16 }) +
+        lbl("Moneda") + opcion("moneda", [["ARS", "Pesos"], ["USD", "Dólares"]], "Moneda") +
+        campo("monto", v.moneda === "USD" ? "Monto por mes, en dólares" : "Monto por mes, en pesos", { modo: "monto", max: 16 }) +
+        (v.moneda === "USD" ? `<div class="hint">Se anota en pesos con el dólar de ese día (el que elegiste en Más › Dólar).</div>` : "") +
         selector("categoria", "Categoría", cats.map((c) => [c.id, c.nombre])) +
         campo("dia", ing ? "Día del mes en que cobrás" : "Día del mes en que se paga", { ph: "1 a 31", modo: "num", max: 2 }) +
         selector("medio", "Medio de pago (opcional)", [["", "Ninguno"], ...mediosVisibles(v.medio).map((m) => [m.id, m.nombre])]) +
@@ -168,7 +173,7 @@ export function crearVistasPlan(st, hoy, V) {
       const d = st.deudas.find((x) => x.id === st.form.id);
       const me = d.tipo === "meDeben";
       return back("Plan") + hdr(esc(d.concepto || d.quien), me ? "Cobrarle a " + esc(d.quien || "alguien") : "Pagarle a " + esc(d.quien || "alguien")) +
-        campo("monto", "Monto", { modo: "monto", max: 16 }) + `<div class="hint">Falta ${me ? "cobrar" : "pagar"} ${plata(restante(d))}.</div>` +
+        campo("monto", d.moneda === "USD" ? "Monto, en dólares" : "Monto", { modo: "monto", max: 16 }) + `<div class="hint">Falta ${me ? "cobrar" : "pagar"} ${dinero(restante(d), d.moneda)}.${d.moneda === "USD" ? " Si lo anotás, se pasa a pesos con el dólar de hoy." : ""}</div>` +
         crd(`<div class="srow f"><span class="rt"><b>Anotarlo también como ${me ? "ingreso" : "gasto"}</b><small>Categoría ${esc(nombreCat(me ? "otros_in" : "deudas"))}</small></span>${interruptor("formSwitch", !!st.form.vals.anotar, "Anotarlo también", "anotar")}</div>`) +
         pie(me ? "Registrar cobro" : "Registrar pago");
     },

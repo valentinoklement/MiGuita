@@ -53,7 +53,7 @@ export function crearVistasPrimera(st, V) {
     () => [Art.pan(0.6), "Mirá cuánto te queda", "Si cargás lo que cobrás, ves cuánto te queda del mes y cuánto podés gastar por día. Si te pasás, Miguita se empieza a poner fea."],
     () => [Art.masa(0.6), "Ahorrá para algo", "En Plan ponés metas (un viaje, un fondo de emergencia), topes por categoría, deudas y gastos fijos que se anotan solos."],
     () => [`<div class="crew">${["fact", "canon", "bola"].map((k) => Art.factura(k)).join("")}</div>`, "Dividí con amigos", "Armá el grupo una vez e invitalos con un link. En cada juntada marcan quién entra en qué (la comida, el fernet, la birra) y la app dice quién le pasa a quién, con el alias a mano."],
-    () => [Art.minion(), "Sumá días de racha", "Cada día que anotás suma un ingrediente. A los 7 días horneás un miñón, y sigue."],
+    () => [Art.masa(0.35), "Sumá días de racha", "Cada día que anotás suma un ingrediente a la receta. ¿Qué sale del horno a los 7 días? ¿Y a los 100? Para saberlo, hay que llegar."],
     () => [Art.miguita("ok"), "Tus datos son tuyos", "Todo queda solo en tu celu. Podés cerrarla con PIN y hacer copias de seguridad desde Más."],
   ];
   function tutorial() {

@@ -1,7 +1,7 @@
 // Plan: presupuestos, metas, deudas y gastos fijos.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { estadoPresupuestos, estadoConPresupuestos, infoMeta, resumenDeudas, restante, mesDeInicio, correrFijos } from "../src/logic/plan.js";
+import { estadoPresupuestos, estadoConPresupuestos, infoMeta, resumenDeudas, restante, mesDeInicio, correrFijos, movimientoDeFijo } from "../src/logic/plan.js";
 import { leerMonto, montoEnCampo } from "../src/logic/dinero.js";
 import { migrar, VERSION } from "../src/logic/migraciones.js";
 import { planDeEjemplo } from "../src/ui/ejemplo.js";
@@ -137,4 +137,17 @@ test("fijos de ingreso y fijos que preguntan antes de anotarse", async () => {
   assert.equal(auto[0].tipo, "ingreso", "un ingreso fijo automático se anota como ingreso");
   const v4 = migrar({}); v4.schemaVersion = 4; v4.fijos = [{ id: "a", nombre: "Alquiler", dia: 5, monto: 1, activo: true }];
   assert.deepEqual(migrar(v4).fijos.map((f) => [f.tipo, f.modo]), [["gasto", "auto"]], "los fijos viejos siguen siendo gastos automáticos");
+});
+
+test("fijos y deudas en dólares", () => {
+  const f = { id: "net", tipo: "gasto", modo: "auto", nombre: "Streaming", moneda: "USD", monto: 1000, categoria: "servicios", medio: "", dia: 5, activo: true, desde: "2026-10", hechos: [] };
+  const cot = (fecha) => (fecha >= "2026-11-01" ? { valor: 150000, fecha, fuente: "dolarapi", estimado: false, tipo: "cripto" } : null);
+  // Octubre no tiene dólar guardado: no se anota (ni se marca hecho) hasta que lo haya.
+  const r = correrFijos([f], [], "2026-11-10", cot);
+  assert.deepEqual(r.nuevos.map((m) => [m.fecha, m.monto, m.usd.monto, m.usd.tipo]), [["2026-11-05", 1500000, 1000, "cripto"]]);
+  assert.deepEqual(r.cambiados[0].hechos, ["2026-11"]);
+  assert.equal(movimientoDeFijo(f, "2026-10", cot), null);
+  assert.equal(movimientoDeFijo({ ...f, moneda: "ARS" }, "2026-10", cot).monto, 1000, "en pesos no cambia nada");
+  const d = resumenDeudas([{ tipo: "debo", moneda: "USD", total: 2000, pagado: 0 }, { tipo: "debo", total: 50000, pagado: 0 }, { tipo: "meDeben", moneda: "USD", total: 500, pagado: 100 }], "2026-11-01");
+  assert.deepEqual([d.debo, d.deboUsd, d.meDeben, d.meDebenUsd], [50000, 2000, 0, 400]);
 });

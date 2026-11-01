@@ -300,3 +300,15 @@ em.nuevo{font-style:normal;font-size:10px;font-weight:800;text-transform:upperca
 .celda.on{background:var(--tbox);color:var(--box);border:1.5px solid var(--tbox)}
 .celda:focus-visible,.grilla thead button:focus-visible{outline:2px solid var(--tbox);outline-offset:2px}
 .pagado{opacity:.75}
+
+/* Miguita habla cuando la tocan */
+.miguita-toque{all:unset;cursor:pointer;position:relative;flex:none;-webkit-tap-highlight-color:transparent}
+.miguita-toque:focus-visible{outline:2px dashed var(--lscr);outline-offset:4px;border-radius:12px}
+.globo{position:absolute;right:0;top:100%;margin-top:6px;width:210px;background:var(--box);color:var(--tbox);border:2px solid var(--tbox);font:700 13px/1.35 "Manrope",sans-serif;padding:9px 11px;border-radius:12px;z-index:6;text-align:left;pointer-events:none}
+.globo::before{content:"";position:absolute;top:-8px;right:52px;border:6px solid transparent;border-top:0;border-bottom-color:var(--box)}
+@keyframes salta0{0%{transform:none}30%{transform:translateY(-10px) rotate(-6deg)}60%{transform:translateY(0) rotate(4deg)}100%{transform:none}}
+@keyframes salta1{0%{transform:none}30%{transform:translateY(-10px) rotate(6deg)}60%{transform:translateY(0) rotate(-4deg)}100%{transform:none}}
+@keyframes gira{to{transform:rotate(360deg)}}
+.motion .salta0 svg{animation:salta0 .5s ease-out}
+.motion .salta1 svg{animation:salta1 .5s ease-out}
+.motion .gira svg{animation:gira .9s ease-in-out}

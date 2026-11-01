@@ -1,12 +1,12 @@
 // Pantallas de Grupos: lista, un grupo (tu situación y sus juntadas), una juntada (compras, quién entra en qué
 // y cómo quedar a mano), formularios, compartir, unir y WhatsApp.
 import { Art } from "../art/art.js";
+import { amigo } from "../art/amigos.js";
 import { formatear, leerMonto } from "../logic/dinero.js";
 import { centavos, repartir, saldos, saldar, miParte, textoWhatsApp, juntadasVivas, gastosDe, pagosDe, haySueltos, cuentas, detalleDe, miSituacion, pagadores } from "../logic/grupos.js";
 import { sumarDias } from "../logic/mes.js";
 import { esc } from "./pantallas.js";
 
-const AMIGOS = ["canon", "bola", "fact", "luna"];
 const REPARTOS = [["eq", "Parejo"], ["sh", "Partes"], ["pc", "Porcentaje"], ["ex", "Montos"]];
 
 // Pesos de reparto escritos en el formulario → como los guarda el grupo (partes, porcentaje o pesos).
@@ -28,7 +28,7 @@ export function crearVistasGrupos(st, hoy, V) {
   const dibujo = (g, id) => {
     if (id === g.yo) return Art.miguita("ok");
     const i = vivos(g).filter((m) => m.id !== g.yo).findIndex((m) => m.id === id);
-    return Art.factura(AMIGOS[Math.max(0, i) % AMIGOS.length]);
+    return amigo(i);
   };
   const fecha = (f) => f ? Number(f.slice(8, 10)) + " " + ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"][Number(f.slice(5, 7)) - 1] : "";
   const btn = (act, texto, { alt = false, v = "" } = {}) => `<button class="btn pp w${alt ? " alt" : ""}" data-act="${act}"${v ? ` data-v="${esc(v)}"` : ""}>${texto}</button>`;
@@ -186,7 +186,7 @@ export function crearVistasGrupos(st, hoy, V) {
           `<div class="persona"><input class="field" data-act="gPersona" data-i="${i}" data-k="nombre" value="${esc(m.nombre)}" placeholder="${i ? "Nombre" : "Tu nombre"}" aria-label="${i ? "Nombre de la persona " + (i + 1) : "Tu nombre"}" maxlength="40">` +
           `<input class="field" data-act="gPersona" data-i="${i}" data-k="alias" value="${esc(m.alias)}" placeholder="alias (opcional)" aria-label="Alias de ${i ? "la persona " + (i + 1) : "vos"}" maxlength="22" autocapitalize="none">` +
           (i ? `<button class="mbtn" data-act="quitarFila" data-v="${i}" aria-label="Quitar persona ${i + 1}">×</button>` : `<span class="hint">vos</span>`) + `</div>`).join("") +
-          `<div class="chips"><button class="pp" data-act="sumarFila">+ Sumar integrante</button></div><div class="hint">El alias es solo de Mercado Pago, nunca el CBU.</div>`) +
+          `<div class="chips"><button class="pp" data-act="sumarFila">+ Sumar integrante</button></div><div class="hint">Podés dejarlo solo con vos: cada uno se suma con su nombre cuando le mandás el link. El alias es solo de Mercado Pago, nunca el CBU.</div>`) +
         pie("Crear grupo");
     },
     grupoEditar() {
@@ -313,10 +313,12 @@ export function crearVistasGrupos(st, hoy, V) {
   function quien() {
     const g = st.pendiente;
     const opcion = (id, texto, dib) => `<button class="card pp qs" data-act="elegirYo" data-v="${esc(id)}" aria-pressed="${st.yoElegido === id}"><span class="rd${st.yoElegido === id ? " on" : ""}"></span>${dib}<b>${esc(texto)}</b></button>`;
+    // Cada uno se pone su nombre: si ya estaba en la lista lo elige (y lo puede corregir); si no, se suma.
     return hdr(g.nombre, "¿Quién sos en este grupo?") +
-      vivos(g).map((m, i) => opcion(m.id, m.nombre, Art.factura(AMIGOS[i % AMIGOS.length]))).join("") +
-      opcion("_otra", "— Soy otra persona —", "") +
-      (st.yoElegido === "_otra" ? `<div class="quick"><div class="pp"><input class="field" data-act="nombreNuevo" value="${esc(st.nombreNuevo)}" placeholder="Tu nombre" aria-label="Tu nombre" maxlength="40"></div></div>` : "") +
+      opcion("_otra", "No estoy en la lista: sumarme", Art.miguita("ok")) +
+      (vivos(g).length ? `<div class="sub" style="margin:4px 2px">O si ya te anotaron, elegite:</div>` : "") +
+      vivos(g).map((m, i) => opcion(m.id, m.nombre, amigo(i))).join("") +
+      (st.yoElegido ? lbl("Tu nombre en el grupo") + `<div class="quick"><div class="pp"><input class="field" data-act="nombreNuevo" value="${esc(st.nombreNuevo)}" placeholder="Tu nombre" aria-label="Tu nombre en el grupo" maxlength="40" autocomplete="given-name"></div></div>` : "") +
       (st.yoElegido ? crd(lbl("Tu alias para cobrar (opcional)") +
         `<input class="field fondo" data-act="aliasQuien" value="${esc(st.aliasQuien)}" placeholder="tu.alias.mp" aria-label="Tu alias para cobrar" maxlength="22" autocapitalize="none" autocomplete="off" spellcheck="false">` +
         `<div class="sub">Así los demás ven a dónde transferirte. Solo el alias, nunca el CBU.</div>`) : "") +

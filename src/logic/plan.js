@@ -1,9 +1,10 @@
 // Plan: presupuestos, metas, deudas y gastos fijos. Todo en centavos.
 //   presupuesto: { id, categoria, tope }
 //   meta:  { id, nombre, icono, moneda: "ARS"|"USD", objetivo, ahorrado, fecha?, ts }
-//   deuda: { id, tipo: "debo"|"meDeben", quien, concepto, total, pagado, vence?, ts }
-//   fijo:  { id, tipo: "gasto"|"ingreso", modo: "auto"|"recordar", nombre, monto, categoria, medio, dia (1 a 31), activo,
+//   deuda: { id, tipo: "debo"|"meDeben", quien, concepto, moneda?: "ARS"|"USD", total, pagado, vence?, ts }
+//   fijo:  { id, tipo: "gasto"|"ingreso", modo: "auto"|"recordar", nombre, moneda?: "ARS"|"USD", monto, categoria, medio, dia (1 a 31), activo,
 //            desde "AAAA-MM", hechos: ["AAAA-MM"] }
+//   Sin moneda es en pesos. Un fijo en dólares se anota en pesos con el dólar de ese día (cotizar(fecha) → { valor, ... }).
 //   modo "auto": se anota solo. modo "recordar": el día que toca, Inicio pregunta y la persona lo confirma.
 import { delMes, diasDelMes, cambiarMes } from "./mes.js";
 
@@ -46,14 +47,17 @@ export function infoMeta(m, hoy) {
 /* ---------- deudas ---------- */
 export const restante = (d) => Math.max(0, d.total - d.pagado);
 
+const suma = (ds, tipo, usd) => ds.filter((d) => d.tipo === tipo && (d.moneda === "USD") === usd).reduce((a, d) => a + restante(d), 0);
 export function resumenDeudas(deudas, hoy) {
   const activas = deudas.filter((d) => restante(d) > 0)
     .sort((a, b) => (a.vence || "9999").localeCompare(b.vence || "9999") || restante(b) - restante(a));
   return {
     activas,
     saldadas: deudas.filter((d) => restante(d) === 0),
-    debo: activas.filter((d) => d.tipo === "debo").reduce((a, d) => a + restante(d), 0),
-    meDeben: activas.filter((d) => d.tipo === "meDeben").reduce((a, d) => a + restante(d), 0),
+    debo: suma(activas, "debo", false),
+    meDeben: suma(activas, "meDeben", false),
+    deboUsd: suma(activas, "debo", true),
+    meDebenUsd: suma(activas, "meDeben", true),
     vencida: (d) => !!d.vence && d.vence < hoy && restante(d) > 0,
   };
 }
@@ -68,7 +72,15 @@ export function mesDeInicio(dia, hoy) {
 // Anota los fijos que ya llegaron a su día y no se anotaron todavía, con su fecha correcta,
 // aunque la app no se haya abierto ese día (hasta 12 meses atrás). Un fijo se anota una sola vez por mes:
 // el movimiento tiene id fijo "fx_<fijo>_<mes>" y el mes queda en "hechos".
-export function correrFijos(fijos, movs, hoy) {
+// Pasa a pesos el movimiento de un fijo en dólares. null si todavía no hay valor del dólar para esa fecha.
+function enPesos(mov, f, cotizar) {
+  if (f.moneda !== "USD") return mov;
+  const c = cotizar && cotizar(mov.fecha);
+  if (!c) return null;
+  return { ...mov, monto: Math.round(f.monto * c.valor / 100), usd: { monto: f.monto, valor: c.valor, fecha: c.fecha, tipo: c.tipo, fuente: c.fuente, estimado: c.estimado } };
+}
+
+export function correrFijos(fijos, movs, hoy, cotizar) {
   const ids = new Set(movs.map((x) => x.id));
   const nuevos = [], cambiados = [];
   const mesHoy = hoy.slice(0, 7), limite = cambiarMes(mesHoy, -11);
@@ -82,7 +94,9 @@ export function correrFijos(fijos, movs, hoy) {
       if (fecha > hoy) continue;
       const id = "fx_" + f.id + "_" + m;
       if (!ids.has(id)) {
-        nuevos.push({ id, tipo: f.tipo || "gasto", monto: f.monto, detalle: f.nombre, categoria: f.categoria, medio: f.medio || "", fecha, ts: Date.parse(fecha + "T12:00:00"), mod: Date.now(), fijo: f.id });
+        const mov = enPesos({ id, tipo: f.tipo || "gasto", monto: f.monto, detalle: f.nombre, categoria: f.categoria, medio: f.medio || "", fecha, ts: Date.parse(fecha + "T12:00:00"), mod: Date.now(), fijo: f.id }, f, cotizar);
+        if (!mov) continue; // sin dólar todavía: se anota cuando lo haya
+        nuevos.push(mov);
         ids.add(id);
       }
       hechos.add(m);
@@ -101,7 +115,7 @@ export function fijosPorConfirmar(fijos, hoy) {
 }
 
 // El movimiento de un fijo para un mes (mismo id que si se anotara solo, así nunca se duplica).
-export function movimientoDeFijo(f, mes) {
+export function movimientoDeFijo(f, mes, cotizar) {
   const fecha = mes + "-" + String(Math.min(f.dia, diasDelMes(mes))).padStart(2, "0");
-  return { id: "fx_" + f.id + "_" + mes, tipo: f.tipo || "gasto", monto: f.monto, detalle: f.nombre, categoria: f.categoria, medio: f.medio || "", fecha, ts: Date.parse(fecha + "T12:00:00"), mod: Date.now(), fijo: f.id };
+  return enPesos({ id: "fx_" + f.id + "_" + mes, tipo: f.tipo || "gasto", monto: f.monto, detalle: f.nombre, categoria: f.categoria, medio: f.medio || "", fecha, ts: Date.parse(fecha + "T12:00:00"), mod: Date.now(), fijo: f.id }, f, cotizar);
 }
