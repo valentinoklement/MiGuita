@@ -412,10 +412,10 @@ export function crearVistas(st, hoy) {
       `<label class="pp otra"${otra ? ' data-on="1"' : ""}>${otra ? esc(nombreDia(s.fecha, true)) : "Otra fecha"}<input type="date" data-act="otra" value="${s.fecha}" max="${hoy}" aria-label="Elegir otra fecha"></label></div>` +
       `<div class="quick"><div class="pp"><input data-act="detalle" value="${esc(s.detalle)}" placeholder="Detalle (opcional)" aria-label="Detalle" maxlength="80"></div></div>` +
       (s.error ? `<div class="msg" role="alert">${esc(s.error)}</div>` : "") +
-      `<div class="pad">${tecla("7")}${tecla("8")}${tecla("9")}${tecla("⌫")}${tecla("4")}${tecla("5")}${tecla("6")}${tecla("+")}${tecla("1")}${tecla("2")}${tecla("3")}` +
+      `<div class="pie"><div class="pad">${tecla("7")}${tecla("8")}${tecla("9")}${tecla("⌫")}${tecla("4")}${tecla("5")}${tecla("6")}${tecla("+")}${tecla("1")}${tecla("2")}${tecla("3")}` +
       `<button class="key pp ok" data-act="guardar">Guardar</button>${tecla("000")}${tecla("0")}${tecla("−")}</div>` +
       (editar ? `<button class="btn pp w alt del" data-act="borrarMov">${st.confirmar === "mov" ? "Tocá de nuevo para borrar" : "Borrar este movimiento"}</button>` : "") +
-      `</div></div>`;
+      `</div></div></div>`;
   }
 
   return { inicio, movimientos, resumen, racha, festejo, mas, cargarPlata, personalizacion, hayEjemplo, categorias, editarCat, hoja, nombreCat, nombreMedio, nombreDia, mesTexto, plata, motivosApretado, estadoDelMes,
