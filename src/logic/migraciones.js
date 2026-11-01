@@ -5,17 +5,17 @@
 // Datos: { schemaVersion, config: {...}, y una lista por cada nombre de LISTAS }
 //   mov:  { id, tipo: "gasto"|"ingreso", monto (centavos), detalle, categoria (id), medio (id o ""), fecha "AAAA-MM-DD", ts, mod, fijo? }
 //   dia:  { fecha, sinGasto?: true, salvavidas?: true }
-//   presupuestos, metas, deudas, fijos: ver src/logic/plan.js · grupos: ver src/logic/grupos.js
+//   presupuestos, metas, deudas, fijos: ver src/logic/plan.js · grupos: ver src/logic/grupos.js · tarjetas, compras: ver src/logic/cuotas.js
 //   cotización: { id: "AAAA-MM-DD|tipo", fecha, tipo, valor (centavos por dólar), fuente, hora }
 //   mov en dólares además lleva usd: { monto (centavos de dólar), valor, fecha, tipo, fuente, estimado }
 //   config: { categorias: {gasto, ingreso}, medios: [...], tema, movimiento, ocultar, nombre, ... }
 import { categoriasIniciales, mediosIniciales } from "./categorias.js";
 import { NOTIF_INICIAL } from "./avisos.js";
 
-export const VERSION = 6;
+export const VERSION = 7;
 
 // Nombre de cada lista guardada y su clave.
-export const LISTAS = { movs: "id", dias: "fecha", presupuestos: "id", metas: "id", deudas: "id", fijos: "id", grupos: "id", cotizaciones: "id" };
+export const LISTAS = { movs: "id", dias: "fecha", presupuestos: "id", metas: "id", deudas: "id", fijos: "id", grupos: "id", cotizaciones: "id", tarjetas: "id", compras: "id" };
 
 const MIGRACIONES = [
   // 0 → 1: base nueva vacía, con categorías y medios por defecto.
@@ -43,6 +43,8 @@ const MIGRACIONES = [
   (d) => ({ ...d, fijos: (d.fijos || []).map((f) => ({ tipo: "gasto", modo: "auto", ...f })) }),
   // 5 → 6: el medio "Mercado Pago" pasa a "Billetera virtual" (sirve también para Ualá, MODO, Naranja X…), salvo que la persona lo haya renombrado.
   (d) => ({ ...d, config: { ...d.config, medios: (d.config?.medios || []).map((m) => (m.id === "mp" && m.nombre === "Mercado Pago" ? { ...m, nombre: "Billetera virtual" } : m)) } }),
+  // 6 → 7: compras en cuotas y tarjetas.
+  (d) => ({ ...d, tarjetas: d.tarjetas || [], compras: d.compras || [] }),
 ];
 
 export function migrar(datos) {

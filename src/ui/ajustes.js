@@ -16,9 +16,14 @@ export function crearVistasAjustes(st, hoy, V) {
   /* ---------- avisos ---------- */
   function notif() {
     const n = st.cfg.notif;
-    const permiso = !("Notification" in globalThis) ? "no" : Notification.permission;
+    const permiso = !("Notification" in globalThis) || !("PushManager" in globalThis) ? "no" : Notification.permission;
+    const activos = st.cfg.avisos && permiso === "granted";
     return back("Más") + hdr("Ajustes", "Notificaciones") +
-      crd(`<div class="sub"><b>Por ahora los avisos aparecen cuando abrís MiGuita.</b> Que lleguen con la app cerrada está en camino.</div>`) +
+      (permiso === "no" ? "" : activos ?
+        crd(`<div class="sub">● Activados en este dispositivo</div><b style="font:800 17px 'Bricolage Grotesque',sans-serif">Te avisamos aunque la app esté cerrada</b>` +
+          `<div class="sub">Para eso, el servidor guarda solo a dónde mandar el aviso, tus horarios y el último día que anotaste algo. Nunca montos ni movimientos.</div>`) :
+        crd(`<b style="font:800 17px 'Bricolage Grotesque',sans-serif">Avisos con la app cerrada</b><div class="sub">Para que MiGuita te recuerde anotar aunque no la tengas abierta. El servidor guarda solo a dónde mandar el aviso, tus horarios y el último día que anotaste algo. Nunca montos ni movimientos.</div>`) +
+        (permiso === "denied" ? "" : btn("activarAvisos", st.avisosTrabajando ? "Activando…" : "Activar avisos"))) +
       lbl("¿Cuántos avisos por día?") + chips("notifCant", [["0", "Ninguno"], ["1", "1"], ["2", "2"], ["3", "3"]], String(n.cantidad), "Cantidad de avisos") +
       (n.cantidad ? crd(n.horas.slice(0, n.cantidad).map((h, i) => fila("Aviso " + (i + 1), "", hora("notifHora", h, "Hora del aviso " + (i + 1)).replace('data-act="notifHora"', `data-act="notifHora" data-i="${i}"`), !i)).join("")) +
         `<div class="sub">Te avisamos solo si todavía no anotaste nada ese día.</div>` : "") +
@@ -30,9 +35,9 @@ export function crearVistasAjustes(st, hoy, V) {
         fila("Presupuesto por pasarse", "Una vez al llegar al 90%", interruptor("notifTipo", n.tipos.presupuesto, "Presupuesto por pasarse", "presupuesto"))) +
       crd(fila("No molestar", n.noMolestar.activo ? "Sin avisos en esa franja" : "Apagado", interruptor("notifNM", n.noMolestar.activo, "No molestar"), true) +
         (n.noMolestar.activo ? fila("Desde", "", hora("notifDesde", n.noMolestar.desde, "No molestar desde")) + fila("Hasta", "", hora("notifHasta", n.noMolestar.hasta, "No molestar hasta")) : "")) +
-      btn("probarAviso", "Probar un aviso", true) +
+      (activos ? btn("probarAvisoServidor", "Mandarme un aviso de prueba", true) + `<button class="btn pp w alt del" data-act="apagarAvisos">${st.confirmar === "avisos" ? "Tocá de nuevo para apagarlos" : "Apagar los avisos"}</button>` : btn("probarAviso", "Probar un aviso", true)) +
       (permiso === "denied" ? crd(`<div class="msg">Los avisos están bloqueados en este celu.</div><div class="sub">Para activarlos: en Android, mantené apretado el ícono de MiGuita › Información de la app › Notificaciones. En iPhone: Ajustes › Notificaciones › MiGuita.</div>`) :
-        permiso === "no" ? crd(`<div class="sub">Este navegador no permite avisos. En iPhone hay que agregar MiGuita a la pantalla de inicio (iOS 16.4 o más).</div>`) : "");
+        permiso === "no" ? crd(`<div class="sub">Acá no se pueden recibir avisos con la app cerrada. En iPhone hay que agregar MiGuita a la pantalla de inicio (iOS 16.4 o más) y abrirla desde el ícono.</div>`) : "");
   }
 
   /* ---------- seguridad ---------- */
@@ -55,7 +60,7 @@ export function crearVistasAjustes(st, hoy, V) {
     return h + crd(lbl("Lo que tenés que saber") +
       `<div class="sub">• Si te olvidás el PIN y no tenés una copia, no hay forma de recuperar los datos. Por eso conviene la copia automática.</div>` +
       `<div class="sub">• Un PIN corto frena a un curioso, pero no a alguien con herramientas para copiar la memoria del celu. Para más protección, usá una contraseña larga.</div>` +
-      `<div class="sub">• La app no tiene cuentas, publicidad ni seguimiento, y tus gastos no salen de tu celu. Solo los grupos que conectes viajan por internet, cifrados.</div>`);
+      `<div class="sub">• La app no tiene cuentas, publicidad ni seguimiento, y tus gastos no salen de tu celu. Solo los grupos y dispositivos que conectes viajan por internet, cifrados. Si activás los avisos, el servidor guarda solo a dónde mandarlos, tus horarios y el último día que anotaste algo.</div>`);
   }
 
   function crearPin() {

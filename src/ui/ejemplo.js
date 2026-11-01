@@ -55,6 +55,13 @@ export function planDeEjemplo(hoy) {
       { id: "ej_f1", nombre: "Alquiler", monto: 350000_00, categoria: "servicios", medio: "transferencia", dia: 5, activo: true, desde: cambiarMes(mes, 1), hechos: [] },
       { id: "ej_f2", nombre: "Gimnasio", monto: 35000_00, categoria: "gym", medio: "debito", dia: 10, activo: false, desde: cambiarMes(mes, 1), hechos: [] },
     ],
+    tarjetas: [{ id: "ej_t1", nombre: "Visa", ts: 1 }, { id: "ej_t2", nombre: "Mastercard", ts: 2 }],
+    // Las cuotas ya pagas no se anotan y la próxima es el mes que viene: el ejemplo no anota nada solo.
+    compras: [
+      { id: "ej_c1", tarjeta: "ej_t1", detalle: "Heladera", categoria: "otros", total: 600000_00, cuotas: 6, desde: cambiarMes(mes, -1), dia: 10, previas: 2, hechas: 2, ts: 1, mod: 1 },
+      { id: "ej_c2", tarjeta: "ej_t1", detalle: "Zapatillas", categoria: "ropa", total: 90000_00, cuotas: 3, desde: mes, dia: 10, previas: 1, hechas: 1, ts: 2, mod: 2 },
+      { id: "ej_c3", tarjeta: "ej_t2", detalle: "Celular", categoria: "otros", total: 480000_00, cuotas: 12, desde: cambiarMes(mes, -2), dia: 10, previas: 3, hechas: 3, ts: 3, mod: 3 },
+    ],
   };
 }
 
@@ -77,5 +84,10 @@ export function grupoDeEjemplo(hoy) {
       { id: "ej_x4", t: "Carbón y pan", m: 8000, p: "ej_yo", a: ["ej_yo", "ej_a", "ej_b", "ej_c"], sp: "eq", w: {}, f, ts: 5, x: false, por: "ej_yo", j: "ej_j1" },
     ],
     pagos: [],
+    hist: [
+      { id: "ej_h1", ts: Date.now() - 864e5, por: "ej_a", q: "a", k: "j", o: "ej_j1", t: "Asado del sábado", j: "ej_j1" },
+      { id: "ej_h2", ts: Date.now() - 86e6, por: "ej_a", q: "a", k: "g", o: "ej_x1", t: "Carne y chorizos", j: "ej_j1", m: 41400 },
+      { id: "ej_h3", ts: Date.now() - 85e6, por: "ej_b", q: "c", k: "g", o: "ej_x2", t: "Fernet", j: "ej_j1", m: 18000, m0: 15000 },
+    ],
   };
 }

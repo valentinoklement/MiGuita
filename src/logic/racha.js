@@ -19,7 +19,7 @@ function diferencia(a, b) {
 
 export function diasAnotados(movs, dias, extra = []) {
   const s = new Set();
-  movs.forEach((x) => x.fecha && s.add(x.fecha));
+  movs.forEach((x) => x.fecha && !x.cuota && s.add(x.fecha)); // una cuota se anota sola: no es que anotaste vos
   dias.forEach((x) => x.fecha && s.add(x.fecha));
   extra.forEach((f) => s.add(f));
   return s;

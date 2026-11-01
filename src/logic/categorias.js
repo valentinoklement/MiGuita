@@ -30,6 +30,14 @@ export const INGRESO = [
 
 export const MEDIOS = [["debito", "Débito"], ["efectivo", "Efectivo"], ["mp", "Billetera virtual"], ["credito", "Crédito"], ["transferencia", "Transferencia"], ["cripto", "Cripto"]];
 
+// La billetera que usa cada persona: es el nombre del medio "mp". Si no eligió ninguna, queda el nombre general.
+export const BILLETERA_GENERAL = "Billetera virtual";
+export const BILLETERAS = ["Mercado Pago", "Ualá", "MODO", "Naranja X", "Personal Pay", "Cuenta DNI"];
+export function ponerBilletera(medios, nombre) {
+  const n = String(nombre ?? "").trim().slice(0, 30);
+  return medios.map((m) => (m.id === "mp" ? { ...m, nombre: n || BILLETERA_GENERAL, oculto: n ? false : m.oculto } : m));
+}
+
 // La última de cada lista es la de "no sé": no se puede ocultar y es la que se usa si nada coincide.
 export const RESPALDO = { gasto: "otros", ingreso: "otros_in" };
 

@@ -3,9 +3,10 @@ import { Art } from "../art/art.js";
 import { formatear, leerMonto } from "../logic/dinero.js";
 import { delMes, resumenMes } from "../logic/mes.js";
 import { estadoPresupuestos, infoMeta, resumenDeudas, restante } from "../logic/plan.js";
+import { resumenCuotas, infoCompra, MAX_CUOTAS, SIN_TARJETA } from "../logic/cuotas.js";
 import { esc } from "./pantallas.js";
 
-const PESTANAS = [["presupuesto", "Presupuesto"], ["metas", "Metas"], ["deudas", "Deudas"], ["fijos", "Fijos"]];
+const PESTANAS = [["presupuesto", "Presupuesto"], ["metas", "Metas"], ["deudas", "Deudas"], ["fijos", "Fijos"], ["cuotas", "Cuotas"]];
 
 export function crearVistasPlan(st, hoy, V) {
   const { back, hdr, lbl, crd, chips, interruptor } = V.ayudas;
@@ -83,9 +84,29 @@ export function crearVistasPlan(st, hoy, V) {
       lista("ingreso", "Ingresos fijos") + lista("gasto", "Gastos fijos") + nuevo("fijo", "+ Nuevo fijo");
   }
 
+  function cuotas() {
+    if (!st.compras.length && !st.tarjetas.length) return vacio("Sin cuotas", "Anotá lo que compraste en cuotas y con qué tarjeta. Cada cuota se anota sola en su mes, y acá ves cuánto debés en cada tarjeta.") + nuevo("compra", "+ Nueva compra en cuotas");
+    const r = resumenCuotas(st.compras, st.tarjetas, hoy);
+    const $$ = (t) => [t.pesos || !t.usd ? plata(t.pesos) : "", t.usd ? dinero(t.usd, "USD") : ""].filter(Boolean).join(" + ");
+    const mesCorto = (m) => V.mesTexto(m) + (m.slice(0, 4) === hoy.slice(0, 4) ? "" : " " + m.slice(0, 4));
+    const fila = (c, i) => {
+      const n = c.info, moneda = c.moneda;
+      return `<button class="row rowb${i ? "" : " f"}" data-act="editarPlan" data-v="${esc(c.id)}"><span>${esc(c.detalle)}<small>${n.terminada ? "Terminada: " + c.cuotas + " de " + c.cuotas : "Pagaste " + n.hechas + " de " + c.cuotas + " · faltan " + n.faltan + " · próxima " + fecha(n.proxima).slice(0, 5)}</small></span>` +
+        `<span class="der">${n.terminada ? dinero(c.total, moneda) : dinero(n.cuota, moneda) + "<small>por cuota</small>"}</span></button>`;
+    };
+    const proximos = r.meses.slice(1).filter((m) => m.pesos || m.usd);
+    return crd(`<div class="stats"><div><div class="sub">Falta pagar</div><b class="neg">${$$(r.total)}</b></div><div><div class="sub">Este mes</div><b>${$$(r.meses[0])}</b></div></div>` +
+        lbl("Lo que ya tenés comprometido") + (proximos.length ? proximos.map((m, i) => `<div class="row${i ? "" : " f"}"><span>${mesCorto(m.mes)}</span><span>${$$(m)}</span></div>`).join("") : `<div class="sub">Nada para los próximos meses.</div>`)) +
+      r.tarjetas.map((t) => crd(`<div class="secrow"><b style="font:800 17px 'Bricolage Grotesque',sans-serif">${esc(t.nombre)}</b>${t.id ? `<button class="link" data-act="editarTarjeta" data-v="${esc(t.id)}">Editar</button>` : ""}</div>` +
+        `<div class="sub">Debés ${$$(t.debe)} · este mes ${$$(t.esteMes)}</div>` +
+        (t.compras.length ? t.compras.map(fila).join("") : `<div class="sub">No tiene cuotas pendientes.</div>`) +
+        (st.verTerminadas && t.terminadas.length ? lbl("Terminadas") + t.terminadas.map(fila).join("") : ""))).join("") +
+      nuevo("compra", "+ Nueva compra en cuotas") + nuevo("tarjeta", "+ Nueva tarjeta").replace("btn pp w", "btn pp w alt") +
+      (r.terminadas ? `<div class="chips"><button class="pp" data-act="verTerminadas" aria-pressed="${!!st.verTerminadas}">${st.verTerminadas ? "Ocultar" : "Ver"} terminadas (${r.terminadas})</button></div>` : "");
+  }
 
   function plan() {
-    return encabezado() + { presupuesto, metas, deudas, fijos }[st.planTab]();
+    return encabezado() + { presupuesto, metas, deudas, fijos, cuotas }[st.planTab]();
   }
 
   /* ---------- formularios ---------- */
@@ -158,6 +179,32 @@ export function crearVistasPlan(st, hoy, V) {
         lbl("Cuando llega el día") + opcion("modo", [["auto", "Que se anote solo"], ["recordar", "Que me pregunte"]], "Cuando llega el día") +
         `<div class="hint">${v.modo === "recordar" ? "Ese día te aparece en Inicio: lo confirmás (también con otro monto) o lo salteás ese mes." : "Se anota solo ese día, aunque no abras la app."}</div>` +
         crd(`<div class="srow f"><span class="rt"><b>Activo</b><small>${v.activo ? "Todos los meses, el día " + (v.dia || "elegido") : "Pausado: no se anota ni pregunta"}</small></span>${interruptor("formSwitch", !!v.activo, "Activo", "activo")}</div>`) +
+        pie("Guardar");
+    },
+    compra() {
+      const v = st.form.vals, id = st.form.id, antes = id && st.compras.find((c) => c.id === id);
+      const total = leerMonto(v.total), n = Number(v.cuotas);
+      const anotadas = antes ? infoCompra(antes).hechas - (antes.previas || 0) : 0;
+      return back("Plan") + hdr("Cuotas", id ? "Editar compra" : "Nueva compra en cuotas") +
+        campo("detalle", "¿Qué compraste?", { ph: "por ejemplo: heladera", max: 60 }) +
+        lbl("Moneda") + opcion("moneda", [["ARS", "Pesos"], ["USD", "Dólares"]], "Moneda") +
+        campo("total", v.moneda === "USD" ? "Total, en dólares" : "Total, en pesos", { ph: "con el interés, si tiene", modo: "monto", max: 16 }) +
+        campo("cuotas", "¿En cuántas cuotas?", { ph: "1 a " + MAX_CUOTAS, modo: "num", max: 2 }) +
+        (total && n >= 1 ? crd(`<div class="sub">${n} ${n === 1 ? "cuota" : "cuotas"} de ${dinero(Math.floor(total / n), v.moneda)}.${v.moneda === "USD" ? " Cada una se anota en pesos con el dólar de ese día." : ""}</div>`) : "") +
+        campo("yaPagas", "¿Cuántas ya pagaste?", { ph: "0", modo: "num", max: 2 }) +
+        `<div class="hint">Las que ya pagaste no se anotan como gasto. Las que vengan, se anotan solas en su mes.</div>` +
+        (id ? "" : lbl("La próxima cuota") + opcion("proxima", [["este", "En este mes"], ["sig", "El mes que viene"]], "Próxima cuota")) +
+        selector("tarjeta", "Tarjeta", [["", st.tarjetas.length ? "Elegí una" : SIN_TARJETA], ...st.tarjetas.map((t) => [t.id, t.nombre])]) +
+        campo("tarjetaNueva", "¿Otra tarjeta?", { ph: "por ejemplo: Visa", max: 30 }) +
+        selector("categoria", "Categoría", catsGasto(v.categoria).map((c) => [c.id, c.nombre])) +
+        (anotadas ? `<div class="hint">Ya se anotaron ${anotadas} ${anotadas === 1 ? "cuota" : "cuotas"} como gasto. Si guardás, se actualizan; si borrás, se borran también.</div>` : "") +
+        pie(id ? "Guardar" : "Sumar compra");
+    },
+    tarjeta() {
+      const id = st.form.id, deCompras = id ? st.compras.filter((c) => c.tarjeta === id).length : 0;
+      return back("Plan") + hdr("Cuotas", id ? "Editar tarjeta" : "Nueva tarjeta") +
+        campo("nombre", "Nombre", { ph: "por ejemplo: Visa", max: 30 }) +
+        (deCompras ? `<div class="hint">Si la borrás, sus ${deCompras} ${deCompras === 1 ? "compra queda" : "compras quedan"} como «${SIN_TARJETA}»: no se pierde nada.</div>` : "") +
         pie("Guardar");
     },
     ahorro() {

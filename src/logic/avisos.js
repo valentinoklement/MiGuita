@@ -3,6 +3,7 @@
 //   notif: { cantidad: 0..3, horas: ["13:00", ...], forma: "sonido"|"silencio", tipos: { dia, racha, presupuesto },
 //            noMolestar: { activo, desde, hasta } }
 
+export const CLAVE_AVISOS = "BCkqXJ-n_TyrDO4cRAaOUbgQq2ObDWAe1yCttqqTawwwm1EwO0U0Zq_VDy0MM0Sud-bN1s7ZYXEG-O9fnjHmiKY"; // clave pública: no es secreta, identifica a MiGuita ante el servicio de avisos del celu
 export const NOTIF_INICIAL = { cantidad: 1, horas: ["21:00", "13:00", "18:00"], forma: "sonido", tipos: { dia: true, racha: true, presupuesto: true }, noMolestar: { activo: false, desde: "23:00", hasta: "08:00" } };
 
 // ¿La hora cae dentro de "no molestar"? La franja puede cruzar la medianoche (23:00 a 08:00).
@@ -22,6 +23,12 @@ export function avisosDeHoy(notif, estado) {
   if (notif.tipos.presupuesto)
     (estado.presupuestos || []).forEach((c) => lista.push({ hora: estado.ahora, tipo: "presupuesto", texto: "Ya usaste el 90% del presupuesto de " + c + "." }));
   return lista.filter((a) => !enNoMolestar(notif.noMolestar, a.hora)).sort((a, b) => a.hora.localeCompare(b.hora)).slice(0, 3);
+}
+
+// Lo que necesita el servidor para avisar con la app cerrada: solo las horas y de qué tipo es cada aviso.
+export function planDeAvisos(notif) {
+  const lista = [...(notif.tipos.racha ? [{ h: "21:00", t: "racha" }] : []), ...(notif.tipos.dia ? notif.horas.slice(0, notif.cantidad).map((h) => ({ h, t: "dia" })) : [])];
+  return lista.filter((a) => !enNoMolestar(notif.noMolestar, a.h)).sort((a, b) => a.h.localeCompare(b.h));
 }
 
 // Presupuestos que cruzaron el 90% este mes y todavía no se avisaron. avisados: ["AAAA-MM|categoria"]

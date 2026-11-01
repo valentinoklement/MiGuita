@@ -9,7 +9,7 @@ import { migrar, LISTAS } from "../logic/migraciones.js";
 import * as C from "../logic/cifrado.js";
 
 const NOMBRE = "miguita";
-const VERSION_IDB = 4; // subirla cuando se agrega una tienda nueva
+const VERSION_IDB = 5; // subirla cuando se agrega una tienda nueva
 const TIENDAS = { ...LISTAS, config: "k", cofre: "k" };
 const RESERVADAS = ["seguridad", "temaBloqueo", "schemaVersion"]; // claves de config que no son de la persona
 

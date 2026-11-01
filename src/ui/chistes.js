@@ -26,3 +26,26 @@ export const ESPECIALES = {
   30: "Está bien, ganaste: sos la persona que más toca sanguchitos en Argentina.",
   50: "50 toques. Si anotaras gastos con estas ganas, ya serías millonario.",
 };
+
+// El chiste de la tarjeta "Tu mes en MiGuita": según en qué se gastó más. Cada mes tiene el suyo, siempre el mismo.
+const DEL_MES = {
+  super: ["Tu changuito ya me saluda por el nombre.", "Tanto súper y seguís diciendo que no hay nada en la heladera."],
+  carne: ["Con lo que fuiste a la carnicería, ya sos familia.", "El carnicero te guarda el mejor corte. Y la cuenta."],
+  comida: ["El delivery ya sabe cómo llegar sin GPS.", "Cocinar también es una opción. Te lo digo con cariño."],
+  auto: ["Tu auto toma más que vos un sábado.", "El surtidor te manda saludos."],
+  transporte: ["Con tanto viaje, ya sos parte del recorrido.", "La SUBE te pidió un descanso."],
+  gym: ["Pagaste el gimnasio. ¿Fuiste? Yo no juzgo.", "Tanta pesa y lo más pesado es la cuota."],
+  subs: ["Tenés más suscripciones que horas para mirarlas.", "Netflix te preguntó si seguís ahí. Yo también."],
+  hobbies: ["Un hobby caro sigue siendo más barato que un psicólogo.", "Lo importante es que lo disfrutes. Y que lo anotes."],
+  salidas: ["La vida social salió cara, pero las anécdotas quedan.", "Ese fernet no se iba a tomar solo."],
+  ropa: ["Tu placard pidió una ampliación.", "Te queda bárbaro. El resumen, no tanto."],
+  salud: ["Lo mejor que se puede gastar. Cuidate, che.", "La salud primero. El presupuesto, después."],
+  regalos: ["Sos el amigo que todos quieren en su cumple.", "Tanto regalo. ¿Y para mí? Un poco de jamón, nomás."],
+  servicios: ["Prender la luz nunca fue tan emocionante.", "Vivir sale caro, pero la vista está buena."],
+  deudas: ["Cada deuda que bajás me hace crecer la miga.", "Una deuda menos, un sanguchito más feliz."],
+  edu: ["Lo que aprendés no te lo saca nadie. Ni el resumen.", "Invertir en la cabeza siempre rinde."],
+};
+const DEL_MES_GENERAL = ["Otro mes anotado. Sos un ejemplo para los sanguchitos.", "Yo sigo acá, sin corteza y sin vueltas.", "Un mes más sin ponerme duro. Gracias por anotar.", "Respirá. El mes que viene también se puede."];
+export function chisteDelMes(mes, categoria, elegir) {
+  return elegir(DEL_MES[categoria] || DEL_MES_GENERAL, mes);
+}

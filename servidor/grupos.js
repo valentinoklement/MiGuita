@@ -4,8 +4,13 @@
 //   GET  /g/<id>      → { v, datos }  (404 si no existe)        pide "Authorization: Bearer <token>"
 //   PUT  /g/<id>      ← { v, datos }  v = versión que tenía quien manda; si no coincide → 409 con lo actual
 //   GET  /g/<id>/ws   WebSocket: avisa { v } cada vez que alguien guarda (no manda datos)
+// Y los avisos con la app cerrada (la clave privada es un secreto de Cloudflare, nunca está en el repositorio):
+//   PUT    /a/<id>         ← { sub, zona, plan, anoto, silencio }  activa o pone al día los avisos de un dispositivo (ver avisos.js)
+//   POST   /a/<id>/probar  manda un aviso de prueba
+//   DELETE /a/<id>         apaga los avisos y borra todo lo de ese dispositivo
 // El token sale del código del grupo; acá se guarda solo su huella (SHA-256), nunca el token ni el código.
 import { DurableObject } from "cloudflare:workers";
+import { validar, proximoAviso, queAvisar, mandar, DESCANSO } from "./avisos.js";
 
 const ORIGENES = ["https://valentinoklement.github.io", "http://localhost:8123", "http://127.0.0.1:8123"];
 const MAX_DATOS = 1_500_000; // ~1,5 MB por grupo
@@ -13,7 +18,7 @@ const VENCE = 400 * 864e5;   // un grupo sin uso por más de ~13 meses se borra 
 
 const cors = (origen) => ({
   "Access-Control-Allow-Origin": ORIGENES.includes(origen) ? origen : ORIGENES[0],
-  "Access-Control-Allow-Methods": "GET, PUT, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, PUT, POST, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Authorization, Content-Type",
   "Access-Control-Max-Age": "86400",
   "Vary": "Origin",
@@ -35,7 +40,23 @@ export default {
   async fetch(pedido, env) {
     const origen = pedido.headers.get("Origin") || "";
     if (pedido.method === "OPTIONS") return new Response(null, { status: 204, headers: cors(origen) });
-    const m = /^\/g\/([0-9a-f]{32})(\/ws)?$/.exec(new URL(pedido.url).pathname);
+    const ruta = new URL(pedido.url).pathname, a = /^\/a\/([0-9a-f]{32})(\/probar)?$/.exec(ruta);
+    if (a) {
+      const metodo = a[2] ? "POST" : pedido.method;
+      if (pedido.method !== metodo || !["PUT", "POST", "DELETE"].includes(metodo)) return json({ error: "método" }, 405, origen);
+      const token = /^Bearer ([0-9a-f]{32})$/.exec(pedido.headers.get("Authorization") || "")?.[1];
+      if (!token) return json({ error: "falta el permiso" }, 401, origen);
+      let cuerpo = null;
+      if (metodo === "PUT") {
+        const texto = await pedido.text();
+        if (texto.length > 4000) return json({ error: "demasiado grande" }, 413, origen);
+        try { cuerpo = validar(JSON.parse(texto)); } catch { /* queda null */ }
+        if (!cuerpo) return json({ error: "mal formado" }, 400, origen);
+      }
+      const r = await env.AVISOS.get(env.AVISOS.idFromName(a[1])).atender(metodo, await huella(token), cuerpo);
+      return json(r.cuerpo, r.estado, origen);
+    }
+    const m = /^\/g\/([0-9a-f]{32})(\/ws)?$/.exec(ruta);
     if (!m) return json({ error: "no existe" }, 404, origen);
     const grupo = env.GRUPOS.get(env.GRUPOS.idFromName(m[1]));
     if (m[2]) {
@@ -89,4 +110,43 @@ export class Grupo extends DurableObject {
   webSocketClose(ws, codigo) { try { ws.close(codigo, "chau"); } catch { /* ya cerrado */ } }
 
   async alarm() { await this.ctx.storage.deleteAll(); }
+}
+
+// Un dispositivo con avisos activados. Se despierta solo a la hora de cada aviso.
+export class Aviso extends DurableObject {
+  async atender(metodo, llave, cuerpo) {
+    const s = this.ctx.storage, guardada = await s.get("llave");
+    if (guardada && !iguales(guardada, llave)) return { estado: 403, cuerpo: { error: "código incorrecto" } };
+    if (metodo === "DELETE") { await s.deleteAlarm(); await s.deleteAll(); return { estado: 200, cuerpo: {} }; }
+    if (metodo === "POST") {
+      const e = await s.get("e");
+      if (!e) return { estado: 404, cuerpo: { error: "no existe" } };
+      return { estado: 200, cuerpo: { estado: await this.enviar(e, "Así te van a llegar los avisos de MiGuita.") } };
+    }
+    const e = { ...cuerpo, visto: Date.now() };
+    await s.put({ llave, e });
+    await this.programar(e);
+    return { estado: 200, cuerpo: {} };
+  }
+
+  async programar(e) {
+    const ahora = Date.now(), quieto = ahora - e.visto > DESCANSO;
+    await this.ctx.storage.setAlarm((!quieto && proximoAviso(e.plan, e.zona, ahora)) || ahora + DESCANSO);
+  }
+
+  // Si el celu ya no existe (desinstaló la app, por ejemplo), se borra todo.
+  async enviar(e, texto) {
+    const estado = await mandar(e, texto, JSON.parse(this.env.VAPID_PRIVADA), this.env.VAPID_PUBLICA);
+    if (estado === 404 || estado === 410) { await this.ctx.storage.deleteAlarm(); await this.ctx.storage.deleteAll(); }
+    return estado;
+  }
+
+  async alarm() {
+    const e = await this.ctx.storage.get("e");
+    if (!e) return;
+    if (Date.now() - e.visto > VENCE) { await this.ctx.storage.deleteAll(); return; }
+    const texto = queAvisar(e, Date.now());
+    try { if (texto && await this.enviar(e, texto) === 410) return; } catch { /* sigue: ya llegará el próximo */ }
+    if (await this.ctx.storage.get("e")) await this.programar(e);
+  }
 }

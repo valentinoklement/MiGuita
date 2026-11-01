@@ -4,8 +4,9 @@
   "compatibility_date": "2026-10-01",
   "workers_dev": true,
   "durable_objects": {
-    "bindings": [{ "name": "GRUPOS", "class_name": "Grupo" }]
+    "bindings": [{ "name": "GRUPOS", "class_name": "Grupo" }, { "name": "AVISOS", "class_name": "Aviso" }]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Grupo"] }],
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Grupo"] }, { "tag": "v2", "new_sqlite_classes": ["Aviso"] }],
+  "vars": { "VAPID_PUBLICA": "BCkqXJ-n_TyrDO4cRAaOUbgQq2ObDWAe1yCttqqTawwwm1EwO0U0Zq_VDy0MM0Sud-bN1s7ZYXEG-O9fnjHmiKY" },
   "observability": { "enabled": false }
 }

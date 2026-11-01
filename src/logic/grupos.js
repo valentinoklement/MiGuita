@@ -1,7 +1,7 @@
 // Grupos: dividir gastos. Portado de grp_logic.js de la app anterior (probado con 86.552 verificaciones);
 // las funciones de reparto, saldos, saldar, fusión y limpieza son las mismas, con nombres en castellano.
 //
-// Grupo: { id, nombre, moneda: "ARS"|"USD", ts, miembros, gastos, pagos, juntadas, yo?, loc?, sync? }
+// Grupo: { id, nombre, moneda: "ARS"|"USD", ts, miembros, gastos, pagos, juntadas, hist, yo?, loc?, sync? }
 //   miembro: { id, nombre, alias?, ts, x?, pj? (personaje elegido: -1 Miguita, 0 a 63 los amigos de la panadería), cam? (camiseta 1 a 7) }
 //   gasto:   { id, t (qué fue), m (monto en pesos, con decimales), p (quién pagó), a: [entre quiénes],
 //              sp: "eq"|"sh"|"pc"|"ex" (parejo, partes, porcentaje, montos), w: {id: valor}, f, ts, x?, por,
@@ -9,6 +9,8 @@
 //   pago:    { id, de, a, m, f, ts, x?, j? }
 //   juntada: { id, nombre, f, gente: [ids que fueron], ts, x? } — cada juntada se salda por separado;
 //            los gastos y pagos sin j son "gastos sueltos" (los de antes de que existieran las juntadas).
+//   hist:    { id, ts, por (quién), q: "a"|"c"|"b" (sumó, cambió, borró), k: "g"|"p"|"j"|"m"|"n" (gasto, pago, juntada, persona, nombre del grupo),
+//              o (id de lo que cambió), t (cómo se llamaba), j? (juntada), m? y m0? (monto ahora y antes), e? (cambió quién entra) }
 // - Los montos del grupo van en pesos (como en los códigos G1 y G2 de la app anterior) y todas las cuentas
 //   se hacen en centavos enteros con centavos().
 // - x:true es una lápida: el registro está borrado, pero viaja para que el borrado llegue a todos.
@@ -19,6 +21,7 @@ export const centavos = (n) => Math.round(num(n) * 100);
 
 export const MAX_MIEMBROS = 50;
 export const MAX_REGISTROS = 1500;
+export const MAX_HISTORIAL = 200;  // el historial guarda solo lo último, para que el grupo no crezca sin fin
 const MAX_CODIGO = 400_000;        // caracteres de un código pegado
 const MAX_DESCOMPRIMIDO = 2_000_000; // bytes del grupo ya descomprimido
 
@@ -93,6 +96,8 @@ export function fusionar(a, b) {
     miembros: fusionarLista(a.miembros, b.miembros), gastos: fusionarLista(a.gastos, b.gastos), pagos: fusionarLista(a.pagos, b.pagos) };
   const juntadas = fusionarLista(a.juntadas, b.juntadas);
   if (juntadas.length) g.juntadas = juntadas;
+  const hist = fusionarLista(a.hist, b.hist).slice(-MAX_HISTORIAL);
+  if (hist.length) g.hist = hist;
   if (g.yo === undefined) delete g.yo;
   if (g.loc === undefined) delete g.loc;
   if (g.sync === undefined) delete g.sync;
@@ -108,6 +113,54 @@ export function novedades(antes, despues) {
     return { nuevos, cambiados };
   };
   return { gastos: cuenta("gastos"), pagos: cuenta("pagos"), miembros: cuenta("miembros"), juntadas: cuenta("juntadas") };
+}
+
+/* ---------- historial: quién cambió qué ---------- */
+const CAMPOS = { g: ["t", "m", "p", "a", "pp", "sp", "w", "f"], p: ["de", "a", "m", "f"], j: ["nombre", "f", "gente"], m: ["nombre", "alias"] };
+const dato = (k, r) => JSON.stringify(CAMPOS[k].map((c) => r[c] ?? null));
+const JUNTA_CAMBIO = 10 * 60000; // tocar varias veces lo mismo en un ratito queda como un solo cambio
+
+// Devuelve g con lo que cambió respecto de "antes" anotado en el historial, a nombre de quien está en este celu (g.yo).
+export function conHistorial(antes, g, ahora = Date.now()) {
+  const nuevos = [];
+  const nombre = (id) => g.miembros.find((m) => m.id === id)?.nombre || "?";
+  const juntadaBorrada = (j) => (g.juntadas || []).some((x) => x.id === j && x.x);
+  const revisar = (k, lista, viejos, titulo) => {
+    const previos = new Map((viejos || []).map((r) => [r.id, r]));
+    for (const r of lista || []) {
+      const a = previos.get(r.id);
+      let q = "";
+      if (r.x) { if (a && !a.x) q = "b"; }
+      else if (!a || a.x) q = "a";
+      else if (dato(k, a) !== dato(k, r)) q = "c";
+      if (!q) continue;
+      if (q === "b" && r.j && juntadaBorrada(r.j)) continue; // al borrar la juntada alcanza con decir eso
+      const e = { k, o: r.id, q, t: titulo(r).slice(0, 80) };
+      const j = k === "j" ? r.id : r.j;
+      if (j) e.j = j;
+      if (k === "g" || k === "p") {
+        e.m = num(r.m);
+        if (a && q === "c" && num(a.m) !== num(r.m)) e.m0 = num(a.m);
+        if (k === "g" && a && q === "c" && JSON.stringify(a.a) !== JSON.stringify(r.a)) e.e = 1;
+      }
+      nuevos.push(e);
+    }
+  };
+  revisar("g", g.gastos, antes?.gastos, (r) => r.t);
+  revisar("p", g.pagos, antes?.pagos, (r) => nombre(r.de) + " a " + nombre(r.a));
+  revisar("j", g.juntadas, antes?.juntadas, (r) => r.nombre);
+  revisar("m", g.miembros, antes?.miembros, (r) => r.nombre);
+  if (antes && antes.nombre !== g.nombre) nuevos.push({ k: "n", o: g.id, q: "c", t: g.nombre.slice(0, 80) });
+  if (!nuevos.length) return g;
+  const hist = [...(g.hist || [])], por = g.yo || "";
+  for (const e of nuevos) {
+    const i = hist.findLastIndex((h) => h.o === e.o && h.k === e.k && h.por === por);
+    if (e.q === "c" && i >= 0 && hist[i].q !== "b" && ahora - hist[i].ts < JUNTA_CAMBIO) {
+      const h = hist.splice(i, 1)[0];
+      hist.push({ ...h, ...e, q: h.q, ts: ahora, ...(h.m0 !== undefined && { m0: h.m0 }), ...(h.e && { e: 1 }) });
+    } else hist.push({ id: ahora.toString(36) + Math.random().toString(36).slice(2, 8), ts: ahora, por, ...e });
+  }
+  return { ...g, hist: hist.slice(-MAX_HISTORIAL) };
 }
 
 /* ---------- alias ---------- */
@@ -158,6 +211,15 @@ export function limpiar(o) {
     const i = okId(x && x.id); if (!i) return;
     (g.juntadas ||= []).push({ id: i, nombre: s(x.nombre, 60).trim() || "Juntada", f: fecha(x.f),
       gente: (Array.isArray(x.gente) ? x.gente : []).map(okId).filter(Boolean).slice(0, MAX_MIEMBROS), ts: num(x.ts), x: !!x.x });
+  });
+  (Array.isArray(o.hist) ? o.hist : []).slice(-MAX_HISTORIAL).forEach((h) => {
+    const i = okId(h && h.id), oo = okId(h && h.o); if (!i || !oo || !["a", "c", "b"].includes(h.q) || !["g", "p", "j", "m", "n"].includes(h.k)) return;
+    const e = { id: i, ts: num(h.ts), por: okId(h.por) || "", q: h.q, k: h.k, o: oo, t: s(h.t, 80) };
+    if (okId(h.j)) e.j = okId(h.j);
+    if (h.m !== undefined) e.m = Math.max(0, num(h.m));
+    if (h.m0 !== undefined) e.m0 = Math.max(0, num(h.m0));
+    if (h.e) e.e = 1;
+    (g.hist ||= []).push(e);
   });
   return g;
 }

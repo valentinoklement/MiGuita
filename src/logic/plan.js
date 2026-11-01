@@ -73,7 +73,7 @@ export function mesDeInicio(dia, hoy) {
 // aunque la app no se haya abierto ese día (hasta 12 meses atrás). Un fijo se anota una sola vez por mes:
 // el movimiento tiene id fijo "fx_<fijo>_<mes>" y el mes queda en "hechos".
 // Pasa a pesos el movimiento de un fijo en dólares. null si todavía no hay valor del dólar para esa fecha.
-function enPesos(mov, f, cotizar) {
+export function enPesos(mov, f, cotizar) {
   if (f.moneda !== "USD") return mov;
   const c = cotizar && cotizar(mov.fecha);
   if (!c) return null;

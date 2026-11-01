@@ -3,6 +3,8 @@
 // el permiso para leer/guardar y la clave de cifrado. El servidor guarda solo una caja cifrada que no puede abrir.
 import { limpiar, fusionar, b64, unb64, transformar } from "./grupos.js";
 
+// Una clave pública en base64url, como la pide el navegador para suscribirse a los avisos.
+export const unb64Claves = (t) => Uint8Array.from(atob(t.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(t.length / 4) * 4, "=")), (c) => c.charCodeAt(0));
 export const SERVIDOR = "https://miguita-grupos.valentinoklement.workers.dev";
 const LETRAS = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"; // sin I, L, O ni U para no confundirse
 const MAX_DESCOMPRIMIDO = 2_000_000;

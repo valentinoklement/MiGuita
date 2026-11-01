@@ -1,11 +1,12 @@
 // Pantallas de MiGuita. Cada función devuelve HTML; los textos de la persona pasan siempre por esc().
 import { Art } from "../art/art.js";
 import { formatear, evaluar } from "../logic/dinero.js";
-import { RESPALDO } from "../logic/categorias.js";
+import { RESPALDO, BILLETERAS, BILLETERA_GENERAL } from "../logic/categorias.js";
 import { sumarDias, delMes, referencia, resumenMes, gastosPor, gastosPorDia, estadoMiguita, porDiaAgrupado } from "../logic/mes.js";
 import { infoRacha, apretado, PREMIOS } from "../logic/racha.js";
 import { estadoPresupuestos, estadoConPresupuestos, resumenDeudas, restante, fijosPorConfirmar } from "../logic/plan.js";
 import { valorPara, aPesos, nombreTipo } from "../logic/dolar.js";
+import { mesParaMostrar } from "../logic/tumes.js";
 import { ICONO_BILLETERA } from "./importar.js";
 
 const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
@@ -53,7 +54,7 @@ export function crearVistas(st, hoy) {
   const subLista = (x) => [nombreCat(x.categoria), nombreMedio(x.medio)].filter(Boolean).join(" · ") + enUsd(x);
   const dolarDe = (fecha) => valorPara(fecha, st.cfg.dolar.tipo, st.cotizaciones, st.cfg.dolar.manual);
 
-  const hayEjemplo = () => ["movs", "presupuestos", "metas", "deudas", "fijos"].some((k) => st[k].some((x) => x.id.startsWith("ej_")));
+  const hayEjemplo = () => ["movs", "presupuestos", "metas", "deudas", "fijos", "compras"].some((k) => st[k].some((x) => x.id.startsWith("ej_")));
 
   // Estado de Miguita del mes: el peor entre gasto sobre ingresos y los presupuestos.
   function estadoDelMes(mes, r) {
@@ -80,6 +81,10 @@ export function crearVistas(st, hoy) {
     if (peor) h += `<button class="card pp tecard" data-act="verPlan" data-v="presupuesto">` +
       `<span class="msg">${peor.nivel === "pasado" ? "Te pasaste del presupuesto de " : "Estás llegando al tope de "}${esc(nombreCat(peor.categoria))}.</span>` +
       `<span class="sub">Gastaste ${plata(peor.gastado)} de ${plata(peor.tope)}.</span></button>`;
+
+    const cerrado = actual && mesParaMostrar(st.movs, hoy, st.cfg.mesVisto || "");
+    if (cerrado) h += crd(`<b class="pregunta">Ya está tu mes de ${mesTexto(cerrado).toLowerCase()}</b><div class="sub">Miguita te armó una tarjeta para compartir: en qué se te fue la plata, tu racha y un chiste.</div>` +
+      `<div class="chips"><button class="pp" data-act="abrirTuMes" data-v="${cerrado}" aria-pressed="true">Verla</button><button class="pp" data-act="descartarTuMes" data-v="${cerrado}">Ahora no</button></div>`, "aviso");
 
     if (hayEjemplo())
       h += crd(`<span>Estás viendo datos de ejemplo</span><button class="btnmini" data-act="quitarEjemplo">Quitar</button>`, "banner");
@@ -153,6 +158,7 @@ export function crearVistas(st, hoy) {
     h += crd(lbl("Tu ritmo") + `<div class="row f"><span>Gastás en promedio</span><span>${plata(r.promedio)} por día</span></div>` +
       (actual ? `<div class="sub">A este ritmo, a fin de mes vas a gastar ${plata(r.proyeccion)}.</div>` : ""));
     h += crd(lbl("Por día") + Art.barrasDias(dias, diaMax) + `<div class="sub">Más gastaste: ${esc(nombreDia(st.mes + "-" + String(diaMax + 1).padStart(2, "0"), true))}, ${plata(max)}</div>`);
+    h += `<button class="btn pp w alt" data-act="abrirTuMes" data-v="${st.mes}">Tu mes en MiGuita${actual ? " (hasta hoy)" : ""}</button>`;
     return h;
   }
 
@@ -194,6 +200,14 @@ export function crearVistas(st, hoy) {
   }
 
   /* ---------- Más ---------- */
+  function billetera() {
+    const n = st.cfg.medios.find((m) => m.id === "mp")?.nombre || BILLETERA_GENERAL;
+    const otra = n !== BILLETERA_GENERAL && !BILLETERAS.includes(n);
+    return crd(lbl("Tu billetera virtual") + chips("billetera", BILLETERAS.map((b) => [b, b]), n, "Tu billetera virtual") +
+      `<div class="quick"><div class="pp"><input class="field" data-act="billeteraOtra" value="${otra ? esc(n) : ""}" placeholder="¿Otra? Escribila acá" aria-label="Otra billetera virtual" maxlength="30" autocomplete="off"></div></div>` +
+      `<div class="hint">Aparece con ese nombre al anotar y en los resúmenes. Si no elegís ninguna, dice «${BILLETERA_GENERAL}». Tocala de nuevo para sacarla.</div>`);
+  }
+
   function mas() {
     const ej = hayEjemplo();
     const n = st.cfg.notif, d = dolarDe(hoy), cp = st.cfg.copias;
@@ -209,6 +223,7 @@ export function crearVistas(st, hoy) {
       crd(lbl("Tu nombre") + `<div class="quick"><div class="pp"><input class="field" data-act="nombre" value="${esc(st.cfg.nombre || "")}" placeholder="Para saludarte en Inicio" aria-label="Tu nombre" maxlength="30" autocomplete="given-name"></div></div>`) +
       crd(lbl("Mi alias para cobrar") + `<div class="quick"><div class="pp${st.errorAlias ? " err" : ""}"><input class="field" data-act="miAlias" value="${esc(st.cfg.alias || "")}" placeholder="tu alias, nunca el CBU" aria-label="Mi alias para cobrar" maxlength="22" autocapitalize="none" autocomplete="off"></div></div>` +
         (st.errorAlias ? `<div class="msg" role="alert">${esc(st.errorAlias)}</div>` : "") + `<div class="hint">Se suma a los grupos que crees, para que te transfieran. Nunca pongas el CBU.</div>`) +
+      billetera() +
       crd(`<button class="srow f rowb" data-act="abrir" data-v="categorias" style="width:100%;text-align:left"><span class="rt"><b>Categorías y medios de pago</b><small>Renombrar, ocultar o agregar</small></span><span class="chev" aria-hidden="true">›</span></button>`) +
       crd(lbl("Apariencia") +
         `<div class="srow f"><span class="rt"><b>Tema</b></span>${chips("tema", [["dark", "Oscuro"], ["light", "Claro"]], st.cfg.tema, "Tema")}</div>` +
@@ -250,6 +265,19 @@ export function crearVistas(st, hoy) {
   }
 
   /* ---------- hoja de anotar ---------- */
+  // Compra en cuotas: en cuántas, con qué tarjeta y desde cuándo.
+  function enCuotas(s, total, usd) {
+    if (!s.enCuotas) return `<div class="chips"><button class="pp" data-act="enCuotas" aria-pressed="false">En cuotas</button></div>`;
+    const n = s.nCuotas || 0;
+    return crd(`<div class="chips"><button class="pp" data-act="enCuotas" aria-pressed="true">En cuotas</button></div>` +
+      lbl("¿En cuántas?") + chips("hojaCuotas", [2, 3, 6, 9, 12, 18, 24, 36].map((c) => [String(c), String(c)]), String(n), "Cantidad de cuotas") +
+      (n && total ? `<div class="sub">${n} cuotas de ${formatear(Math.floor(total / n), { moneda: usd ? "US$ " : "$" })}. Si tiene interés, poné el total con interés.</div>` : "") +
+      lbl("¿Con qué tarjeta?") + (st.tarjetas.length ? chips("hojaTarjeta", st.tarjetas.map((t) => [t.id, t.nombre]), s.tarjeta, "Tarjeta") : "") +
+      `<div class="quick"><div class="pp"><input data-act="hojaTarjetaNueva" value="${esc(s.tarjetaNueva || "")}" placeholder="${st.tarjetas.length ? "U otra: por ejemplo Visa" : "Por ejemplo Visa"}" aria-label="Nombre de la tarjeta" maxlength="30"></div></div>` +
+      lbl("La primera cuota") + chips("hojaPrimera", [["este", "En este mes"], ["sig", "El mes que viene"]], s.primera || "este", "Primera cuota"));
+  }
+
+
   function hoja() {
     const s = st.hoja;
     const total = s.tocada ? evaluar(s.expr) : s.centavos;
@@ -270,6 +298,7 @@ export function crearVistas(st, hoy) {
       lbl("Categoría") + `<div class="cats" role="group" aria-label="Categoría">` +
       cats.map((c) => `<button class="cat pp" data-act="cat" data-v="${esc(c.id)}" aria-pressed="${c.id === s.categoria}">${Art.catIcon(c.id)}${esc(c.nombre.split("/")[0])}</button>`).join("") + "</div>" +
       lbl("Medio de pago") + chips("medio", medios.map((m) => [m.id, m.nombre]), s.medio, "Medio de pago") +
+      (s.tipo === "gasto" && !editar ? enCuotas(s, total, usd) : "") +
       `<div class="chips" role="group" aria-label="Fecha">` + fechas.map(([v, t]) => `<button class="pp" data-act="fecha" data-v="${v}" aria-pressed="${v === s.fecha}">${t}</button>`).join("") +
       `<label class="pp otra"${otra ? ' data-on="1"' : ""}>${otra ? esc(nombreDia(s.fecha, true)) : "Otra fecha"}<input type="date" data-act="otra" value="${s.fecha}" max="${hoy}" aria-label="Elegir otra fecha"></label></div>` +
       `<div class="quick"><div class="pp"><input data-act="detalle" value="${esc(s.detalle)}" placeholder="Detalle (opcional)" aria-label="Detalle" maxlength="80"></div></div>` +
@@ -280,6 +309,6 @@ export function crearVistas(st, hoy) {
       `</div></div>`;
   }
 
-  return { inicio, movimientos, resumen, racha, festejo, mas, categorias, editarCat, hoja, nombreCat, nombreMedio, nombreDia, plata, motivosApretado, estadoDelMes,
+  return { inicio, movimientos, resumen, racha, festejo, mas, categorias, editarCat, hoja, nombreCat, nombreMedio, nombreDia, mesTexto, plata, motivosApretado, estadoDelMes,
     ayudas: { back, hdr, lbl, crd, chips, interruptor } };
 }

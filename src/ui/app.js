@@ -2,12 +2,13 @@
 import { Art } from "../art/art.js";
 import { evaluar, leerMonto, montoEnCampo } from "../logic/dinero.js";
 import { leerTexto } from "../logic/anotar.js";
-import { RESPALDO } from "../logic/categorias.js";
+import { RESPALDO, ponerBilletera } from "../logic/categorias.js";
 import { fechaLocal, cambiarMes } from "../logic/mes.js";
 import { infoRacha, salvavidasPara, festejoDeHoy } from "../logic/racha.js";
 import { correrFijos, mesDeInicio, infoMeta, restante, movimientoDeFijo } from "../logic/plan.js";
+import { correrCuotas, movsDeCompra, MAX_CUOTAS } from "../logic/cuotas.js";
 import { abrirBase } from "../data/db.js";
-import { centavos, fusionar, novedades, decodificar, codificar, validarAlias, sincronizarMiParte, pagadores } from "../logic/grupos.js";
+import { centavos, fusionar, novedades, decodificar, codificar, validarAlias, sincronizarMiParte, pagadores, conHistorial } from "../logic/grupos.js";
 import { nuevoCodigo, buscarCodigo, derivar, sincronizar, bajar, escuchar, pedir } from "../logic/sincro.js";
 import { CONFIG_COMPARTIDA, nuevoCodigoVinculo, leerCodigoVinculo, derivarVinculo, aplanar, huellas, huella, sincronizarDatos } from "../logic/vinculo.js";
 import { datosDeEjemplo, planDeEjemplo, grupoDeEjemplo } from "./ejemplo.js";
@@ -18,13 +19,18 @@ import { svgQR, escanear } from "./qr.js";
 import { VERSION } from "../logic/migraciones.js";
 import { estadoPresupuestos } from "../logic/plan.js";
 import { buscarDolar, necesitaConfirmar, tocaActualizar, valorPara, aPesos } from "../logic/dolar.js";
-import { presupuestosPorAvisar, enNoMolestar } from "../logic/avisos.js";
+import { presupuestosPorAvisar, enNoMolestar, planDeAvisos, CLAVE_AVISOS } from "../logic/avisos.js";
+import { diasAnotados } from "../logic/racha.js";
+import { SERVIDOR, unb64Claves } from "../logic/sincro.js";
 import { validarPin, armarCopia, abrirCopia } from "../logic/cifrado.js";
 import { movimientosCSV } from "../logic/exportar.js";
 import { leerCSV, leerXLSX, armarMovimientos, filasDesdePDF, claveComercio } from "../logic/importar.js";
 import { textoDePDF } from "./pdf.js";
 import { crearVistaImportar } from "./importar.js";
-import { CHISTES, ESPECIALES } from "./chistes.js";
+import { CHISTES, ESPECIALES, chisteDelMes } from "./chistes.js";
+import { armarTarjeta, crearVistaTuMes } from "./tumes.js";
+import { datosDelMes, elegirDelMes } from "../logic/tumes.js";
+import { referencia, resumenMes } from "../logic/mes.js";
 import { migrar } from "../logic/migraciones.js";
 import { pantallaBloqueo } from "./bloqueo.js";
 import { crearVistasAjustes } from "./ajustes.js";
@@ -32,11 +38,11 @@ import { hayHuella, registrarHuella } from "./huella.js";
 import { crearVistasPrimera, instalada } from "./primera.js";
 
 const PESTANAS = [["inicio", "Inicio"], ["grupos", "Grupos"], ["plan", "Plan"], ["mas", "Más"]];
-const TAB_DE = { movimientos: "inicio", resumen: "inicio", racha: "inicio", categorias: "mas", editarCat: "mas", form: "plan",
-  grupo: "grupos", juntada: "grupos", gform: "grupos", compartir: "grupos", unido: "grupos", quien: "grupos", whatsapp: "grupos",
+const TAB_DE = { movimientos: "inicio", resumen: "inicio", racha: "inicio", tuMes: "inicio", categorias: "mas", editarCat: "mas", form: "plan",
+  grupo: "grupos", juntada: "grupos", historial: "grupos", gform: "grupos", compartir: "grupos", unido: "grupos", quien: "grupos", whatsapp: "grupos",
   notif: "mas", seguridad: "mas", dolar: "mas", copias: "mas", dispositivos: "mas", instalar: "mas", tutorial: "mas", importar: "inicio" };
 const SIN_BARRA = ["bienvenida", "primerIngreso", "tutorial"];
-const PLAN = ["presupuestos", "metas", "deudas", "fijos"];
+const PLAN = ["presupuestos", "metas", "deudas", "fijos", "tarjetas", "compras"];
 const hoy = fechaLocal();
 const raiz = document.getElementById("app");
 
@@ -52,6 +58,8 @@ const st = {
   fijos: base.datos.fijos,
   grupos: base.datos.grupos,
   cotizaciones: base.datos.cotizaciones,
+  tarjetas: base.datos.tarjetas,
+  compras: base.datos.compras,
   seguridad: base.seguridad,
   hayHuella: false,
   pinFlujo: null,    // { modo, paso, primero, actual, error }
@@ -107,9 +115,10 @@ let timerAviso = 0;
 const VA = crearVistasAjustes(st, hoy, V);
 const VI = crearVistasPrimera(st, V);
 const importarVista = crearVistaImportar(st, V);
+const tuMesVista = crearVistaTuMes(st, V);
 // Lo que se guarda (cifrado, si hay PIN) y lo que va en una copia.
 base.leerEstado = () => ({ schemaVersion: VERSION, movs: st.movs, dias: st.dias, presupuestos: st.presupuestos, metas: st.metas, deudas: st.deudas,
-  fijos: st.fijos, grupos: st.grupos, cotizaciones: st.cotizaciones, config: st.cfg });
+  fijos: st.fijos, grupos: st.grupos, cotizaciones: st.cotizaciones, tarjetas: st.tarjetas, compras: st.compras, config: st.cfg });
 hayHuella().then((h) => { st.hayHuella = h; });
 base.onError = () => mostrarAviso("No se pudo guardar el último cambio. Probá de nuevo.");
 
@@ -121,6 +130,7 @@ function guardarMov(mov) {
   if (i >= 0) st.movs[i] = mov; else st.movs.push(mov);
   base.poner("movs", mov);
   programarVinculo();
+  programarAvisos();
 }
 function quitarMov(id) {
   st.movs = st.movs.filter((x) => x.id !== id);
@@ -131,6 +141,7 @@ function ponerDia(d) {
   st.dias = st.dias.filter((x) => x.fecha !== d.fecha).concat(d);
   base.poner("dias", d);
   programarVinculo();
+  programarAvisos();
 }
 // Presupuestos, metas, deudas y fijos.
 function ponerItem(lista, obj) {
@@ -265,6 +276,56 @@ async function unirVinculo() {
   vigilarVinculo(); prepararVinculo(); dibujar();
 }
 
+/* ---------- avisos con la app cerrada ---------- */
+// El servidor sabe solo a dónde mandar el aviso, a qué horas y el último día que se anotó algo (para no avisar si ya anotaste).
+// Se le cuenta al abrir la app, al volver a ella, al cambiar los horarios y al anotar. cfg.avisos = { id, token, enviado: "AAAA-MM-DD|..." }
+let avisosTimer = 0;
+const hexa = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join("");
+const pedirAvisos = (metodo, ruta, cuerpo) => fetch(SERVIDOR + "/a/" + st.cfg.avisos.id + ruta, { method: metodo, cache: "no-store",
+  headers: { Authorization: "Bearer " + st.cfg.avisos.token, ...(cuerpo && { "Content-Type": "application/json" }) }, body: cuerpo && JSON.stringify(cuerpo) });
+function programarAvisos() {
+  if (!st.cfg?.avisos) return;
+  clearTimeout(avisosTimer);
+  avisosTimer = setTimeout(() => enviarAvisos().catch(() => {}), 1500);
+}
+async function suscripcionAvisos() {
+  const reg = await navigator.serviceWorker.ready;
+  return (await reg.pushManager.getSubscription()) || reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: unb64Claves(CLAVE_AVISOS) });
+}
+async function enviarAvisos() {
+  const av = st.cfg.avisos;
+  if (!av || navigator.onLine === false || globalThis.Notification?.permission !== "granted") return;
+  const sub = (await suscripcionAvisos()).toJSON();
+  const anoto = [...diasAnotados(st.movs, st.dias)].filter((f) => f <= hoy).sort().pop() || "";
+  const cuerpo = { sub, zona: Intl.DateTimeFormat().resolvedOptions().timeZone, plan: planDeAvisos(st.cfg.notif), anoto, silencio: st.cfg.notif.forma === "silencio" };
+  // Una vez por día alcanza si no cambió nada: así el servidor sabe que la app se sigue usando.
+  const huellaAvisos = hoy + "|" + JSON.stringify(cuerpo);
+  if (av.enviado === huellaAvisos) return;
+  const r = await pedirAvisos("PUT", "", cuerpo);
+  if (r.ok && st.cfg.avisos) ponerConfig("avisos", { ...st.cfg.avisos, enviado: huellaAvisos });
+}
+async function activarAvisos() {
+  const p = await Notification.requestPermission();
+  if (p !== "granted") { mostrarAviso("Sin permiso para avisar. Mirá abajo cómo activarlo."); return dibujar(); }
+  st.avisosTrabajando = true; dibujar();
+  const viejo = st.cfg.avisos;
+  try {
+    if (!viejo) ponerConfig("avisos", { id: hexa(), token: hexa() });
+    await enviarAvisos();
+    if (!st.cfg.avisos?.enviado) throw new Error("sin enviar");
+    mostrarAviso("¡Listo! Los avisos te llegan aunque la app esté cerrada.");
+  } catch {
+    if (!viejo) ponerConfig("avisos", null);
+    mostrarAviso("No se pudieron activar. Revisá internet y probá de nuevo.");
+  }
+  st.avisosTrabajando = false; dibujar();
+}
+async function apagarAvisos() {
+  await pedirAvisos("DELETE", "").catch(() => {});
+  ponerConfig("avisos", null);
+  try { await (await (await navigator.serviceWorker.ready).pushManager.getSubscription())?.unsubscribe(); } catch { /* ya no estaba */ }
+}
+
 function mostrarAviso(texto, deshacer) {
   clearTimeout(timerAviso);
   st.aviso = { texto, deshacer };
@@ -324,9 +385,43 @@ function revisarFijos() {
   else if (nuevos.length > 1) mostrarAviso("Se anotaron solos " + nuevos.length + " gastos fijos.");
 }
 
+// Anota las cuotas que ya llegaron a su fecha. Devuelve los movimientos nuevos.
+function revisarCuotas(callado) {
+  const { nuevos, cambiadas } = correrCuotas(st.compras, st.movs, hoy, cotizar);
+  nuevos.forEach(guardarMov);
+  cambiadas.forEach((c) => ponerItem("compras", c));
+  if (!callado && nuevos.length === 1) mostrarAviso("Se anotó sola: " + nuevos[0].detalle + " " + V.plata(nuevos[0].monto));
+  else if (!callado && nuevos.length > 1) mostrarAviso("Se anotaron solas " + nuevos.length + " cuotas.");
+  return nuevos;
+}
+// Guarda una compra en cuotas (nueva o editada): sus cuotas se vuelven a armar con los datos nuevos. Devuelve cómo deshacerlo.
+function guardarCompra(c, antes) {
+  const movsAntes = antes ? movsDeCompra(st.movs, antes.id) : [];
+  movsAntes.forEach((x) => quitarMov(x.id));
+  ponerItem("compras", c);
+  revisarCuotas(true);
+  return () => {
+    movsDeCompra(st.movs, c.id).forEach((x) => quitarMov(x.id));
+    if (antes) ponerItem("compras", antes); else quitarItem("compras", c.id);
+    movsAntes.forEach(guardarMov);
+  };
+}
+// La tarjeta elegida, o una nueva con el nombre que escribió. null si no hay ninguna de las dos.
+function tarjetaElegida(id, nombreNuevo) {
+  const nombre = (nombreNuevo || "").trim().slice(0, 30);
+  if (nombre) {
+    const ya = st.tarjetas.find((t) => t.nombre.toLowerCase() === nombre.toLowerCase());
+    if (ya) return ya.id;
+    const t = { id: nuevoId(), nombre, ts: Date.now() };
+    ponerItem("tarjetas", t);
+    return t.id;
+  }
+  return st.tarjetas.some((t) => t.id === id) ? id : null;
+}
+
 /* ---------- formularios de Plan ---------- */
-const LISTA_DE = { presupuesto: "presupuestos", meta: "metas", deuda: "deudas", fijo: "fijos", ahorro: "metas", pago: "deudas" };
-const FORM_DE_TAB = { presupuesto: "presupuesto", metas: "meta", deudas: "deuda", fijos: "fijo" };
+const LISTA_DE = { presupuesto: "presupuestos", meta: "metas", deuda: "deudas", fijo: "fijos", ahorro: "metas", pago: "deudas", compra: "compras", tarjeta: "tarjetas" };
+const FORM_DE_TAB = { presupuesto: "presupuesto", metas: "meta", deudas: "deuda", fijos: "fijo", cuotas: "compra" };
 
 function abrirForm(tipo, id) {
   const x = id ? st[LISTA_DE[tipo]].find((i) => i.id === id) : null;
@@ -338,6 +433,9 @@ function abrirForm(tipo, id) {
     meta: () => x ? { nombre: x.nombre, icono: x.icono, moneda: x.moneda, objetivo: m(x.objetivo), ahorrado: m(x.ahorrado), fecha: x.fecha || "" } : { nombre: "", icono: "meta", moneda: "ARS", objetivo: "", ahorrado: "", fecha: "" },
     deuda: () => x ? { tipo: x.tipo, quien: x.quien, concepto: x.concepto, moneda: x.moneda || "ARS", total: m(x.total), pagado: m(x.pagado), vence: x.vence || "" } : { tipo: "debo", quien: "", concepto: "", moneda: "ARS", total: "", pagado: "", vence: "" },
     fijo: () => x ? { tipo: x.tipo || "gasto", modo: x.modo || "auto", nombre: x.nombre, moneda: x.moneda || "ARS", monto: m(x.monto), categoria: x.categoria, dia: String(x.dia), medio: x.medio, activo: x.activo } : { tipo: "gasto", modo: "auto", nombre: "", moneda: "ARS", monto: "", categoria: "servicios", dia: "", medio: "", activo: true },
+    compra: () => x ? { detalle: x.detalle, moneda: x.moneda || "ARS", total: m(x.total), cuotas: String(x.cuotas), yaPagas: x.previas ? String(x.previas) : "", tarjeta: x.tarjeta, tarjetaNueva: "", categoria: x.categoria, proxima: "este" } :
+      { detalle: "", moneda: "ARS", total: "", cuotas: "", yaPagas: "", tarjeta: st.tarjetas.length === 1 ? st.tarjetas[0].id : "", tarjetaNueva: "", categoria: "otros", proxima: "este" },
+    tarjeta: () => ({ nombre: x?.nombre || "" }),
     ahorro: () => ({ monto: "" }),
     pago: () => ({ monto: m(restante(x)), anotar: true }),
   }[tipo]();
@@ -384,6 +482,30 @@ function guardarForm() {
       ponerItem("fijos", f);
       mostrarAviso("Fijo guardado. " + (f.activo ? (f.desde === hoy.slice(0, 7) ? "Empieza este mes." : "Empieza el mes que viene.") : "Está pausado."), deshacerItem("fijos", antes, f));
       revisarFijos();
+    } else if (tipo === "compra") {
+      if (!v.detalle.trim()) throw "Poné qué compraste, por ejemplo «Heladera».";
+      const cuotas = Number(v.cuotas);
+      if (!Number.isInteger(cuotas) || cuotas < 1 || cuotas > MAX_CUOTAS) throw "Las cuotas tienen que ser un número del 1 al " + MAX_CUOTAS + ".";
+      const previas = v.yaPagas.trim() === "" ? 0 : Number(v.yaPagas);
+      if (!Number.isInteger(previas) || previas < 0 || previas >= cuotas) throw "Las cuotas que ya pagaste tienen que ser menos que el total de cuotas.";
+      const total = monto("total", "el total");
+      if (total < cuotas) throw "El total es muy chico para tantas cuotas.";
+      const tarjeta = tarjetaElegida(v.tarjeta, v.tarjetaNueva);
+      if (!tarjeta) throw "Elegí la tarjeta o escribí una nueva.";
+      const antes = st.compras.find((x) => x.id === id);
+      // Compra nueva: la próxima cuota es este mes o el que viene, y de ahí se calcula cuándo fue la primera.
+      const proxima = v.proxima === "sig" ? cambiarMes(hoy.slice(0, 7), 1) : hoy.slice(0, 7);
+      const c = { id: id || nuevoId(), tarjeta, detalle: v.detalle.trim().slice(0, 60), categoria: v.categoria, moneda: v.moneda, total, cuotas,
+        desde: antes ? antes.desde : cambiarMes(proxima, -previas), dia: antes ? antes.dia : Number(hoy.slice(8, 10)), previas, hechas: previas, ts: antes?.ts || Date.now(), mod: Date.now() };
+      mostrarAviso((antes ? "Guardada: " : "Sumada: ") + c.detalle, guardarCompra(c, antes));
+    } else if (tipo === "tarjeta") {
+      const nombre = v.nombre.trim().slice(0, 30);
+      if (!nombre) throw "Poné un nombre, por ejemplo «Visa».";
+      const antes = st.tarjetas.find((x) => x.id === id);
+      if (st.tarjetas.some((t) => t.id !== id && t.nombre.toLowerCase() === nombre.toLowerCase())) throw "Ya tenés una tarjeta con ese nombre.";
+      const t = { id: id || nuevoId(), nombre, ts: antes?.ts || Date.now() };
+      ponerItem("tarjetas", t);
+      mostrarAviso("Tarjeta guardada", deshacerItem("tarjetas", antes, t));
     } else if (tipo === "ahorro") {
       const antes = st.metas.find((x) => x.id === id);
       const m = { ...antes, ahorrado: antes.ahorrado + monto("monto", "el monto") };
@@ -418,8 +540,10 @@ function guardarForm() {
 function borrarForm() {
   const lista = LISTA_DE[st.form.tipo];
   const x = st[lista].find((i) => i.id === st.form.id);
+  const cuotas = st.form.tipo === "compra" ? movsDeCompra(st.movs, x.id) : [];
+  cuotas.forEach((m) => quitarMov(m.id));
   quitarItem(lista, x.id);
-  mostrarAviso("Borrado", () => ponerItem(lista, x));
+  mostrarAviso("Borrado", () => { ponerItem(lista, x); cuotas.forEach(guardarMov); });
 }
 
 /* ---------- grupos ---------- */
@@ -427,7 +551,10 @@ const grupoActual = () => st.grupos.find((g) => g.id === st.grupoId);
 
 // Guarda el grupo y pone al día "mi parte" en mis gastos.
 // Si el grupo está conectado, el cambio se manda al servidor un ratito después (subir = false: vino del servidor).
-function guardarGrupo(g, subir = true) {
+// historial = false: lo que cambió no lo hizo esta persona (se juntó con lo de otro).
+function guardarGrupo(g, subir = true, historial = subir) {
+  const anterior = historial && st.grupos.find((x) => x.id === g.id);
+  if (anterior) g = conHistorial(anterior, g);
   if (subir && g.sync) g = { ...g, sync: { ...g.sync, pendiente: true } };
   ponerItem("grupos", g);
   const { poner, quitar } = sincronizarMiParte(g, st.movs, "otros", hoy);
@@ -438,9 +565,12 @@ function guardarGrupo(g, subir = true) {
 // Deshacer en un grupo: lo que vuelve atrás lleva la hora de ahora, para que le gane al cambio que ya viajó a los demás.
 function restaurarGrupo(antes) {
   const act = st.grupos.find((x) => x.id === antes.id), ahora = Date.now();
-  const re = (lista) => antes[lista].map((y) => { const c = act?.[lista].find((z) => z.id === y.id); return c && JSON.stringify(c) !== JSON.stringify(y) ? { ...y, ts: ahora } : y; });
-  guardarGrupo({ ...antes, sync: act?.sync, ts: act && JSON.stringify([act.nombre, act.moneda]) !== JSON.stringify([antes.nombre, antes.moneda]) ? ahora : antes.ts,
-    miembros: re("miembros"), gastos: re("gastos"), pagos: re("pagos"), ...(antes.juntadas && { juntadas: re("juntadas") }) });
+  // Lo que se había sumado queda como borrado: si no, al juntarse con los demás volvería a aparecer.
+  const re = (lista) => [...(antes[lista] || []).map((y) => { const c = act?.[lista]?.find((z) => z.id === y.id); return c && JSON.stringify(c) !== JSON.stringify(y) ? { ...y, ts: ahora } : y; }),
+    ...(act?.[lista] || []).filter((z) => !z.x && !(antes[lista] || []).some((y) => y.id === z.id)).map((z) => ({ ...z, x: true, ts: ahora }))];
+  const juntadas = re("juntadas");
+  guardarGrupo({ ...antes, sync: act?.sync, hist: act?.hist, ts: act && JSON.stringify([act.nombre, act.moneda]) !== JSON.stringify([antes.nombre, antes.moneda]) ? ahora : antes.ts,
+    miembros: re("miembros"), gastos: re("gastos"), pagos: re("pagos"), ...(juntadas.length && { juntadas }) });
 }
 const copiaGrupo = (g) => structuredClone(g);
 // Lo que pasó en una juntada mientras la miro (o lo que cambio yo) no se marca como "nuevo".
@@ -570,7 +700,7 @@ function entrarAGrupo(g) {
     const f = fusionar(local, g);
     if (g.sync) f.sync = g.sync;
     st.unido = novedades(local, f);
-    guardarGrupo(f);
+    guardarGrupo(f, true, false);
     st.grupoId = f.id;
     irA("unido");
   } else {
@@ -798,12 +928,37 @@ document.addEventListener("visibilitychange", async () => {
   sincronizarTodos();
   vigilarVinculo();
   sincronizarVinculo();
+  programarAvisos();
 });
 addEventListener("online", () => { sincronizarTodos(); sincronizarVinculo(); });
 // Si la app queda abierta pasada la medianoche, se recarga con el día nuevo (salvo que esté anotando algo).
 setInterval(async () => {
   if (fechaLocal() !== hoy && !st.hoja && !document.hidden) { await base.terminar(); location.reload(); }
 }, 60000);
+
+/* ---------- tu mes en MiGuita ---------- */
+function abrirTuMes(mes) {
+  st.tuMes = { mes, montos: false };
+  // Ya no hace falta avisar de este mes.
+  if ((st.cfg.mesVisto || "") < mes && mes < hoy.slice(0, 7)) ponerConfig("mesVisto", mes);
+  abrir("tuMes");
+  prepararTuMes();
+}
+async function prepararTuMes() {
+  const t = st.tuMes;
+  if (t.descarga) URL.revokeObjectURL(t.descarga);
+  Object.assign(t, { url: "", descarga: "", archivo: null });
+  const d = datosDelMes(st.movs, st.dias, t.mes);
+  const r = await armarTarjeta(d, {
+    titulo: V.mesTexto(t.mes) + " " + t.mes.slice(0, 4), hastaHoy: t.mes === hoy.slice(0, 7), montos: t.montos, nombreCat: V.nombreCat,
+    estado: V.estadoDelMes(t.mes, resumenMes(st.movs, referencia(t.mes, hoy))), chiste: chisteDelMes(t.mes, d.top[0]?.id, elegirDelMes),
+  });
+  if (st.tuMes !== t) return;
+  const nombre = "MiGuita-" + V.mesTexto(t.mes).toLowerCase() + "-" + t.mes.slice(0, 4) + ".png";
+  const archivo = new File([r.blob], nombre, { type: "image/png" });
+  Object.assign(t, { url: r.url, nombre, archivo, descarga: URL.createObjectURL(archivo), compartible: !!navigator.canShare?.({ files: [archivo] }) });
+  if (st.pantalla === "tuMes") dibujar();
+}
 
 /* ---------- copias ---------- */
 async function crearCopia() {
@@ -881,6 +1036,8 @@ function dibujar() {
     grupos: VG.lista,
     grupo: VG.unGrupo,
     juntada: VG.juntada,
+    historial: VG.historial,
+    tuMes: tuMesVista,
     gform: VG.formulario,
     compartir: VG.compartir,
     unido: VG.unido,
@@ -976,7 +1133,7 @@ raiz.addEventListener("click", (e) => {
   if (!b || b.tagName === "INPUT" || b.tagName === "SELECT") return;
   const act = b.dataset.act, v = b.dataset.v;
   const s = st.hoja;
-  if (!["borrarMov", "borrarTodo", "borrarPlan", "borrarG", "quitarPin", "aplicarCopia", "desconectarGrupo", "desconectarVinculo"].includes(act)) st.confirmar = "";
+  if (!["borrarMov", "borrarTodo", "borrarPlan", "borrarG", "quitarPin", "aplicarCopia", "desconectarGrupo", "desconectarVinculo", "apagarAvisos"].includes(act)) st.confirmar = "";
   switch (act) {
     case "ir": history.replaceState({ p: v }, ""); st.pantalla = v; st.error = ""; scrollTo(0, 0); break;
     case "abrir": if (v === "tutorial") { st.tutorialPaso = 0; st.tutorialDesde = ""; } abrir(v); if (v === "dispositivos") prepararVinculo(); break;
@@ -999,6 +1156,8 @@ raiz.addEventListener("click", (e) => {
     case "editar": {
       const x = st.movs.find((m) => m.id === v);
       if (!x) break;
+      // Una cuota se cambia desde su compra, así todas quedan parejas.
+      if (x.cuota && st.compras.some((c) => c.id === x.cuota.compra)) { abrirForm("compra", x.cuota.compra); break; }
       const m = x.usd ? x.usd.monto : x.monto;
       return abrirHoja({ modo: "editar", id: x.id, tipo: x.tipo, moneda: x.usd ? "USD" : "ARS", expr: m % 100 ? "" : String(m / 100), tocada: false, centavos: m, categoria: x.categoria, medio: x.medio, fecha: x.fecha, detalle: x.detalle });
     }
@@ -1014,6 +1173,7 @@ raiz.addEventListener("click", (e) => {
       if (st.confirmar !== "todo") { st.confirmar = "todo"; break; }
       st.confirmar = "";
       if (st.cfg.vinculo) { escuchaVinculo?.cortar?.(); escuchaVinculo = null; ponerConfig("vinculo", null); }
+      if (st.cfg.avisos) apagarAvisos();
       [...st.movs].forEach((x) => quitarMov(x.id));
       [...st.dias].forEach((d) => base.quitar("dias", d.fecha));
       st.dias = [];
@@ -1104,6 +1264,11 @@ raiz.addEventListener("click", (e) => {
       break;
     }
     case "copiarAlias": copiar(v); mostrarAviso("Alias copiado. Pegalo en tu billetera o banco."); break;
+    case "abrirTuMes": abrirTuMes(v); break;
+    case "tuMesMontos": if (st.tuMes.montos !== (v === "si")) { st.tuMes.montos = v === "si"; prepararTuMes(); } break;
+    case "compartirTuMes": navigator.share({ files: [st.tuMes.archivo], title: "Mi mes en MiGuita", text: "Mi mes en MiGuita: " + location.origin + location.pathname }).catch(() => {}); return;
+    case "descartarTuMes": ponerConfig("mesVisto", v); break;
+    case "verHistorial": st.histJ = v === undefined ? null : v; abrir("historial"); break;
     case "whatsJuntada": st.whatsJ = st.juntadaId ?? ""; abrir("whatsapp"); break;
     case "editarGastoG": abrirGForm("gasto", v, formGasto(grupoActual().gastos.find((x) => x.id === v))); break;
     case "gEntre": { const a = st.gform.vals.a; st.gform.vals.a = a.includes(v) ? a.filter((i) => i !== v) : [...a, v]; st.gform.error = ""; break; }
@@ -1180,10 +1345,21 @@ raiz.addEventListener("click", (e) => {
     }
     case "monedaHoja": s.moneda = v; break;
     /* avisos */
-    case "notifCant": st.cfg.notif.cantidad = +v; ponerConfig("notif", st.cfg.notif); break;
-    case "notifForma": st.cfg.notif.forma = v; ponerConfig("notif", st.cfg.notif); break;
-    case "notifTipo": st.cfg.notif.tipos[v] = !st.cfg.notif.tipos[v]; ponerConfig("notif", st.cfg.notif); break;
-    case "notifNM": st.cfg.notif.noMolestar.activo = !st.cfg.notif.noMolestar.activo; ponerConfig("notif", st.cfg.notif); break;
+    case "notifCant": st.cfg.notif.cantidad = +v; ponerConfig("notif", st.cfg.notif); programarAvisos(); break;
+    case "notifForma": st.cfg.notif.forma = v; ponerConfig("notif", st.cfg.notif); programarAvisos(); break;
+    case "notifTipo": st.cfg.notif.tipos[v] = !st.cfg.notif.tipos[v]; ponerConfig("notif", st.cfg.notif); programarAvisos(); break;
+    case "notifNM": st.cfg.notif.noMolestar.activo = !st.cfg.notif.noMolestar.activo; ponerConfig("notif", st.cfg.notif); programarAvisos(); break;
+    case "activarAvisos": activarAvisos(); return;
+    case "apagarAvisos":
+      if (st.confirmar !== "avisos") { st.confirmar = "avisos"; break; }
+      st.confirmar = "";
+      apagarAvisos().then(() => { mostrarAviso("Listo: se apagaron y se borró lo que había en el servidor."); dibujar(); });
+      return;
+    case "probarAvisoServidor":
+      enviarAvisos().then(() => pedirAvisos("POST", "/probar")).then((r) => r.json()).then((j) => {
+        mostrarAviso(j.estado >= 200 && j.estado < 300 ? "Mandado. Te tiene que llegar en unos segundos." : "No se pudo mandar. Apagá y volvé a activar los avisos.");
+      }).catch(() => mostrarAviso("No se pudo mandar. Revisá internet.")).then(dibujar);
+      return;
     case "probarAviso":
       if (!("Notification" in globalThis)) { mostrarAviso("Este navegador no permite avisos."); break; }
       Notification.requestPermission().then(async (p) => {
@@ -1327,6 +1503,7 @@ raiz.addEventListener("click", (e) => {
           g = { ...g, miembros: g.miembros.map((m) => (m.id === g.yo ? { ...m, nombre, ts: Date.now() } : m)) };
       }
       g.loc = false;
+      g = conHistorial(st.pendiente, g);
       if (!st.cfg.nombre && st.nombreNuevo.trim()) ponerConfig("nombre", st.nombreNuevo.trim().slice(0, 30));
       guardarGrupo(g);
       st.pendiente = null; st.grupoId = g.id; st.grupoTab = "gastos";
@@ -1341,6 +1518,16 @@ raiz.addEventListener("click", (e) => {
     case "sumarAhorro": abrirForm("ahorro", v); break;
     case "pagarDeuda": abrirForm("pago", v); break;
     case "verSaldadas": st.verSaldadas = !st.verSaldadas; break;
+    case "verTerminadas": st.verTerminadas = !st.verTerminadas; break;
+    case "editarTarjeta": abrirForm("tarjeta", v); break;
+    case "enCuotas":
+      s.enCuotas = !s.enCuotas; s.error = "";
+      if (s.enCuotas) { s.medio = "credito"; if (!s.tarjeta && st.tarjetas.length === 1) s.tarjeta = st.tarjetas[0].id; }
+      break;
+    case "hojaCuotas": s.nCuotas = +v; s.error = ""; break;
+    case "hojaTarjeta": s.tarjeta = v; s.tarjetaNueva = ""; s.error = ""; break;
+    case "hojaPrimera": s.primera = v; break;
+    case "billetera": ponerConfig("medios", ponerBilletera(st.cfg.medios, st.cfg.medios.find((m) => m.id === "mp")?.nombre === v ? "" : v)); break;
     case "fijoActivo": {
       const f = st.fijos.find((x) => x.id === v);
       ponerItem("fijos", { ...f, activo: !f.activo, desde: f.activo ? f.desde : mesDeInicio(f.dia, hoy) });
@@ -1424,6 +1611,25 @@ raiz.addEventListener("click", (e) => {
     case "guardar": {
       const total = s.tocada ? evaluar(s.expr) : s.centavos;
       if (total <= 0) { s.error = "Poné un monto mayor a cero."; break; }
+      if (s.enCuotas && s.tipo === "gasto" && s.modo !== "editar") {
+        if (!s.nCuotas) { s.error = "Elegí en cuántas cuotas."; break; }
+        if (total < s.nCuotas) { s.error = "El monto es muy chico para tantas cuotas."; break; }
+        if (s.moneda === "USD" && !cotizar(hoy)) { s.error = "Falta el valor del dólar. Cargalo en Más › Dólar."; break; }
+        const tarjeta = tarjetaElegida(s.tarjeta, s.tarjetaNueva);
+        if (!tarjeta) { s.error = "Elegí la tarjeta o escribí una nueva."; break; }
+        const mesCompra = s.fecha.slice(0, 7);
+        const c = { id: nuevoId(), tarjeta, detalle: (s.detalle.trim() || V.nombreCat(s.categoria)).slice(0, 60), categoria: s.categoria, moneda: s.moneda, total, cuotas: s.nCuotas,
+          desde: s.primera === "sig" ? cambiarMes(mesCompra, 1) : mesCompra, dia: Number(s.fecha.slice(8, 10)), previas: 0, hechas: 0, ts: Date.now(), mod: Date.now() };
+        const antes = infoRacha(st.movs, st.dias, hoy);
+        // Anotar la compra sí cuenta para la racha (las cuotas que se anotan solas, no).
+        if (!st.dias.some((d) => d.fecha === hoy)) ponerDia({ fecha: hoy, anoto: true });
+        const quitar = guardarCompra(c, null);
+        const $ = (n) => V.plata(n, s.moneda === "USD" ? { moneda: "US$ " } : {});
+        mostrarAviso(c.detalle + ": " + c.cuotas + " cuotas de " + $(Math.floor(total / c.cuotas)) + ".", quitar);
+        revisarFestejo(antes);
+        cerrarHoja();
+        break;
+      }
       const anterior = s.modo === "editar" ? st.movs.find((x) => x.id === s.id) : null;
       const mov = { id: s.id || nuevoId(), tipo: s.tipo, monto: total, detalle: s.detalle.trim(), categoria: s.categoria, medio: s.medio, fecha: s.fecha, ts: anterior?.ts || Date.now(), mod: Date.now() };
       if (s.moneda === "USD") {
@@ -1451,7 +1657,7 @@ raiz.addEventListener("click", (e) => {
     default: return;
   }
   dibujar();
-  if (["tecla", "cat", "medio", "fecha", "tipo", "filtro", "catTab", "tema", "borrarMov", "borrarTodo", "planTab", "formSel", "formSwitch", "fijoActivo", "borrarPlan", "grupoTab", "gSel", "gEntre", "gPj", "gPjDetalle", "gCam", "gGente", "gPaga", "celda", "columna", "gSoyYo", "grupoLoc", "elegirYo", "borrarG", "monedaHoja", "notifCant", "notifForma", "notifTipo", "notifNM", "pinNuevo", "tapar", "dolarTipo", "dolarFuente", "dolarConv", "copiaAuto", "copiaCada", "quitarPin", "aplicarCopia"].includes(act))
+  if (["tecla", "cat", "medio", "fecha", "tipo", "filtro", "catTab", "tema", "borrarMov", "borrarTodo", "planTab", "formSel", "formSwitch", "fijoActivo", "borrarPlan", "grupoTab", "gSel", "gEntre", "gPj", "gPjDetalle", "gCam", "gGente", "gPaga", "celda", "columna", "gSoyYo", "grupoLoc", "elegirYo", "borrarG", "tuMesMontos", "enCuotas", "hojaCuotas", "hojaTarjeta", "hojaPrimera", "billetera", "monedaHoja", "notifCant", "notifForma", "notifTipo", "notifNM", "pinNuevo", "tapar", "dolarTipo", "dolarFuente", "dolarConv", "copiaAuto", "copiaCada", "quitarPin", "aplicarCopia"].includes(act))
     raiz.querySelector(`[data-act="${act}"]${b.dataset.k ? `[data-k="${CSS.escape(b.dataset.k)}"]` : ""}${v ? `[data-v="${CSS.escape(v)}"]` : ""}`)?.focus();
 });
 
@@ -1466,6 +1672,7 @@ raiz.addEventListener("input", (e) => {
   else if (act === "gPeso") { st.gform.vals.w[e.target.dataset.k] = val; st.gform.error = ""; dibujar(); }
   else if (act === "gPP") { st.gform.vals.pp[e.target.dataset.k] = val; st.gform.error = ""; }
   else if (act === "pegado") { st.compartir.pegado = val; st.compartir.error = ""; }
+  else if (act === "hojaTarjetaNueva") { st.hoja.tarjetaNueva = val; if (val.trim()) st.hoja.tarjeta = ""; st.hoja.error = ""; }
   else if (act === "codigoVinculo") { st.vinc.pegado = val; st.vinc.error = ""; }
   else if (act === "nombreNuevo") st.nombreNuevo = val;
   else if (act === "aliasQuien") { st.aliasQuien = val; st.errorQuien = ""; }
@@ -1483,8 +1690,8 @@ raiz.addEventListener("change", (e) => {
   else if (act === "filtroCat") { st.filtro.cat = e.target.value; dibujar(); }
   else if (act === "campoSel" || act === "campoFecha") { st.form.vals[e.target.dataset.k] = e.target.value; dibujar(); }
   else if (act === "nombre") ponerConfig("nombre", e.target.value.trim());
-  else if (act === "notifHora" && e.target.value) { st.cfg.notif.horas[+e.target.dataset.i] = e.target.value; ponerConfig("notif", st.cfg.notif); }
-  else if ((act === "notifDesde" || act === "notifHasta") && e.target.value) { st.cfg.notif.noMolestar[act === "notifDesde" ? "desde" : "hasta"] = e.target.value; ponerConfig("notif", st.cfg.notif); }
+  else if (act === "notifHora" && e.target.value) { st.cfg.notif.horas[+e.target.dataset.i] = e.target.value; ponerConfig("notif", st.cfg.notif); programarAvisos(); }
+  else if ((act === "notifDesde" || act === "notifHasta") && e.target.value) { st.cfg.notif.noMolestar[act === "notifDesde" ? "desde" : "hasta"] = e.target.value; ponerConfig("notif", st.cfg.notif); programarAvisos(); }
   else if (act === "dolarHora" && e.target.value) { st.cfg.dolar.hora = e.target.value; ponerConfig("dolar", st.cfg.dolar); }
   else if (act === "dolarManual") {
     const c = leerMonto(e.target.value);
@@ -1519,6 +1726,7 @@ raiz.addEventListener("change", (e) => {
     if (al.alias) st.grupos.filter((g) => g.yo).forEach((g) => { const n = conMiAlias(g, al.alias); if (n !== g) guardarGrupo(n); });
     dibujar();
   }
+  else if (act === "billeteraOtra") { ponerConfig("medios", ponerBilletera(st.cfg.medios, e.target.value)); dibujar(); }
   else if (act === "catNombre") {
     const c = itemCat();
     c.nombre = e.target.value.trim() || (st.editCat.tipo === "medios" ? "Medio sin nombre" : "Sin nombre");
@@ -1541,10 +1749,12 @@ if (!st.cfg.primeraVez) irA("bienvenida");
 // Quien ya usaba la app ve el tutorial una vez (se puede saltear).
 else if (!st.cfg.tutorialVisto) { st.tutorialPaso = 0; st.tutorialDesde = "inicio"; irA("tutorial"); }
 revisarFijos();
+revisarCuotas();
 revisarSalvavidas();
 sincronizarTodos();
 sincronizarVinculo();
 vigilarVinculo();
+programarAvisos();
 // Link para conectar este dispositivo: ...#v=<código>
 // Link para unirse a un grupo: ...#g=<código largo> o ...#u=<código corto>
 // Se atienden al abrir la app y también si la app ya estaba abierta (el link solo cambia el final de la dirección).

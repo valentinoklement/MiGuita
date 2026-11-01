@@ -20,7 +20,7 @@ function servidorFalso() {
 }
 
 const mov = (id, monto, mod = 1) => ({ id, tipo: "gasto", monto, detalle: "x", categoria: "otros", medio: "", fecha: "2026-11-01", ts: 1, mod });
-const estado = (movs, extra = {}) => ({ schemaVersion: VERSION, movs, dias: [], presupuestos: [], metas: [], deudas: [], fijos: [], grupos: [], cotizaciones: [],
+const estado = (movs, extra = {}) => ({ schemaVersion: VERSION, movs, dias: [], presupuestos: [], metas: [], deudas: [], fijos: [], grupos: [], cotizaciones: [], tarjetas: [], compras: [],
   config: { nombre: "Ana", categorias: { gasto: [], ingreso: [] }, medios: [], tema: "dark", ...extra } });
 // Un "dispositivo": sus datos y lo que recuerda de la última vez.
 const aparato = (movs) => ({ d: estado(movs), base: {} });

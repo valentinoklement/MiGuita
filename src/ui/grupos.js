@@ -3,8 +3,8 @@
 import { Art } from "../art/art.js";
 import { amigo, BASES, DETALLES, MIGUITA, CAMISETAS, miguitaCon, personaje } from "../art/amigos.js";
 import { formatear, leerMonto } from "../logic/dinero.js";
-import { centavos, repartir, saldos, saldar, miParte, textoWhatsApp, juntadasVivas, gastosDe, pagosDe, haySueltos, cuentas, detalleDe, miSituacion, pagadores } from "../logic/grupos.js";
-import { sumarDias } from "../logic/mes.js";
+import { centavos, repartir, saldos, saldar, miParte, textoWhatsApp, juntadasVivas, gastosDe, pagosDe, haySueltos, cuentas, detalleDe, miSituacion, pagadores, MAX_HISTORIAL } from "../logic/grupos.js";
+import { sumarDias, fechaLocal } from "../logic/mes.js";
 import { esc } from "./pantallas.js";
 
 const REPARTOS = [["eq", "Parejo"], ["sh", "Partes"], ["pc", "Porcentaje"], ["ex", "Montos"]];
@@ -104,7 +104,8 @@ export function crearVistasGrupos(st, hoy, V) {
       `<div class="chips"><button class="pp" data-act="nuevaPersona">+ Sumar integrante</button></div>`);
     if (g.yo && g.moneda === "ARS")
       h += crd(`<div class="srow f"><span class="rt"><b>Contar lo que me toca en mis gastos</b><small>Hasta ahora te tocó ${plataG(g, miParte(g))} en total</small></span>${interruptor("grupoLoc", !!g.loc, "Contar lo que me toca en mis gastos")}</div>`);
-    return h + btn("abrirCompartir", g.sync ? "Invitar al grupo" : "Invitar y conectar", { alt: true });
+    return h + btn("abrirCompartir", g.sync ? "Invitar al grupo" : "Invitar y conectar", { alt: true }) +
+      `<div class="chips"><button class="pp" data-act="verHistorial">Quién cambió qué</button></div>`;
   }
 
   /* ---------- una juntada ---------- */
@@ -166,7 +167,39 @@ export function crearVistasGrupos(st, hoy, V) {
         `<div class="sub">Son la menor cantidad de transferencias posible. Cada uno le paga directo a quien puso la plata.</div>`);
       h += btn("whatsJuntada", "Mandar al grupo de WhatsApp", { alt: true });
     }
-    return h;
+    return h + (ju ? `<div class="chips"><button class="pp" data-act="verHistorial" data-v="${esc(jid)}">Quién cambió qué</button></div>` : "");
+  }
+
+  /* ---------- historial ---------- */
+  function textoCambio(g, h) {
+    const quien = h.por === g.yo ? "Vos" : g.miembros.find((m) => m.id === h.por)?.nombre || "Alguien";
+    const vos = quien === "Vos";
+    const verbo = { a: vos ? "sumaste" : "sumó", c: vos ? "cambiaste" : "cambió", b: vos ? "borraste" : "borró" }[h.q];
+    const t = "«" + h.t + "»";
+    const $ = (m) => plataG(g, centavos(m));
+    let que;
+    if (h.k === "n") que = "el nombre del grupo a " + t;
+    else if (h.k === "j") que = "la juntada " + t;
+    else if (h.k === "m") que = h.q === "a" ? "a " + h.t + " al grupo" : h.q === "b" ? "a " + h.t + " del grupo" : "los datos de " + h.t;
+    else if (h.k === "p") que = "el pago de " + h.t + (h.m !== undefined ? " (" + $(h.m) + ")" : "");
+    else if (h.q === "c" && h.m0 !== undefined) que = t + ": de " + $(h.m0) + " a " + $(h.m);
+    else if (h.q === "c" && h.e) que = "quién entra en " + t;
+    else que = t + (h.m !== undefined ? " (" + $(h.m) + ")" : "");
+    return quien + " " + verbo + " " + que;
+  }
+  function historial() {
+    const g = grupo();
+    if (!g) return back("Grupos");
+    const jid = st.histJ, ju = jid ? (g.juntadas || []).find((x) => x.id === jid) : null;
+    const lista = (g.hist || []).filter((h) => !jid || h.j === jid).sort((a, b) => b.ts - a.ts);
+    const cuando = (ts) => {
+      const d = new Date(ts), f = fechaLocal(d);
+      return (f === hoy ? "hoy" : f === ayer ? "ayer" : fecha(f)) + ", " + d.toTimeString().slice(0, 5);
+    };
+    return back(ju ? ju.nombre : g.nombre) + hdr(esc(ju ? ju.nombre : g.nombre), "Quién cambió qué") +
+      crd(lista.length ? lista.map((h, i) => `<div class="row${i ? "" : " f"}"><span class="hist">${esc(textoCambio(g, h))}<small>${cuando(h.ts)}</small></span></div>`).join("") :
+        `<div class="empty"><b>Todavía no hay cambios</b><span>Cuando alguien sume, cambie o borre algo, va a aparecer acá.</span></div>`) +
+      `<div class="hint">Se guardan los últimos ${MAX_HISTORIAL} cambios. Lo de antes de esta versión no aparece.</div>`;
   }
 
   /* ---------- formularios ---------- */
@@ -354,5 +387,5 @@ export function crearVistasGrupos(st, hoy, V) {
       `<div class="sub">Se ve el alias de quien cobra en cada pago.</div>`;
   }
 
-  return { lista, unGrupo, juntada, formulario, compartir, unido, quien, whatsapp };
+  return { lista, unGrupo, juntada, historial, formulario, compartir, unido, quien, whatsapp };
 }
