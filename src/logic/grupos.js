@@ -70,10 +70,11 @@ export function fusionarLista(x, y) {
 }
 export function fusionar(a, b) {
   const top = elegir({ ts: a.ts, nombre: a.nombre, moneda: a.moneda }, { ts: b.ts, nombre: b.nombre, moneda: b.moneda });
-  const g = { id: a.id, yo: a.yo, loc: a.loc, nombre: top.nombre, moneda: top.moneda, ts: Math.max(num(a.ts), num(b.ts)),
+  const g = { id: a.id, yo: a.yo, loc: a.loc, sync: a.sync, nombre: top.nombre, moneda: top.moneda, ts: Math.max(num(a.ts), num(b.ts)),
     miembros: fusionarLista(a.miembros, b.miembros), gastos: fusionarLista(a.gastos, b.gastos), pagos: fusionarLista(a.pagos, b.pagos) };
   if (g.yo === undefined) delete g.yo;
   if (g.loc === undefined) delete g.loc;
+  if (g.sync === undefined) delete g.sync;
   return g;
 }
 
@@ -127,13 +128,13 @@ export function limpiar(o) {
 /* ---------- código para compartir ---------- */
 // G3 (nuevo): "G3:" + JSON comprimido en base64 + "." + suma de verificación (CRC32 del JSON).
 // Se siguen leyendo G2 (comprimido) y G1 (sin comprimir) de la app anterior.
-const b64 = (u8) => { let s = ""; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); };
-const unb64 = (t) => { t = t.replace(/-/g, "+").replace(/_/g, "/"); while (t.length % 4) t += "="; const s = atob(t), u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return u; };
+export const b64 = (u8) => { let s = ""; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); };
+export const unb64 = (t) => { t = t.replace(/-/g, "+").replace(/_/g, "/"); while (t.length % 4) t += "="; const s = atob(t), u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return u; };
 
 const TABLA_CRC = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
 export function crc32(u8) { let c = 0xFFFFFFFF; for (const b of u8) c = TABLA_CRC[(c ^ b) & 0xFF] ^ (c >>> 8); return ((c ^ 0xFFFFFFFF) >>> 0).toString(16).padStart(8, "0"); }
 
-async function transformar(u8, flujo, limite) {
+export async function transformar(u8, flujo, limite) {
   const s = new Blob([u8]).stream().pipeThrough(flujo);
   const partes = []; let total = 0;
   for await (const p of s) { total += p.length; if (total > limite) throw new Error("demasiado grande"); partes.push(p); }

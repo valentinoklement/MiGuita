@@ -57,7 +57,10 @@ export function crearVistasGrupos(st, hoy, V) {
     const g = grupo();
     if (!g) return back("Grupos") + crd(`<div class="empty"><b>Ese grupo ya no está en este celu</b></div>`);
     const total = totalGrupo(g), n = vivos(g).length;
+    const s = g.sync;
     let h = `<div class="secrow">${back("Grupos")}<button class="link" data-act="editarGrupo">Editar</button></div>` + encabezado(g, g.nombre) +
+      (s ? `<div class="estado-sync${s.error ? " mal" : ""}">${s.error === "codigo" ? "El código del grupo ya no funciona" : s.error === "red" || (s.pendiente && navigator.onLine === false) ? "Sin conexión: se manda cuando vuelva internet" : "● Conectado: todos ven lo mismo"}</div>` :
+        g.id.startsWith("ej_") ? "" : `<button class="link estado-sync" data-act="abrirCompartir">Conectalo para que todos vean los gastos al instante ›</button>`) +
       chips("grupoTab", [["gastos", "Gastos"], ["saldos", "Saldos"], ["pagos", "Pagos"]], st.grupoTab, "Parte del grupo");
     if (st.grupoTab === "gastos") {
       const gastos = g.gastos.filter((x) => !x.x).sort((a, b) => (b.f || "").localeCompare(a.f || "") || b.ts - a.ts);
@@ -163,17 +166,36 @@ export function crearVistasGrupos(st, hoy, V) {
   function compartir() {
     const c = st.compartir, g = grupo();
     let h = back(g ? g.nombre : "Grupos");
+    if (g?.sync) {
+      h += encabezado(g, "Invitar al grupo") +
+        crd(lbl("Código del grupo") + `<div class="code corto">${esc(g.sync.codigo)}</div><div class="sub">Tus amigos lo ponen en Grupos › «Unirme con un código». O mandales la invitación con el link.</div>`) +
+        `<div class="btnrow">${navigator.share ? btn("compartirCodigo", "Mandar invitación") : btn("copiarLink", "Copiar invitación")}${btn("copiarCodigo", "Copiar código", { alt: true })}</div>` +
+        crd(lbl("O que lo escaneen") + (c.svg ? c.svg + `<div class="sub" style="text-align:center">Con la cámara del celu se abre directo.</div>` : `<div class="sub">…</div>`)) +
+        crd(`<div class="sub"><b>Quien tenga este código puede ver y anotar en el grupo.</b> Pasalo solo a la gente del grupo.</div>` +
+          `<div class="sub">Lo del grupo viaja y se guarda cifrado: ni MiGuita lo puede leer. Tus gastos personales no salen de tu celu.</div>`) +
+        `<button class="btn pp w alt del" data-act="desconectarGrupo">${st.confirmar === "desconectar" ? "Tocá de nuevo para desconectar" : "Desconectar este celu"}</button>`;
+      return h;
+    }
     if (g) {
       h += encabezado(g, "Compartir grupo") +
-        crd(lbl("Mandá este código") + `<div class="code">${c.codigo ? esc(c.codigo) : "Armando el código…"}</div><div class="sub">Pegalo en WhatsApp. Tus amigos lo pegan en Grupos, «Unirme con un código».</div>`) +
-        `<div class="btnrow">${btn("copiarCodigo", "Copiar código")}${navigator.share ? btn("compartirCodigo", "Mandar", { alt: true }) : ""}</div>` +
-        crd(lbl("O que lo escaneen") + (c.svg ? c.svg + `<div class="sub" style="text-align:center">Ideal si están juntos.</div>` :
-          `<div class="sub">${c.codigo ? "El grupo es muy grande para un QR: mandá el código." : "…"}</div>`));
-    } else h += hdr("Grupos", "Unirme a un grupo");
+        crd(`<b style="font:800 17px 'Bricolage Grotesque',sans-serif">Conectá el grupo</b>` +
+          `<div class="sub">Así, cuando alguien anota un gasto, lo ven todos al instante. Te damos un código corto para pasarle a tus amigos.</div>` +
+          `<div class="sub">Lo del grupo viaja cifrado: solo lo puede abrir quien tenga el código. Tus gastos personales no salen de tu celu.</div>` +
+          (c.error ? `<div class="msg" role="alert">${esc(c.error)}</div>` : "")) +
+        btn("conectarGrupo", c.conectando ? "Conectando…" : "Conectar el grupo") +
+        `<details class="card pp sinconectar"><summary>Mandar una copia sin conectar</summary>` +
+          `<div class="sub">Es una foto del grupo en este momento: si después alguien anota algo, hay que volver a mandarla.</div>` +
+          `<div class="code">${c.codigo ? esc(c.codigo) : "Armando el código…"}</div>` +
+          `<div class="btnrow">${btn("copiarCodigo", "Copiar código")}${navigator.share ? btn("compartirCodigo", "Mandar", { alt: true }) : ""}</div>` +
+          (c.svg ? c.svg : `<div class="sub">${c.codigo ? "El grupo es muy grande para un QR: mandá el código." : ""}</div>`) +
+        `</details>`;
+      return h;
+    }
+    h += hdr("Grupos", "Unirme a un grupo");
     h += crd(lbl("¿Te pasaron un código?") +
-      `<textarea class="field code-in" data-act="pegado" rows="3" placeholder="Pegá acá el código (empieza con G3:, G2: o G1:)" aria-label="Código del grupo" maxlength="400000">${esc(c.pegado)}</textarea>` +
+      `<textarea class="field code-in" data-act="pegado" rows="2" placeholder="Por ejemplo: K7QM-3XPA-9TRB" aria-label="Código del grupo" maxlength="400000" autocapitalize="characters" autocomplete="off" spellcheck="false">${esc(c.pegado)}</textarea>` +
       (c.error ? `<div class="msg" role="alert">${esc(c.error)}</div>` : "") +
-      `<div class="btnrow">${btn("unirCodigo", "Unir")}${btn("escanear", c.escaneando ? "Cerrar cámara" : "Escanear QR", { alt: true })}</div>` +
+      `<div class="btnrow">${btn("unirCodigo", c.uniendo ? "Buscando…" : "Unirme")}${btn("escanear", c.escaneando ? "Cerrar cámara" : "Escanear QR", { alt: true })}</div>` +
       (c.escaneando ? `<video class="cam" muted playsinline aria-label="Cámara para escanear"></video>` : ""));
     return h;
   }

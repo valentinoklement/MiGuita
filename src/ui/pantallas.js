@@ -96,6 +96,10 @@ export function crearVistas(st, hoy) {
     const c = st.cfg.copias;
     if (actual && c.auto && (!c.ultima || Date.now() - Date.parse(c.ultima) >= (c.cada === "mes" ? 30 : 7) * 864e5))
       h += crd(`<span>Toca hacer tu copia de seguridad</span><button class="btnmini" data-act="abrir" data-v="copias">Hacerla</button>`, "banner");
+    // Aunque no haya activado el recordatorio: si ya anotó bastante y nunca hizo una copia, se lo decimos (cada 30 días como mucho).
+    else if (actual && !c.ultima && st.movs.filter((m) => !m.id.startsWith("ej_")).length >= 20 && (!c.pospuesta || Date.now() - Date.parse(c.pospuesta) >= 30 * 864e5))
+      h += crd(`<div class="sub"><b>Tus datos están solo en este celu.</b> Si lo perdés o se borra la app, se pierden. Una copia los salva.</div>` +
+        `<div class="chips"><button class="pp" data-act="abrir" data-v="copias" aria-pressed="true">Hacer una copia</button><button class="pp" data-act="posponerCopia">Ahora no</button></div>`, "aviso");
 
     h += `<button class="card pp hr tecard" data-act="abrir" data-v="resumen" aria-label="Ver el resumen del mes">${Art.pan(r.queda)}<span class="ht"><span class="sub">Te queda</span>` +
       `<span class="big std">${plata(r.teQueda)}</span>` +
@@ -209,10 +213,9 @@ export function crearVistas(st, hoy) {
         `<div class="srow"><span class="rt"><b>Reducir movimiento</b><small>Frena el temblor de los dibujos</small></span>${interruptor("movimiento", !st.cfg.movimiento, "Reducir movimiento")}</div>` +
         `<div class="srow"><span class="rt"><b>Ocultar montos</b><small>Tapa los números en la pantalla</small></span>${interruptor("ocultar", st.cfg.ocultar, "Ocultar montos")}</div>`) +
       crd(lbl("Tus datos") +
-        `<div class="sub">${st.persistente ? "Se guardan solo en este celu. Nada se manda a internet." : "Este navegador no deja guardar: lo que anotes se pierde al cerrar."}</div>` +
+        `<div class="sub">${st.persistente ? "Tus gastos se guardan solo en este celu. Solo los grupos que conectes viajan por internet, cifrados." : "Este navegador no deja guardar: lo que anotes se pierde al cerrar."}</div>` +
         `<div class="btnrow">${ej ? `<button class="btn pp alt" data-act="quitarEjemplo">Quitar ejemplo</button>` : `<button class="btn pp alt" data-act="ponerEjemplo">Cargar ejemplo</button>`}` +
-        `<button class="btn pp alt del" data-act="borrarTodo">${st.confirmar === "todo" ? "Tocá de nuevo para borrar" : "Borrar todo"}</button></div>`) +
-      `<div class="sub">Notificaciones, dólar, seguridad y copias llegan en la etapa 5.</div>`;
+        `<button class="btn pp alt del" data-act="borrarTodo">${st.confirmar === "todo" ? "Tocá de nuevo para borrar" : "Borrar todo"}</button></div>`);
   }
 
   /* ---------- Categorías y medios ---------- */

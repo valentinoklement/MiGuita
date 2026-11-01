@@ -268,3 +268,11 @@ img,svg{-webkit-user-drag:none}
 .subir input{position:absolute;inset:0;opacity:0;cursor:pointer;z-index:3}
 .tilde{display:inline-block;width:18px;font-weight:800;color:var(--pos)}
 .row[aria-pressed="false"]{opacity:.45}
+
+/* grupos conectados */
+.code.corto{font:800 26px "Courier New",monospace;letter-spacing:2px;text-align:center;word-break:normal;white-space:nowrap;max-height:none;overflow:visible}
+.estado-sync{display:block;text-transform:none;letter-spacing:normal;font-size:12px;font-weight:700;color:var(--tscr);opacity:.85;margin:2px 2px 10px;text-align:left}
+.estado-sync.mal{color:var(--negscr);opacity:1}
+.sinconectar summary{cursor:pointer;font-weight:700;font-size:14px;padding:4px 0}
+.sinconectar[open] summary{margin-bottom:8px}
+.sinconectar .code{margin:8px 0}

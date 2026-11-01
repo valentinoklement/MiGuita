@@ -6,12 +6,13 @@ Anotá lo que gastás en 10 segundos. App web gratis e instalable (iPhone y Andr
 - Anotar gastos e ingresos rápido ("nafta 20000"), en pesos o dólares.
 - Te queda, por día, resumen del mes y racha de días anotados.
 - Plan: presupuestos, metas de ahorro, deudas y gastos fijos que se anotan solos.
-- Grupos para dividir gastos con amigos: se comparten con un código o un QR, sin servidor.
+- Grupos para dividir gastos con amigos: conectados con un código corto (todos ven lo mismo al instante) o con una copia por código o QR.
 - PIN o contraseña con los datos cifrados, copias de seguridad cifradas y avisos.
 
 ## Privacidad
 - Los datos se guardan **solo en tu celu**. Este repositorio tiene el código de la app, nunca datos de nadie.
-- La app solo se conecta a internet para consultar el dólar (dolarapi.com y api.bluelytics.com.ar), sin mandar ningún dato personal.
+- La app se conecta a internet para consultar el dólar (dolarapi.com y api.bluelytics.com.ar), sin mandar ningún dato personal.
+- Los grupos conectados pasan por un servidor propio en Cloudflare (su código está en la carpeta `servidor/`). Viajan y se guardan cifrados (AES-GCM) con una clave que sale del código del grupo: el servidor no puede leerlos. Quien tenga el código puede ver y anotar en el grupo. Un grupo sin uso por más de 13 meses se borra del servidor.
 - Con PIN, los datos se cifran con AES-GCM; la clave sale del PIN con PBKDF2-SHA256 de 600.000 vueltas. Si se olvida el PIN y no hay copia, no hay forma de recuperarlos.
 
 ## Para desarrollar

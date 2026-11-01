@@ -8,6 +8,7 @@ import { infoRacha, salvavidasPara, festejoDeHoy } from "../logic/racha.js";
 import { correrFijos, mesDeInicio, infoMeta, restante, movimientoDeFijo } from "../logic/plan.js";
 import { abrirBase } from "../data/db.js";
 import { centavos, fusionar, novedades, decodificar, codificar, validarAlias, sincronizarMiParte } from "../logic/grupos.js";
+import { nuevoCodigo, buscarCodigo, derivar, sincronizar, bajar, escuchar } from "../logic/sincro.js";
 import { datosDeEjemplo, planDeEjemplo, grupoDeEjemplo } from "./ejemplo.js";
 import { crearVistas, esc } from "./pantallas.js";
 import { crearVistasPlan } from "./plan.js";
@@ -289,11 +290,21 @@ function borrarForm() {
 const grupoActual = () => st.grupos.find((g) => g.id === st.grupoId);
 
 // Guarda el grupo y pone al día "mi parte" en mis gastos.
-function guardarGrupo(g) {
+// Si el grupo está conectado, el cambio se manda al servidor un ratito después (subir = false: vino del servidor).
+function guardarGrupo(g, subir = true) {
+  if (subir && g.sync) g = { ...g, sync: { ...g.sync, pendiente: true } };
   ponerItem("grupos", g);
   const { poner, quitar } = sincronizarMiParte(g, st.movs, "otros", hoy);
   poner.forEach(guardarMov);
   quitar.forEach(quitarMov);
+  if (subir && g.sync) programarSubida(g.id);
+}
+// Deshacer en un grupo: lo que vuelve atrás lleva la hora de ahora, para que le gane al cambio que ya viajó a los demás.
+function restaurarGrupo(antes) {
+  const act = st.grupos.find((x) => x.id === antes.id), ahora = Date.now();
+  const re = (lista) => antes[lista].map((y) => { const c = act?.[lista].find((z) => z.id === y.id); return c && JSON.stringify(c) !== JSON.stringify(y) ? { ...y, ts: ahora } : y; });
+  guardarGrupo({ ...antes, sync: act?.sync, ts: act && JSON.stringify([act.nombre, act.moneda]) !== JSON.stringify([antes.nombre, antes.moneda]) ? ahora : antes.ts,
+    miembros: re("miembros"), gastos: re("gastos"), pagos: re("pagos") });
 }
 const copiaGrupo = (g) => structuredClone(g);
 
@@ -315,12 +326,101 @@ async function copiar(texto) {
 }
 
 async function unirCodigo(texto) {
+  const corto = /G[123]:/.test(texto) ? null : buscarCodigo(texto);
+  if (corto) return unirCorto(corto);
   let g;
   try { g = await decodificar(texto); }
   catch { st.compartir.error = "Ese código no es válido. Pedile que lo copie de nuevo."; dibujar(); return; }
+  entrarAGrupo(g);
+}
+
+/* ---------- grupos conectados ---------- */
+// Cada grupo conectado se junta con el servidor al abrir la app, al volver a ella, al recuperar internet,
+// cuando otro guarda (aviso al instante) y un ratito después de cada cambio propio.
+const llaves = new Map(), colas = new Map(), subidas = new Map();
+const llaveDe = (codigo) => { if (!llaves.has(codigo)) llaves.set(codigo, derivar(codigo)); return llaves.get(codigo); };
+function sincronizarGrupo(id, avisar = false) {
+  const p = (colas.get(id) || Promise.resolve()).then(() => sincroUna(id, avisar));
+  colas.set(id, p.catch(() => {}));
+  return p;
+}
+function programarSubida(id) { clearTimeout(subidas.get(id)); subidas.set(id, setTimeout(() => sincronizarGrupo(id), 700)); }
+const sincronizarTodos = () => st.grupos.filter((g) => g.sync).forEach((g) => sincronizarGrupo(g.id));
+
+async function sincroUna(id, avisar) {
+  const g = st.grupos.find((x) => x.id === id);
+  if (!g?.sync || navigator.onLine === false) return;
+  let r;
+  try { r = await sincronizar(await llaveDe(g.sync.codigo), g); }
+  catch (e) {
+    const error = /403/.test(e.message) ? "codigo" : "red";
+    const ahora = st.grupos.find((x) => x.id === id);
+    if (ahora?.sync && ahora.sync.error !== error) { ponerItem("grupos", { ...ahora, sync: { ...ahora.sync, error } }); dibujar(); }
+    return;
+  }
+  const ahora = st.grupos.find((x) => x.id === id);
+  if (!ahora?.sync || ahora.sync.codigo !== g.sync.codigo) return;
+  const cambioLocal = ahora !== g; // se anotó algo mientras viajaba: se junta y se vuelve a mandar
+  const f = cambioLocal ? fusionar(ahora, r.g) : r.g;
+  f.sync = { codigo: ahora.sync.codigo, v: r.v, ...(cambioLocal && { pendiente: true }) };
+  const n = novedades(ahora, f);
+  const hayNuevo = ["gastos", "pagos", "miembros"].some((k) => n[k].nuevos || n[k].cambiados);
+  if (!hayNuevo && JSON.stringify(f.sync) === JSON.stringify(ahora.sync)) return;
+  guardarGrupo(f, false);
+  if (cambioLocal) programarSubida(id);
+  if (hayNuevo && avisar && !st.aviso) mostrarAviso("Llegó algo nuevo en «" + f.nombre + "».");
+  dibujar();
+}
+
+// Mientras se mira un grupo conectado, queda escuchando: si otro anota algo, aparece solo.
+let escucha = null;
+function vigilar() {
+  const g = !document.hidden && TAB_DE[st.pantalla] === "grupos" ? grupoActual() : null;
+  const quiero = g?.sync ? g.id + "|" + g.sync.codigo : "";
+  if ((escucha?.clave || "") === quiero) return;
+  dejarDeEscuchar();
+  if (!quiero) return;
+  const gid = g.id, e = (escucha = { clave: quiero, cortar: null });
+  llaveDe(g.sync.codigo).then((d) => {
+    if (escucha !== e) return;
+    e.cortar = escuchar(d, (v) => { const x = st.grupos.find((y) => y.id === gid); if (x?.sync && v !== x.sync.v) sincronizarGrupo(gid, true); });
+  });
+}
+function dejarDeEscuchar() { escucha?.cortar?.(); escucha = null; }
+
+async function conectarGrupo() {
+  const g = grupoActual();
+  if (!g || st.compartir.conectando) return;
+  st.compartir.conectando = true; st.compartir.error = ""; dibujar();
+  const codigo = nuevoCodigo();
+  try {
+    const r = await sincronizar(await llaveDe(codigo), g);
+    guardarGrupo({ ...fusionar(grupoActual() || g, r.g), sync: { codigo, v: r.v } }, false);
+    mostrarAviso("¡Listo! El grupo quedó conectado.");
+  } catch { if (st.compartir) st.compartir.error = "No pude conectar el grupo. Revisá que tengas internet y probá de nuevo."; }
+  if (st.compartir) st.compartir.conectando = false;
+  await prepararCompartir();
+  dibujar();
+}
+
+async function unirCorto(codigo) {
+  st.compartir.error = ""; st.compartir.uniendo = true; dibujar();
+  try {
+    const r = await bajar(await llaveDe(codigo));
+    if (!r) st.compartir.error = "No encontré un grupo con ese código. Revisá que esté bien escrito.";
+    else { st.compartir.uniendo = false; return entrarAGrupo({ ...r.g, sync: { codigo, v: r.v } }); }
+  } catch (e) {
+    st.compartir.error = /403/.test(e.message) ? "Ese código no es de ningún grupo. Revisá que esté bien escrito." : "No pude conectarme. Revisá que tengas internet y probá de nuevo.";
+  }
+  if (st.compartir) st.compartir.uniendo = false;
+  dibujar();
+}
+
+function entrarAGrupo(g) {
   const local = st.grupos.find((x) => x.id === g.id);
   if (local) {
     const f = fusionar(local, g);
+    if (g.sync) f.sync = g.sync;
     st.unido = novedades(local, f);
     guardarGrupo(f);
     st.grupoId = f.id;
@@ -332,6 +432,8 @@ async function unirCodigo(texto) {
   }
   dibujar();
 }
+
+const invitacion = () => "Sumate al grupo «" + grupoActual().nombre + "» en MiGuita: " + st.compartir.link + "\n\nO en Grupos › Unirme con un código, poné: " + st.compartir.codigo;
 
 function abrirGForm(tipo, id, vals) {
   st.gform = { tipo, id: id || null, vals, error: "" };
@@ -351,7 +453,7 @@ function formGasto(x) {
 function guardarGForm() {
   const { tipo, id, vals: v } = st.gform;
   const g = grupoActual(), antes = g && copiaGrupo(g), ahora = Date.now();
-  const deshacer = () => guardarGrupo(antes);
+  const deshacer = () => restaurarGrupo(antes);
   if (tipo === "grupoNuevo") {
     const nombre = v.nombre.trim();
     if (!nombre) return "Ponele un nombre al grupo.";
@@ -424,16 +526,18 @@ function borrarGForm() {
   if (tipo === "gasto") guardarGrupo({ ...g, gastos: lapida(g.gastos) });
   else if (tipo === "pago") guardarGrupo({ ...g, pagos: lapida(g.pagos) });
   else if (tipo === "persona") guardarGrupo({ ...g, miembros: lapida(g.miembros) });
-  mostrarAviso("Borrado", () => guardarGrupo(antes));
+  mostrarAviso("Borrado", () => restaurarGrupo(antes));
   volver();
 }
 
 async function prepararCompartir() {
   const g = grupoActual();
   if (!g) return;
-  const codigo = await codificar(g);
-  const svg = await svgQR(codigo).catch(() => null);
-  if (st.compartir && st.pantalla === "compartir") { st.compartir.codigo = codigo; st.compartir.svg = svg; dibujar(); }
+  // Conectado: código corto y un link (el QR lleva el link, así se abre directo con la cámara del celu).
+  const link = g.sync ? location.origin + location.pathname + "#u=" + g.sync.codigo : "";
+  const codigo = g.sync ? g.sync.codigo : await codificar(g);
+  const svg = await svgQR(link || codigo).catch(() => null);
+  if (st.compartir && st.pantalla === "compartir") { Object.assign(st.compartir, { codigo, svg, link }); dibujar(); }
 }
 
 function cerrarCamara() {
@@ -482,14 +586,22 @@ document.addEventListener("visibilitychange", async () => {
   if (document.hidden) {
     ocultaDesde = Date.now();
     if (st.cfg.tapar) document.body.classList.add("tapado");
+    dejarDeEscuchar();
     if (st.seguridad?.bloqueo === "salir") await base.terminar();
     return;
   }
   document.body.classList.remove("tapado");
   const seg = st.seguridad;
   const minutos = seg ? (seg.bloqueo === "salir" ? 0 : Number(seg.bloqueo)) : Infinity;
-  if (fechaLocal() !== hoy || Date.now() - ocultaDesde >= minutos * 60000) { await base.terminar(); location.reload(); }
+  if (fechaLocal() !== hoy || Date.now() - ocultaDesde >= minutos * 60000) { await base.terminar(); location.reload(); return; }
+  vigilar();
+  sincronizarTodos();
 });
+addEventListener("online", sincronizarTodos);
+// Si la app queda abierta pasada la medianoche, se recarga con el día nuevo (salvo que esté anotando algo).
+setInterval(async () => {
+  if (fechaLocal() !== hoy && !st.hoja && !document.hidden) { await base.terminar(); location.reload(); }
+}, 60000);
 
 /* ---------- copias ---------- */
 async function crearCopia() {
@@ -582,6 +694,7 @@ function dibujar() {
     importar: importarVista,
   };
   if (st.pantalla !== "compartir" && apagarCamara) cerrarCamara();
+  vigilar();
   const tab = TAB_DE[st.pantalla] || st.pantalla;
   const foco = document.activeElement?.dataset?.act;
   const enCampo = foco && /^(buscar|nombre|catNombre|catClaves|detalle|campo|gcampo|gPersona|gPeso|nombreNuevo|miAlias)$/.test(foco) ? { act: foco, k: document.activeElement.dataset.k, i: document.activeElement.dataset.i, pos: document.activeElement.selectionStart } : null;
@@ -640,7 +753,7 @@ raiz.addEventListener("click", (e) => {
   if (!b || b.tagName === "INPUT" || b.tagName === "SELECT") return;
   const act = b.dataset.act, v = b.dataset.v;
   const s = st.hoja;
-  if (!["borrarMov", "borrarTodo", "borrarPlan", "borrarG", "quitarPin", "aplicarCopia"].includes(act)) st.confirmar = "";
+  if (!["borrarMov", "borrarTodo", "borrarPlan", "borrarG", "quitarPin", "aplicarCopia", "desconectarGrupo"].includes(act)) st.confirmar = "";
   switch (act) {
     case "ir": history.replaceState({ p: v }, ""); st.pantalla = v; st.error = ""; scrollTo(0, 0); break;
     case "abrir": if (v === "tutorial") { st.tutorialPaso = 0; st.tutorialDesde = ""; } abrir(v); break;
@@ -727,9 +840,20 @@ raiz.addEventListener("click", (e) => {
       st.grupoId = null;
       st.compartir = { codigo: "", svg: "", pegado: "", error: "", escaneando: false };
       abrir("compartir"); break;
-    case "copiarCodigo": if (st.compartir.codigo) { copiar(st.compartir.codigo); mostrarAviso("Código copiado. Pegalo en WhatsApp."); } break;
+    case "copiarCodigo": if (st.compartir.codigo) { copiar(st.compartir.codigo); mostrarAviso(st.compartir.link ? "Código copiado." : "Código copiado. Pegalo en WhatsApp."); } break;
+    case "copiarLink": if (st.compartir.link) { copiar(invitacion()); mostrarAviso("Invitación copiada. Pegala en WhatsApp."); } break;
+    case "conectarGrupo": conectarGrupo(); return;
+    case "desconectarGrupo": {
+      if (st.confirmar !== "desconectar") { st.confirmar = "desconectar"; break; }
+      st.confirmar = "";
+      const { sync, ...resto } = grupoActual();
+      guardarGrupo(resto, false);
+      mostrarAviso("Listo: este celu ya no se actualiza con el grupo.");
+      prepararCompartir(); break;
+    }
     case "compartirCodigo":
-      if (st.compartir.codigo) navigator.share({ text: "Sumate al grupo «" + grupoActual().nombre + "» en MiGuita. Pegá este código en Grupos, Unirme con un código:\n\n" + st.compartir.codigo }).catch(() => {});
+      if (st.compartir.link) navigator.share({ text: invitacion() }).catch(() => {});
+      else if (st.compartir.codigo) navigator.share({ text: "Sumate al grupo «" + grupoActual().nombre + "» en MiGuita. Pegá este código en Grupos, Unirme con un código:\n\n" + st.compartir.codigo }).catch(() => {});
       return;
     case "unirCodigo": cerrarCamara(); unirCodigo(st.compartir.pegado); return;
     case "escanear":
@@ -798,6 +922,7 @@ raiz.addEventListener("click", (e) => {
     /* copias */
     case "copiaAuto": ponerConfig("copias", { ...st.cfg.copias, auto: !st.cfg.copias.auto }); break;
     case "copiaCada": ponerConfig("copias", { ...st.cfg.copias, cada: v }); break;
+    case "posponerCopia": ponerConfig("copias", { ...st.cfg.copias, pospuesta: new Date().toISOString() }); break;
     /* importar el resumen de una billetera o banco */
     case "impSolo": st.imp.soloGastos = v === "si"; break;
     case "impTransf": st.imp.sinTransf = v === "sacar"; break;
@@ -1085,8 +1210,9 @@ if (!st.cfg.primeraVez) irA("bienvenida");
 else if (!st.cfg.tutorialVisto) { st.tutorialPaso = 0; st.tutorialDesde = "inicio"; irA("tutorial"); }
 revisarFijos();
 revisarSalvavidas();
-// Link para unirse a un grupo: ...#g=<código>
-if (location.hash.startsWith("#g=")) {
+sincronizarTodos();
+// Link para unirse a un grupo: ...#g=<código largo> o ...#u=<código corto>
+if (location.hash.startsWith("#g=") || location.hash.startsWith("#u=")) {
   const codigo = decodeURIComponent(location.hash.slice(3));
   history.replaceState({ p: "inicio" }, "", location.pathname + location.search);
   st.compartir = { codigo: "", svg: "", pegado: codigo, error: "", escaneando: false };

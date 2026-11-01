@@ -17,6 +17,7 @@ export function crearVistasAjustes(st, hoy, V) {
     const n = st.cfg.notif;
     const permiso = !("Notification" in globalThis) ? "no" : Notification.permission;
     return back("Más") + hdr("Ajustes", "Notificaciones") +
+      crd(`<div class="sub"><b>Por ahora los avisos aparecen cuando abrís MiGuita.</b> Que lleguen con la app cerrada está en camino.</div>`) +
       lbl("¿Cuántos avisos por día?") + chips("notifCant", [["0", "Ninguno"], ["1", "1"], ["2", "2"], ["3", "3"]], String(n.cantidad), "Cantidad de avisos") +
       (n.cantidad ? crd(n.horas.slice(0, n.cantidad).map((h, i) => fila("Aviso " + (i + 1), "", hora("notifHora", h, "Hora del aviso " + (i + 1)).replace('data-act="notifHora"', `data-act="notifHora" data-i="${i}"`), !i)).join("")) +
         `<div class="sub">Te avisamos solo si todavía no anotaste nada ese día.</div>` : "") +
@@ -30,8 +31,7 @@ export function crearVistasAjustes(st, hoy, V) {
         (n.noMolestar.activo ? fila("Desde", "", hora("notifDesde", n.noMolestar.desde, "No molestar desde")) + fila("Hasta", "", hora("notifHasta", n.noMolestar.hasta, "No molestar hasta")) : "")) +
       btn("probarAviso", "Probar un aviso", true) +
       (permiso === "denied" ? crd(`<div class="msg">Los avisos están bloqueados en este celu.</div><div class="sub">Para activarlos: en Android, mantené apretado el ícono de MiGuita › Información de la app › Notificaciones. En iPhone: Ajustes › Notificaciones › MiGuita.</div>`) :
-        permiso === "no" ? crd(`<div class="sub">Este navegador no permite avisos. En iPhone hay que agregar MiGuita a la pantalla de inicio (iOS 16.4 o más).</div>`) : "") +
-      `<div class="hint">Mientras usás la app, los avisos aparecen al abrirla. Para que lleguen con la app cerrada falta conectar el servicio gratis de avisos, que se hace al publicar la app.</div>`;
+        permiso === "no" ? crd(`<div class="sub">Este navegador no permite avisos. En iPhone hay que agregar MiGuita a la pantalla de inicio (iOS 16.4 o más).</div>`) : "");
   }
 
   /* ---------- seguridad ---------- */
@@ -54,7 +54,7 @@ export function crearVistasAjustes(st, hoy, V) {
     return h + crd(lbl("Lo que tenés que saber") +
       `<div class="sub">• Si te olvidás el PIN y no tenés una copia, no hay forma de recuperar los datos. Por eso conviene la copia automática.</div>` +
       `<div class="sub">• Un PIN corto frena a un curioso, pero no a alguien con herramientas para copiar la memoria del celu. Para más protección, usá una contraseña larga.</div>` +
-      `<div class="sub">• La app no tiene cuentas, publicidad ni seguimiento, y no manda tus datos a ningún lado.</div>`);
+      `<div class="sub">• La app no tiene cuentas, publicidad ni seguimiento, y tus gastos no salen de tu celu. Solo los grupos que conectes viajan por internet, cifrados.</div>`);
   }
 
   function crearPin() {
