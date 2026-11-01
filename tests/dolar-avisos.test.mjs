@@ -8,6 +8,7 @@ const DOLARAPI = [
   { casa: "oficial", compra: 1400, venta: 1450, fechaActualizacion: "2026-10-31T10:00:00.000Z" },
   { casa: "blue", compra: 1540, venta: 1565, fechaActualizacion: "2026-10-31T10:00:00.000Z" },
   { casa: "bolsa", compra: 1500, venta: 1512.5, fechaActualizacion: "2026-10-31T10:00:00.000Z" },
+  { casa: "cripto", compra: 1635.79, venta: 1643.33, fechaActualizacion: "2026-10-31T10:00:00.000Z" },
   { casa: "tarjeta", compra: 1800, venta: 1885, fechaActualizacion: "2026-10-31T10:00:00.000Z" },
 ];
 const BLUE = { oficial: { value_sell: 1451 }, blue: { value_sell: 1566 }, last_update: "2026-10-31T09:00:00" };
@@ -19,6 +20,8 @@ const porUrl = (mapa) => async (url, o) => mapa[url] ? mapa[url](url, o) : falla
 test("leer cada fuente y cada tipo (precio de venta, en centavos)", () => {
   assert.equal(D.leerDolarApi(DOLARAPI, "blue").valor, 156500);
   assert.equal(D.leerDolarApi(DOLARAPI, "mep").valor, 151250);
+  assert.equal(D.leerDolarApi(DOLARAPI, "cripto").valor, 164333);
+  assert.equal(D.leerBluelytics(BLUE, "cripto"), null, "Bluelytics no tiene cripto");
   assert.equal(D.leerDolarApi(DOLARAPI, "tarjeta").valor, 188500);
   assert.equal(D.leerBluelytics(BLUE, "oficial").valor, 145100);
   assert.equal(D.leerBluelytics(BLUE, "mep"), null, "Bluelytics no tiene MEP");

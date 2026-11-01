@@ -213,6 +213,9 @@ export function crearVistasGrupos(st, hoy, V) {
       vivos(g).map((m, i) => opcion(m.id, m.nombre, Art.factura(AMIGOS[i % AMIGOS.length]))).join("") +
       opcion("_otra", "— Soy otra persona —", "") +
       (st.yoElegido === "_otra" ? `<div class="quick"><div class="pp"><input class="field" data-act="nombreNuevo" value="${esc(st.nombreNuevo)}" placeholder="Tu nombre" aria-label="Tu nombre" maxlength="40"></div></div>` : "") +
+      (st.yoElegido ? crd(lbl("Tu alias para cobrar (opcional)") +
+        `<input class="field fondo" data-act="aliasQuien" value="${esc(st.aliasQuien)}" placeholder="tu.alias.mp" aria-label="Tu alias para cobrar" maxlength="22" autocapitalize="none" autocomplete="off" spellcheck="false">` +
+        `<div class="sub">Así los demás ven a dónde transferirte. Solo el alias, nunca el CBU.</div>`) : "") +
       (st.errorQuien ? `<div class="msg" role="alert">${esc(st.errorQuien)}</div>` : "") +
       btn("listoQuien", "Listo") + `<button class="btn pp w alt" data-act="volver">Cancelar</button>`;
   }

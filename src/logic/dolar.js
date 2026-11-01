@@ -1,10 +1,10 @@
 // Dólar (especificación, sección 5). Valores en centavos de peso por dólar; se usa el precio de venta.
 // Cadena de respaldo: fuente elegida → la otra fuente → último valor guardado → valor manual.
 
-export const TIPOS = [["oficial", "Oficial"], ["blue", "Blue"], ["mep", "MEP"], ["tarjeta", "Tarjeta"], ["fijo", "Fijo"]];
+export const TIPOS = [["oficial", "Oficial"], ["blue", "Blue"], ["mep", "MEP"], ["cripto", "Cripto"], ["tarjeta", "Tarjeta"], ["fijo", "Fijo"]];
 export const FUENTES = [["dolarapi", "DolarApi"], ["bluelytics", "Bluelytics"], ["manual", "Lo cargo yo"]];
 export const URLS = { dolarapi: "https://dolarapi.com/v1/dolares", bluelytics: "https://api.bluelytics.com.ar/v2/latest" };
-const CASA = { oficial: "oficial", blue: "blue", mep: "bolsa", tarjeta: "tarjeta" };
+const CASA = { oficial: "oficial", blue: "blue", mep: "bolsa", cripto: "cripto", tarjeta: "tarjeta" };
 export const nombreTipo = (t) => (TIPOS.find((x) => x[0] === t) || [, t])[1];
 
 const valido = (v) => typeof v === "number" && isFinite(v) && v >= 1 && v <= 10_000_000;

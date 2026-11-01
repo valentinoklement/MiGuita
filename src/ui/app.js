@@ -90,6 +90,7 @@ const st = {
   pendiente: null,   // grupo recién llegado, antes de elegir quién sos
   yoElegido: "",
   nombreNuevo: "",
+  aliasQuien: "",
   errorQuien: "",
   errorAlias: "",
 };
@@ -307,6 +308,12 @@ function restaurarGrupo(antes) {
     miembros: re("miembros"), gastos: re("gastos"), pagos: re("pagos") });
 }
 const copiaGrupo = (g) => structuredClone(g);
+// Pone mi alias en mi persona del grupo. Devuelve el mismo grupo si no hay nada que cambiar.
+function conMiAlias(g, alias) {
+  const yo = g.miembros.find((m) => m.id === g.yo);
+  if (!alias || !yo || yo.alias === alias) return g;
+  return { ...g, miembros: g.miembros.map((m) => (m.id === yo.id ? { ...m, alias, ts: Date.now() } : m)) };
+}
 
 function irA(p) {
   history.replaceState({ p }, "");
@@ -427,7 +434,7 @@ function entrarAGrupo(g) {
     irA("unido");
   } else {
     st.pendiente = g;
-    st.yoElegido = ""; st.errorQuien = ""; st.nombreNuevo = st.cfg.nombre || "";
+    st.yoElegido = ""; st.errorQuien = ""; st.nombreNuevo = st.cfg.nombre || ""; st.aliasQuien = st.cfg.alias || "";
     irA("quien");
   }
   dibujar();
@@ -697,7 +704,7 @@ function dibujar() {
   vigilar();
   const tab = TAB_DE[st.pantalla] || st.pantalla;
   const foco = document.activeElement?.dataset?.act;
-  const enCampo = foco && /^(buscar|nombre|catNombre|catClaves|detalle|campo|gcampo|gPersona|gPeso|nombreNuevo|miAlias)$/.test(foco) ? { act: foco, k: document.activeElement.dataset.k, i: document.activeElement.dataset.i, pos: document.activeElement.selectionStart } : null;
+  const enCampo = foco && /^(buscar|nombre|catNombre|catClaves|detalle|campo|gcampo|gPersona|gPeso|nombreNuevo|aliasQuien|miAlias)$/.test(foco) ? { act: foco, k: document.activeElement.dataset.k, i: document.activeElement.dataset.i, pos: document.activeElement.selectionStart } : null;
   raiz.innerHTML = `<main class="scr" id="pantalla">` +
     (st.versionNueva ? `<div class="snack pp nueva" role="status"><span>Hay una versión nueva de MiGuita</span><button class="btnmini" data-act="actualizarApp">Actualizar</button></div>` : "") +
     `${P[st.pantalla]()}</main>` +
@@ -993,15 +1000,18 @@ raiz.addEventListener("click", (e) => {
     case "verGrupo": st.grupoTab = "gastos"; irA("grupo"); break;
     case "elegirYo": st.yoElegido = v; st.errorQuien = ""; break;
     case "listoQuien": {
-      const g = structuredClone(st.pendiente);
+      let g = structuredClone(st.pendiente);
       if (!st.yoElegido) { st.errorQuien = "Elegí quién sos."; break; }
+      const al = validarAlias(st.aliasQuien);
+      if (!al.ok) { st.errorQuien = al.error; break; }
+      // El alias que pone acá queda como "Mi alias para cobrar" si todavía no tenía uno.
+      if (al.alias && !st.cfg.alias) ponerConfig("alias", al.alias);
       if (st.yoElegido === "_otra") {
         const nombre = st.nombreNuevo.trim();
         if (!nombre) { st.errorQuien = "Poné tu nombre."; break; }
-        const al = validarAlias(st.cfg.alias);
-        const m = { id: nuevoId(), nombre: nombre.slice(0, 40), alias: al.ok ? al.alias : "", ts: Date.now(), x: false };
+        const m = { id: nuevoId(), nombre: nombre.slice(0, 40), alias: al.alias, ts: Date.now(), x: false };
         g.miembros.push(m); g.yo = m.id;
-      } else g.yo = st.yoElegido;
+      } else { g.yo = st.yoElegido; g = conMiAlias(g, al.alias); }
       g.loc = false;
       guardarGrupo(g);
       st.pendiente = null; st.grupoId = g.id; st.grupoTab = "gastos";
@@ -1140,6 +1150,7 @@ raiz.addEventListener("input", (e) => {
   else if (act === "gPeso") { st.gform.vals.w[e.target.dataset.k] = val; st.gform.error = ""; dibujar(); }
   else if (act === "pegado") { st.compartir.pegado = val; st.compartir.error = ""; }
   else if (act === "nombreNuevo") st.nombreNuevo = val;
+  else if (act === "aliasQuien") { st.aliasQuien = val; st.errorQuien = ""; }
   else if (act === "miAlias") { st.errorAlias = ""; }
   else if (act === "primeraNombre") st.primera.nombre = val;
   else if (act === "primeraMonto") { st.primera.monto = val; st.primera.error = ""; }
@@ -1185,7 +1196,10 @@ raiz.addEventListener("change", (e) => {
   else if (act === "miAlias") {
     const al = validarAlias(e.target.value);
     if (!al.ok) { st.errorAlias = al.error; dibujar(); return; }
-    ponerConfig("alias", al.alias); dibujar();
+    ponerConfig("alias", al.alias);
+    // Mi alias nuevo llega solo a todos mis grupos (a los conectados, también a los celus de los demás).
+    if (al.alias) st.grupos.filter((g) => g.yo).forEach((g) => { const n = conMiAlias(g, al.alias); if (n !== g) guardarGrupo(n); });
+    dibujar();
   }
   else if (act === "catNombre") {
     const c = itemCat();

@@ -252,7 +252,7 @@ img,svg{-webkit-user-drag:none}
 .tuto-dibujo>svg:not(.sl):not(.lf):not(.dg){width:120px;height:auto}
 .tuto b{font:800 28px/1.15 "Bricolage Grotesque",sans-serif}
 .tuto span{font-weight:600;opacity:.9;max-width:30ch;font-size:16px}
-.snack.nueva{position:static;transform:none;width:auto;max-width:none}
+.snack.nueva{position:relative;left:auto;bottom:auto;transform:none;width:auto;max-width:none;margin-bottom:12px}
 /* Hoja de anotar: el monto arriba y el teclado con Guardar abajo quedan siempre a la vista. */
 .sheet .top{position:sticky;top:-10px;z-index:3;background:var(--screen);padding:8px 0 6px;margin-top:-8px}
 .sheet .pad{position:sticky;bottom:calc(-16px - env(safe-area-inset-bottom,0px));z-index:3;background:var(--screen);padding:10px 0 calc(16px + env(safe-area-inset-bottom,0px));margin-bottom:calc(-16px - env(safe-area-inset-bottom,0px))}
