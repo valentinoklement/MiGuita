@@ -136,6 +136,18 @@ test("sumame y restame: órdenes directas", () => {
   assert.equal(leerTexto("sumame 10 lucas").categoria, "otros_in");
 });
 
+test("más formas de decirlo", () => {
+  const ver = (t) => { const r = leerTexto(t); return [r.tipo, r.monto / 100, r.detalle]; };
+  for (const [t, esperado] of [["anotame 10 lucas de nafta", ["gasto", 10000, "Nafta"]], ["poneme 3 lucas de café", ["gasto", 3000, "Café"]], ["agregá 2 mil de pan", ["gasto", 2000, "Pan"]], ["se me fueron 30 lucas en el súper", ["gasto", 30000, "Súper"]], ["garpé 10 lucas de luz", ["gasto", 10000, "Luz"]], ["me costó 15 mil el corte de pelo", ["gasto", 15000, "Corte de pelo"]],
+    ["me cayeron 20 lucas", ["ingreso", 20000, "Me cayeron"]], ["me llegaron 40 lucas", ["ingreso", 40000, "Me llegaron"]], ["me acreditaron 20 lucas", ["ingreso", 20000, "Me acreditaron"]], ["me reintegraron 5 mil", ["ingreso", 5000, "Me reintegraron"]],
+    ["más 10 lucas", ["ingreso", 10000, ""]], ["10 lucas más", ["ingreso", 10000, ""]], ["menos 10 lucas", ["gasto", 10000, ""]], ["10 lucas menos", ["gasto", 10000, ""]],
+    ["me llegó la luz 20 mil", ["gasto", 20000, "Me llegó la luz"]]]) assert.deepEqual(ver(t), esperado, t);
+  assert.deepEqual(leerVarios("más 10 lucas").map((r) => r.tipo), ["ingreso"]);
+  assert.deepEqual(leerVarios("10 lucas de nafta más 5 mil de birra").map((r) => [r.detalle, r.tipo]), [["Nafta", "gasto"], ["Birra", "gasto"]]);
+  assert.equal(leerTexto("me dieron 3 lucas de propina").categoria, "extra");
+  assert.equal(leerTexto("me pagaron la changa 30 lucas").categoria, "extra");
+});
+
 test("cada plata que entra va a una categoría de ingreso", () => {
   const cat = (t) => leerTexto(t).categoria;
   assert.equal(cat("me depositaron el sueldo 900 mil"), "sueldo");

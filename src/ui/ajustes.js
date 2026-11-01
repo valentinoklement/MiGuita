@@ -175,13 +175,14 @@ export function crearVistasAjustes(st, hoy, V) {
 
   /* ---------- comentarios de la prueba ---------- */
   function comentario() {
-    const c = st.com || (st.com = { tipo: "idea", texto: "", nombre: st.cfg.nombre || "", error: "", enviando: false, listo: false });
+    const c = st.com || (st.com = { tipo: "idea", texto: "", nombre: st.cfg.nombre || st.cfg.nombreComentario || "", error: "", enviando: false, listo: false });
     const n = st.cfg.comentarios || 0;
     return back("Ajustes") + hdr("Estamos probando", "Mandar un comentario", "ok") +
       `<div class="sub">Lo lee quien hace la app. A fin de mes, el aporte más útil se lleva una birra.${n ? " Ya mandaste " + n + "." : ""}</div>` +
       lbl("¿Qué es?") + chips("comTipo", TIPOS_COMENTARIO, c.tipo, "Tipo de comentario") +
       lbl("Contanos") + `<div class="quick"><div class="pp"><textarea class="field" data-act="comTexto" rows="5" maxlength="${MAX_COMENTARIO}" aria-label="Tu comentario" placeholder="${c.tipo === "error" ? "Qué estabas haciendo y qué pasó" : "Qué cambiarías o qué le falta"}">${esc(c.texto)}</textarea></div></div>` +
-      lbl("Tu nombre (para la birra)") + `<div class="quick"><div class="pp"><input class="field" data-act="comNombre" value="${esc(c.nombre)}" maxlength="40" aria-label="Tu nombre" autocomplete="given-name"></div></div>` +
+      lbl("Tu nombre (para la birra)") + `<div class="quick"><div class="pp${c.pedirNombre ? " err" : ""}"><input class="field" data-act="comNombre" value="${esc(c.nombre)}" maxlength="40" aria-label="Tu nombre" placeholder="Para saber a quién darle la birra" autocomplete="given-name"></div></div>` +
+      (c.pedirNombre ? `<div class="msg" role="alert">Sin tu nombre no sé a quién darle la birra. Si preferís no ponerlo, tocá Mandar de nuevo.</div>` : "") +
       (c.error ? `<div class="msg" role="alert">${esc(c.error)}</div>` : "") +
       (c.listo ? `<div class="msg" role="status">¡Gracias! Ya llegó.</div>` : "") +
       btn("mandarComentario", c.enviando ? "Mandando…" : "Mandar") +

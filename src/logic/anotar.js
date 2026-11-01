@@ -30,7 +30,7 @@ const SOLO_CON_NUMERO = new Set(["k", "palo", "palos", "palito", "palitos", "mil
 const PESOS = new Set(["peso", "pesos", "pe", "mango", "mangos", "mangazos", "morlaco", "morlacos", "pesitos", "ars"]);
 const DOLARES = new Set(["usd", "u$s", "us$", "dolar", "dolares", "verde", "verdes", "verdolagas", "dolarcitos"]);
 const CANTIDADES = new Set("kg kilo kilos g gr grs gramos l lt lts litro litros ml cc cm mts metro metros m2 unidad unidades u hs hora horas dia dias semana semanas mes meses año años cuota cuotas persona personas porcion porciones noches noche latas lata botellas botella packs pack docena docenas".split(" "));
-const FILLER = /^(s[uú]mame|s[uú]male|sumar|sum[aá]|r[eé]stame|r[eé]stale|restar|rest[aá]|s[aá]came|desc[oó]ntame|qu[ií]tame|ingr[eé]same|acr[eé]ditame|me gast[eé]|gast[eé]|pagu[eé]|compr[eé]|cobr[eé]|me sali[oó]|sali[oó]|fueron|puse)(\s+|$)(en\s+|de\s+|del\s+|por\s+)?((el|la|los|las)\s+)?/i;
+const FILLER = /^(an[oó]tame|anot[aá]|p[oó]neme|pon[eé]|agr[eé]game|agreg[aá]|registr[aá]|cargame|carg[aá]|garp[eé]|tir[eé]|me cost[oó]|cost[oó]|se me fueron|se me fue|se fueron|se fue|s[uú]mame|s[uú]male|sumar|sum[aá]|r[eé]stame|r[eé]stale|restar|rest[aá]|s[aá]came|desc[oó]ntame|qu[ií]tame|ingr[eé]same|acr[eé]ditame|me gast[eé]|gast[eé]|pagu[eé]|compr[eé]|cobr[eé]|me sali[oó]|sali[oó]|fueron|puse)(\s+|$)(en\s+|de\s+|del\s+|por\s+)?((el|la|los|las)\s+)?/i;
 
 function numero(t, conMultiplicador) {
   const s = t.replace(/[.,]+$/, "");
@@ -147,10 +147,12 @@ export function leerTexto(texto, cats = POR_DEFECTO, aprendidas = {}) {
   for (const c of [...e.quitar].sort((a, b) => b.desde - a.desde)) sin = sin.slice(0, c.desde) + " " + sin.slice(c.hasta);
   const resto = sin.replace(/\s+/g, " ").trim().replace(/^[+\-−¡¿]\s*/, "").replace(/\s*[!?]+$/, "").replace(FILLER, "").replace(/^(en|de|por|del)\s+((el|la|los|las)\s+)?/i, "").replace(/\s+[-–−]$/, "").replace(/\s*[.,;:]+$/, "").trim();
   const plano = quitarAcentos(s);
-  let tipo = /^\+/.test(s) ? "ingreso" : tipoDe(plano);
+  const soloSigno = quitarAcentos(resto); // "más 10 lucas", "10 lucas menos": la palabra es la orden, no el detalle
+  let tipo = /^\+/.test(s) || soloSigno === "mas" ? "ingreso" : soloSigno === "menos" ? "gasto" : tipoDe(plano);
   // "Sumame 10 lucas" es plata que entró; "sumame 10 lucas de nafta" es un gasto más para la cuenta.
   if (tipo === "ingreso" && ES_SUMAR.test(plano) && categoriaDe(resto, cats, "gasto", aprendidas) !== RESPALDO.gasto) tipo = "gasto";
-  const r = { tipo, monto: Math.round(e.c.valor * 100), detalle: resto ? resto[0].toUpperCase() + resto.slice(1) : "", categoria: categoriaDe(resto, cats, tipo, aprendidas) };
+  const detalle = soloSigno === "mas" || soloSigno === "menos" ? "" : resto;
+  const r = { tipo, monto: Math.round(e.c.valor * 100), detalle: detalle ? detalle[0].toUpperCase() + detalle.slice(1) : "", categoria: categoriaDe(resto, cats, tipo, aprendidas) };
   if (e.c.usd) r.moneda = "USD";
   if (e.opciones) r.opciones = e.opciones.map((v) => Math.round(v * 100));
   return r;
@@ -195,7 +197,9 @@ export function leerVarios(texto, cats = POR_DEFECTO, aprendidas = {}) {
   }
   let anterior = "gasto";
   return juntos.filter((x) => x.tiene).flatMap((x) => {
-    const frase = s.slice(x.a, x.b).replace(COLA, "").replace(ARRANQUE, "");
+    // Al principio de todo, "más 10 lucas" es plata que entra: ahí "más" no une con nada de antes.
+    const pedazo = s.slice(x.a, x.b).replace(COLA, "");
+    const frase = x.a === 0 && /^m[aá]s\s/i.test(pedazo) ? pedazo : pedazo.replace(ARRANQUE, "");
     let r = leerTexto(frase, cats, aprendidas);
     if (!r) return [];
     // "Me pasaron 20 lucas de Juan y 10 lucas de Pedro": lo segundo también entró. "Cobré 500 mil y 20 mil de nafta": la nafta no.

@@ -1693,7 +1693,10 @@ raiz.addEventListener("click", (e) => {
     case "mandarComentario": {
       const c = st.com;
       if (c.texto.trim().length < 3) { c.error = "Contanos un poco más."; break; }
-      c.enviando = true; c.error = ""; dibujar();
+      // Sin nombre no hay a quién darle el premio: se avisa una vez, y si insiste, se manda igual.
+      if (!c.nombre.trim() && !c.pedirNombre) { c.pedirNombre = true; break; }
+      c.pedirNombre = false; c.enviando = true; c.error = ""; dibujar();
+      if (c.nombre.trim()) ponerConfig("nombreComentario", c.nombre.trim());
       mandarComentario({ ...c, version: "datos " + VERSION, ua: navigator.userAgent }).then(() => {
         ponerConfig("comentarios", (st.cfg.comentarios || 0) + 1);
         st.com = { ...c, texto: "", enviando: false, listo: true };
