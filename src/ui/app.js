@@ -54,6 +54,7 @@ const st = {
   dolarCargando: false,
   copiaFlujo: null,
   primera: { nombre: "", monto: "", moneda: "ARS", error: "" },
+  puedeInstalar: false, // Chrome ofreció instalar la app (Android y compus)
   cfg: base.datos.config,
   persistente: base.persistente,
   pantalla: "inicio",
@@ -817,6 +818,11 @@ raiz.addEventListener("click", (e) => {
       irA(st.desdePrimera ? "instalar" : "inicio");
       break;
     }
+    case "instalarYa":
+      if (!pedidoInstalar) break;
+      pedidoInstalar.prompt();
+      pedidoInstalar.userChoice.then((r) => { if (r.outcome === "accepted") { pedidoInstalar = null; st.puedeInstalar = false; } dibujar(); });
+      return;
     case "listoInstalar": if (st.desdePrimera) { st.desdePrimera = false; irA("inicio"); break; } return volver();
     case "verGrupo": st.grupoTab = "gastos"; irA("grupo"); break;
     case "elegirYo": st.yoElegido = v; st.errorQuien = ""; break;
@@ -1006,6 +1012,10 @@ if (location.hash.startsWith("#g=")) {
   abrir("compartir");
   unirCodigo(codigo);
 }
+// Instalar con un toque: Chrome avisa que se puede instalar y la app guarda ese pedido para el botón.
+let pedidoInstalar = null;
+addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); pedidoInstalar = e; st.puedeInstalar = true; if (st.pantalla === "instalar") dibujar(); });
+addEventListener("appinstalled", () => { pedidoInstalar = null; st.puedeInstalar = false; mostrarAviso("¡Listo! MiGuita quedó instalada. Abrila desde el ícono."); dibujar(); });
 // Tocar el aviso abre la hoja de anotar.
 const anotarDesdeAviso = () => { if (location.hash === "#anotar") { history.replaceState({ p: "inicio" }, "", location.pathname + location.search); abrirHoja(); } };
 addEventListener("hashchange", anotarDesdeAviso);
