@@ -75,18 +75,45 @@ const VIEJOS = ["canon", "bola", "fact", "luna"];
 const CABEZA_VIEJOS = { canon: [22, [31, 45, 44]], bola: [13, [33, 47, 36]], fact: [10, [32, 48, 54]] };
 
 // El amigo número i del grupo. Los primeros 16 son todos distintos; después se repiten con gorro, anteojos o moño.
-export function amigo(i) {
+export function amigo(i, cam = 0) {
   const n = Math.max(0, i), base = n % (VIEJOS.length + NUEVOS.length), extra = EXTRAS[Math.floor(n / (VIEJOS.length + NUEVOS.length)) % EXTRAS.length];
   if (base < VIEJOS.length) {
-    const k = VIEJOS[base], svg = Art.factura(k);
-    if (!extra || !CABEZA_VIEJOS[k]) return svg;
-    const e = extra(CABEZA_VIEJOS[k][0], CABEZA_VIEJOS[k][1]);
-    return svg.replace(/<\/svg>$/, F(e.fl) + L(e.ln) + "</svg>").replace('viewBox="0 0 80 8', 'viewBox="0 -24 80 10');
+    const k = VIEJOS[base];
+    let svg = Art.factura(k);
+    if (!CABEZA_VIEJOS[k]) return svg;
+    const e = extra && extra(CABEZA_VIEJOS[k][0], CABEZA_VIEJOS[k][1]), c = camiseta(cam, CABEZA_VIEJOS[k][1][2] + 13);
+    if (!e && !c) return svg;
+    svg = svg.replace(/<\/svg>$/, (c ? c : "") + (e ? F(e.fl) + L(e.ln) : "") + "</svg>");
+    return e ? svg.replace('viewBox="0 0 80 8', 'viewBox="0 -24 80 10') : svg;
   }
   const p = NUEVOS[base - VIEJOS.length], pp = pies(), e = extra && extra(p.cabeza, p.ojos);
   const fl = pp.fl + p.fl() + cachetes(p.cach[0], p.cach[1], p.cach[2]) + (e ? e.fl : "");
   const ln = pp.ln + p.ln() + cara(p.ojos[0], p.ojos[1], p.ojos[2]) + (e ? e.ln : "");
-  return `<svg class="fr" viewBox="${e ? "0 -24 80 104" : "0 0 80 80"}" aria-hidden="true">${F(fl)}${L(ln)}</svg>`;
+  return `<svg class="fr" viewBox="${e ? "0 -24 80 104" : "0 0 80 80"}" aria-hidden="true">${F(fl)}${L(ln)}${camiseta(cam, p.ojos[2] + 13)}</svg>`;
+}
+
+/* ---------- camisetas de fútbol (solo los colores, sin escudos) ---------- */
+export const CAMISETAS = ["Ninguna", "Boca", "River", "San Lorenzo", "Racing", "Independiente", "Estudiantes", "Selección"];
+const AZUL = "#1B3E8C", ROJO = "#C8102E", CELESTE = "#75AADB", BLANCO = "#FFFFFF", ORO = "#F2C230";
+let camN = 0;
+// Camiseta chiquita debajo de la sonrisa (y = donde empieza el cuello). k: índice de CAMISETAS (0 = ninguna).
+function camiseta(k, y) {
+  if (!k || !CAMISETAS[k]) return "";
+  const forma = `M30 ${y}L35 ${y - 1}Q40 ${y + 3} 45 ${y - 1}L50 ${y}L54 ${y + 5}L50 ${y + 8}L49 ${y + 15}H31L30 ${y + 8}L26 ${y + 5}Z`;
+  const rayas = (a, b, ancho) => { let s = `<rect x="24" y="${y - 2}" width="32" height="19" fill="${a}"/>`; for (let x = 26 + ancho; x < 56; x += ancho * 2) s += `<rect x="${x}" y="${y - 2}" width="${ancho}" height="19" fill="${b}"/>`; return s; };
+  const dibujo = {
+    1: `<rect x="24" y="${y - 2}" width="32" height="19" fill="${AZUL}"/><rect x="24" y="${y + 5}" width="32" height="4.5" fill="${ORO}"/>`,
+    2: `<rect x="24" y="${y - 2}" width="32" height="19" fill="${BLANCO}"/><path d="M29 ${y + 1}L33 ${y - 2}L52 ${y + 14}L48 ${y + 17}Z" fill="${ROJO}"/>`,
+    3: rayas(AZUL, ROJO, 4),
+    4: rayas(CELESTE, BLANCO, 5),
+    5: `<rect x="24" y="${y - 2}" width="32" height="19" fill="${ROJO}"/><path d="M36 ${y}L40 ${y + 4}L44 ${y}" stroke="${BLANCO}" stroke-width="1.6" fill="none"/>`,
+    6: rayas(ROJO, BLANCO, 4),
+    7: rayas(CELESTE, BLANCO, 4) + `<circle cx="40" cy="${y + 6}" r="2.2" fill="${ORO}"/>`,
+  }[k];
+  const id = "cam" + (++camN);
+  // Un poco más grande que el dibujo base, para que se reconozca el club aunque el personaje se vea chiquito.
+  return `<g transform="translate(40 ${y}) scale(1.3) translate(-40 ${-y})"><defs><clipPath id="${id}"><path d="${forma}"/></clipPath></defs>` +
+    `<g clip-path="url(#${id})">${dibujo}</g>` + L(`<path d="${forma}" stroke-width="1.6"/>`) + "</g>";
 }
 export const CANTIDAD_DISTINTOS = (VIEJOS.length + NUEVOS.length) * EXTRAS.length;
 // Para elegir personaje: los 16 de base (el número es el que va a amigo()) y los detalles que se le pueden sumar.

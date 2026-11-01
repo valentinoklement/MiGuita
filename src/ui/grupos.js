@@ -1,7 +1,7 @@
 // Pantallas de Grupos: lista, un grupo (tu situación y sus juntadas), una juntada (compras, quién entra en qué
 // y cómo quedar a mano), formularios, compartir, unir y WhatsApp.
 import { Art } from "../art/art.js";
-import { amigo, BASES, DETALLES, MIGUITA } from "../art/amigos.js";
+import { amigo, BASES, DETALLES, MIGUITA, CAMISETAS } from "../art/amigos.js";
 import { formatear, leerMonto } from "../logic/dinero.js";
 import { centavos, repartir, saldos, saldar, miParte, textoWhatsApp, juntadasVivas, gastosDe, pagosDe, haySueltos, cuentas, detalleDe, miSituacion, pagadores } from "../logic/grupos.js";
 import { sumarDias } from "../logic/mes.js";
@@ -26,12 +26,12 @@ export function crearVistasGrupos(st, hoy, V) {
   const plataG = (g, c, o = {}) => formatear(c, { ...o, oculto: st.cfg.ocultar, moneda: g.moneda === "USD" ? "US$ " : "$" });
   const nombre = (g, id) => (id === g.yo ? "Vos" : g.miembros.find((m) => m.id === id)?.nombre || "?");
   const dibujo = (g, id) => {
-    const pj = g.miembros.find((m) => m.id === id)?.pj;
+    const m = g.miembros.find((x) => x.id === id), pj = m?.pj, cam = m?.cam || 0;
     if (pj === MIGUITA) return Art.miguita("ok");
-    if (Number.isInteger(pj)) return amigo(pj);
-    if (id === g.yo) return Art.miguita("ok");
-    const i = vivos(g).filter((m) => m.id !== g.yo).findIndex((m) => m.id === id);
-    return amigo(i);
+    if (Number.isInteger(pj)) return amigo(pj, cam);
+    if (id === g.yo && !cam) return Art.miguita("ok");
+    const i = vivos(g).filter((x) => x.id !== g.yo).findIndex((x) => x.id === id);
+    return amigo(id === g.yo ? 0 : i, cam);
   };
   const fecha = (f) => f ? Number(f.slice(8, 10)) + " " + ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"][Number(f.slice(5, 7)) - 1] : "";
   const btn = (act, texto, { alt = false, v = "" } = {}) => `<button class="btn pp w${alt ? " alt" : ""}" data-act="${act}"${v ? ` data-v="${esc(v)}"` : ""}>${texto}</button>`;
@@ -273,11 +273,14 @@ export function crearVistasGrupos(st, hoy, V) {
   // Elegir el personaje que te representa en el grupo (un chiche: si no elegís, se reparte solo).
   function personajes() {
     const v = f().vals, pj = v.pj, base = Number.isInteger(pj) && pj >= 0 ? pj % 16 : pj, detalle = Number.isInteger(pj) && pj >= 0 ? Math.floor(pj / 16) : 0;
+    const cam = v.cam || 0;
     const opcion = (valor, dib, nombre) => `<button class="pj pp" data-act="gPj" data-v="${valor}" aria-pressed="${base === valor}" aria-label="${esc(nombre)}">${dib}</button>`;
     return crd(lbl("Personaje") + `<div class="pjs" role="group" aria-label="Personaje">` +
-      opcion(MIGUITA, Art.miguita("ok"), "Miguita") + BASES.map((n, i) => opcion(i, amigo(i), n)).join("") + "</div>" +
+      opcion(MIGUITA, Art.miguita("ok"), "Miguita") + BASES.map((n, i) => opcion(i, amigo(i + 16 * detalle, i === 3 ? 0 : cam), n)).join("") + "</div>" +
       (Number.isInteger(base) && base >= 0 ? `<div class="chips" role="group" aria-label="Detalle">` + DETALLES.map((n, k) =>
         `<button class="pp" data-act="gPjDetalle" data-v="${k}" aria-pressed="${detalle === k}">${n}</button>`).join("") + "</div>" : "") +
+      (base !== MIGUITA && base !== 3 ? lbl("Camiseta") + `<div class="chips" role="group" aria-label="Camiseta">` + CAMISETAS.map((n, k) =>
+        `<button class="pp" data-act="gCam" data-v="${k}" aria-pressed="${cam === k}">${n}</button>`).join("") + "</div>" : "") +
       `<div class="sub">${pj == null ? "Si no elegís, la app te asigna uno." : "Así aparece en el grupo."}${pj != null ? ` <button class="link" data-act="gPj" data-v="">Que lo elija la app</button>` : ""}</div>`);
   }
 

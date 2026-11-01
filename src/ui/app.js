@@ -696,6 +696,7 @@ function guardarGForm() {
     const mid = id || nuevoId();
     const m = { ...(g.miembros.find((y) => y.id === mid) || { x: false }), id: mid, nombre: nombre.slice(0, 40), alias: al.alias, ts: ahora };
     if (Number.isInteger(v.pj)) m.pj = v.pj; else delete m.pj;
+    if (v.cam) m.cam = v.cam; else delete m.cam;
     const nuevo = { ...g, miembros: [...g.miembros.filter((y) => y.id !== mid), m] };
     if (v.soyYo) nuevo.yo = mid; else if (g.yo === mid) delete nuevo.yo;
     guardarGrupo(nuevo);
@@ -1113,8 +1114,9 @@ raiz.addEventListener("click", (e) => {
       abrirGForm("pago", null, { de, a, m: m ? montoEnCampo(+m) : "", f: hoy }); break;
     }
     case "editarPagoG": { const p = grupoActual().pagos.find((x) => x.id === v); abrirGForm("pago", v, { de: p.de, a: p.a, m: montoEnCampo(centavos(p.m)), f: p.f || hoy }); break; }
-    case "editarPersona": { const g = grupoActual(), m = g.miembros.find((x) => x.id === v); abrirGForm("persona", v, { nombre: m.nombre, alias: m.alias || "", soyYo: g.yo === v, pj: m.pj ?? null }); break; }
-    case "nuevaPersona": abrirGForm("persona", null, { nombre: "", alias: "", soyYo: false, pj: null }); break;
+    case "editarPersona": { const g = grupoActual(), m = g.miembros.find((x) => x.id === v); abrirGForm("persona", v, { nombre: m.nombre, alias: m.alias || "", soyYo: g.yo === v, pj: m.pj ?? null, cam: m.cam || 0 }); break; }
+    case "nuevaPersona": abrirGForm("persona", null, { nombre: "", alias: "", soyYo: false, pj: null, cam: 0 }); break;
+    case "gCam": st.gform.vals.cam = +v; break;
     case "gPj": st.gform.vals.pj = v === "" ? null : +v; break;
     case "gPjDetalle": { const pj = st.gform.vals.pj; if (Number.isInteger(pj) && pj >= 0) st.gform.vals.pj = (pj % 16) + 16 * +v; break; }
     case "gSoyYo": st.gform.vals.soyYo = !st.gform.vals.soyYo; break;
@@ -1445,7 +1447,7 @@ raiz.addEventListener("click", (e) => {
     default: return;
   }
   dibujar();
-  if (["tecla", "cat", "medio", "fecha", "tipo", "filtro", "catTab", "tema", "borrarMov", "borrarTodo", "planTab", "formSel", "formSwitch", "fijoActivo", "borrarPlan", "grupoTab", "gSel", "gEntre", "gPj", "gPjDetalle", "gGente", "gPaga", "celda", "columna", "gSoyYo", "grupoLoc", "elegirYo", "borrarG", "monedaHoja", "notifCant", "notifForma", "notifTipo", "notifNM", "pinNuevo", "tapar", "dolarTipo", "dolarFuente", "dolarConv", "copiaAuto", "copiaCada", "quitarPin", "aplicarCopia"].includes(act))
+  if (["tecla", "cat", "medio", "fecha", "tipo", "filtro", "catTab", "tema", "borrarMov", "borrarTodo", "planTab", "formSel", "formSwitch", "fijoActivo", "borrarPlan", "grupoTab", "gSel", "gEntre", "gPj", "gPjDetalle", "gCam", "gGente", "gPaga", "celda", "columna", "gSoyYo", "grupoLoc", "elegirYo", "borrarG", "monedaHoja", "notifCant", "notifForma", "notifTipo", "notifNM", "pinNuevo", "tapar", "dolarTipo", "dolarFuente", "dolarConv", "copiaAuto", "copiaCada", "quitarPin", "aplicarCopia"].includes(act))
     raiz.querySelector(`[data-act="${act}"]${b.dataset.k ? `[data-k="${CSS.escape(b.dataset.k)}"]` : ""}${v ? `[data-v="${CSS.escape(v)}"]` : ""}`)?.focus();
 });
 

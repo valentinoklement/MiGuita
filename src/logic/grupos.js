@@ -2,7 +2,7 @@
 // las funciones de reparto, saldos, saldar, fusión y limpieza son las mismas, con nombres en castellano.
 //
 // Grupo: { id, nombre, moneda: "ARS"|"USD", ts, miembros, gastos, pagos, juntadas, yo?, loc?, sync? }
-//   miembro: { id, nombre, alias?, ts, x?, pj? (personaje elegido: -1 Miguita, 0 a 63 los amigos de la panadería) }
+//   miembro: { id, nombre, alias?, ts, x?, pj? (personaje elegido: -1 Miguita, 0 a 63 los amigos de la panadería), cam? (camiseta 1 a 7) }
 //   gasto:   { id, t (qué fue), m (monto en pesos, con decimales), p (quién pagó), a: [entre quiénes],
 //              sp: "eq"|"sh"|"pc"|"ex" (parejo, partes, porcentaje, montos), w: {id: valor}, f, ts, x?, por,
 //              j? (juntada), pp? ({id: pesos} si pagaron varios) }
@@ -133,6 +133,7 @@ export function limpiar(o) {
     const al = validarAlias(m.alias);
     const miembro = { id: i, nombre: s(m.nombre, 40).trim() || "?", alias: al.ok ? al.alias : "", ts: num(m.ts), x: !!m.x };
     if (Number.isInteger(m.pj) && m.pj >= -1 && m.pj < 64) miembro.pj = m.pj; // personaje elegido (-1 = Miguita)
+    if (Number.isInteger(m.cam) && m.cam >= 1 && m.cam <= 7) miembro.cam = m.cam; // camiseta de fútbol
     g.miembros.push(miembro);
   });
   (Array.isArray(o.gastos) ? o.gastos : []).slice(0, MAX_REGISTROS).forEach((x) => {
