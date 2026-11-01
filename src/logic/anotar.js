@@ -3,7 +3,7 @@
 // Si de verdad no se puede saber ("super 1500 verdu 2000", "nafta 20"), devuelve duda: la app le pregunta a la persona.
 // Ojo, documentado y probado: "1.5" se lee como 15 (el punto siempre es de miles); para decimales va la coma. Con "lucas", "1.5 lucas" son 1.500.
 import { categoriasIniciales, paraAdivinar, RESPALDO } from "./categorias.js";
-import { LEXICO_GASTO, LEXICO_INGRESO, ES_INGRESO, quitarAcentos } from "./lexico.js";
+import { LEXICO_GASTO, LEXICO_INGRESO, ES_GASTO, tipoDe, quitarAcentos } from "./lexico.js";
 
 const escapar = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const POR_DEFECTO = categoriasIniciales();
@@ -30,7 +30,7 @@ const SOLO_CON_NUMERO = new Set(["k", "palo", "palos", "palito", "palitos", "mil
 const PESOS = new Set(["peso", "pesos", "pe", "mango", "mangos", "mangazos", "morlaco", "morlacos", "pesitos", "ars"]);
 const DOLARES = new Set(["usd", "u$s", "us$", "dolar", "dolares", "verde", "verdes", "verdolagas", "dolarcitos"]);
 const CANTIDADES = new Set("kg kilo kilos g gr grs gramos l lt lts litro litros ml cc cm mts metro metros m2 unidad unidades u hs hora horas dia dias semana semanas mes meses año años cuota cuotas persona personas porcion porciones noches noche latas lata botellas botella packs pack docena docenas".split(" "));
-const FILLER = /^(me gast[eé]|gast[eé]|pagu[eé]|compr[eé]|me sali[oó]|sali[oó]|fueron|puse)\s+(en\s+|de\s+|por\s+)?((el|la|los|las)\s+)?/i;
+const FILLER = /^(me gast[eé]|gast[eé]|pagu[eé]|compr[eé]|cobr[eé]|me sali[oó]|sali[oó]|fueron|puse)\s+(en\s+|de\s+|del\s+|por\s+)?((el|la|los|las)\s+)?/i;
 
 function numero(t, conMultiplicador) {
   const s = t.replace(/[.,]+$/, "");
@@ -146,8 +146,7 @@ export function leerTexto(texto, cats = POR_DEFECTO, aprendidas = {}) {
   let sin = s;
   for (const c of [...e.quitar].sort((a, b) => b.desde - a.desde)) sin = sin.slice(0, c.desde) + " " + sin.slice(c.hasta);
   const resto = sin.replace(/\s+/g, " ").trim().replace(FILLER, "").replace(/^(en|de|por|del)\s+((el|la|los|las)\s+)?/i, "").replace(/\s+[-–−]$/, "").replace(/\s*[.,;:]+$/, "").trim();
-  const norm = quitarAcentos(resto);
-  const tipo = ES_INGRESO.test(norm) ? "ingreso" : "gasto";
+  const tipo = tipoDe(quitarAcentos(s));
   const r = { tipo, monto: Math.round(e.c.valor * 100), detalle: resto ? resto[0].toUpperCase() + resto.slice(1) : "", categoria: categoriaDe(resto, cats, tipo, aprendidas) };
   if (e.c.usd) r.moneda = "USD";
   if (e.opciones) r.opciones = e.opciones.map((v) => Math.round(v * 100));
@@ -191,10 +190,15 @@ export function leerVarios(texto, cats = POR_DEFECTO, aprendidas = {}) {
     else if (juntos.length && !juntos[juntos.length - 1].tiene) { juntos[juntos.length - 1].b = b; juntos[juntos.length - 1].tiene = tiene; }
     else juntos.push({ a, b, tiene });
   }
+  let anterior = "gasto";
   return juntos.filter((x) => x.tiene).flatMap((x) => {
     const frase = s.slice(x.a, x.b).replace(COLA, "").replace(ARRANQUE, "");
-    const r = leerTexto(frase, cats, aprendidas);
+    let r = leerTexto(frase, cats, aprendidas);
     if (!r) return [];
+    // "Me pasaron 20 lucas de Juan y 10 lucas de Pedro": lo segundo también entró. "Cobré 500 mil y 20 mil de nafta": la nafta no.
+    if (r.tipo === "gasto" && anterior === "ingreso" && r.categoria === RESPALDO.gasto && !ES_GASTO.test(quitarAcentos(frase)))
+      r = { ...r, tipo: "ingreso", categoria: categoriaDe(r.detalle, cats, "ingreso", aprendidas) };
+    anterior = r.tipo;
     if (!r.opciones) return [r];
     const { opciones, ...resto } = r;
     return [{ ...resto, monto: Math.max(...opciones), revisar: true }];
@@ -210,7 +214,7 @@ export const claveDe = (texto) => quitarAcentos(texto).replace(/[^a-z0-9ñ ]/g, 
 // Sin monto: al menos se aprovecha lo escrito para abrir la hoja casi completa.
 export function leerSinMonto(texto, cats = POR_DEFECTO, aprendidas = {}) {
   const resto = String(texto).trim().replace(FILLER, "");
-  const tipo = ES_INGRESO.test(quitarAcentos(resto)) ? "ingreso" : "gasto";
+  const tipo = tipoDe(quitarAcentos(texto));
   return { tipo, detalle: resto ? resto[0].toUpperCase() + resto.slice(1) : "", categoria: categoriaDe(resto, cats, tipo, aprendidas) };
 }
 // ¿Quedó en la categoría de "no sé"? Entonces conviene preguntar.

@@ -23,11 +23,16 @@ export const LEXICO_GASTO = {
 };
 
 export const LEXICO_INGRESO = {
-  sueldo: separar("sueldo, salario, aguinaldo, jubilacion, jornal, quincena, recibo"),
-  extra: separar("freelance, extra, changa, changuita, venta, vendi, honorarios, factura, propina, propinas, bono, comision"),
-  regalo_in: separar("me regalaron, regalo recibido, recibi de regalo"),
-  otros_in: separar("reintegro, devolucion, me devolvieron, me transfirieron, me pasaron, asignacion, auh, beca"),
+  sueldo: separar("sueldo, salario, aguinaldo, jubilacion, jornal, quincena, recibo, me pagaron el sueldo, me pago el sueldo, me deposito el sueldo, me depositaron el sueldo"),
+  extra: separar("freelance, extra, changa, changuita, venta, vendi, vendimos, honorarios, factura, propina, propinas, bono, comision, laburo, cliente, gane, ganamos"),
+  regalo_in: separar("me regalaron, me regalo, regalo recibido, recibi de regalo"),
+  otros_in: separar("me pagaron, me depositaron, reintegro, devolucion, me devolvieron, me devolvio, me transfirieron, me transfirio, me pasaron, me paso, me pago, me dio, me dieron, me mando, me mandaron, me giro, me giraron, me presto, me prestaron, asignacion, auh, beca"),
 };
 
 // Palabras que dicen que entró plata.
-export const ES_INGRESO = /(^|\s)(sueldo|salario|aguinaldo|jubilacion|cobr[eo]|cobramos|ingreso|me pagaron|me pago|me depositaron|me transfirieron|me pasaron|me devolvieron|me regalaron|regalo recibido|recibi de regalo|changa|changuita|vendi|reintegro|propina|propinas|quincena)($|\s)/;
+const P = (t) => new RegExp("(^|[^a-zñ])(" + t + ")($|[^a-zñ])");
+export const ES_INGRESO = P("sueldo|salario|aguinaldo|jubilacion|cobr[eo]|cobramos|ingreso|ingresaron|recibi|recibimos|gane|ganamos|entro|entraron|me entro|me entraron|me pagaron|me pago|me depositaron|me deposito|me transfirieron|me transfirio|me pasaron|me paso|me devolvieron|me devolvio|me regalaron|me regalo|me dio|me dieron|me mando|me mandaron|me giro|me giraron|me presto|me prestaron|regalo recibido|recibi de regalo|changa|changuita|vendi|vendimos|reintegro|propina|propinas|quincena");
+// Palabras que dicen que salió plata. Se miran primero: "me cobró el plomero" y "le pasé a mi hermana" son gastos.
+export const ES_GASTO = P("me cobr(o|aron)|me sacaron|me debitaron|me descontaron|le (pase|pague|di|dimos|dio|transferi|mande|deposite|preste|devolvi|gire|compre|regale)|gaste|gastamos|me gaste|pague|pagamos|compre|compramos|deje|saque|aboné|abone|perdi");
+// Si entró o salió plata, según cómo está dicho. Sin ninguna pista, es un gasto.
+export const tipoDe = (plano) => (ES_GASTO.test(plano) ? "gasto" : ES_INGRESO.test(plano) ? "ingreso" : "gasto");

@@ -1,8 +1,8 @@
 // Guarda la app para que funcione sin internet. Subir VERSION cada vez que cambia un archivo.
-const VERSION = "miguita-e18-1";
+const VERSION = "miguita-e19-1";
 const ARCHIVOS = [
   "./", "./index.html", "./manifest.webmanifest",
-  "./src/ui/styles.css", "./src/ui/ayuda.js", "./src/ui/voz.js", "./src/logic/instalar.js", "./src/logic/voz.js", "./src/ui/arranque.js", "./src/ui/app.js", "./src/ui/pantallas.js", "./src/ui/plan.js", "./src/ui/grupos.js", "./src/ui/qr.js", "./src/ui/ajustes.js", "./src/ui/bloqueo.js", "./src/ui/huella.js", "./src/ui/primera.js", "./src/ui/importar.js", "./src/ui/chistes.js", "./src/ui/pdf.js", "./src/vendor/qrcode.js", "./src/vendor/jsQR.js", "./src/ui/ejemplo.js", "./src/art/art.js", "./src/art/amigos.js", "./src/data/db.js",
+  "./src/ui/styles.css", "./src/ui/ayuda.js", "./src/ui/analisis.js", "./src/logic/analisis.js", "./src/ui/voz.js", "./src/logic/instalar.js", "./src/logic/voz.js", "./src/ui/arranque.js", "./src/ui/app.js", "./src/ui/pantallas.js", "./src/ui/plan.js", "./src/ui/grupos.js", "./src/ui/qr.js", "./src/ui/ajustes.js", "./src/ui/bloqueo.js", "./src/ui/huella.js", "./src/ui/primera.js", "./src/ui/importar.js", "./src/ui/chistes.js", "./src/ui/pdf.js", "./src/vendor/qrcode.js", "./src/vendor/jsQR.js", "./src/ui/ejemplo.js", "./src/art/art.js", "./src/art/amigos.js", "./src/data/db.js",
   "./src/logic/dinero.js", "./src/logic/anotar.js", "./src/logic/categorias.js", "./src/logic/mes.js", "./src/logic/racha.js", "./src/logic/migraciones.js", "./src/logic/plan.js", "./src/logic/grupos.js", "./src/logic/cifrado.js", "./src/logic/dolar.js", "./src/logic/avisos.js", "./src/logic/exportar.js", "./src/logic/importar.js", "./src/logic/sincro.js", "./src/logic/vinculo.js", "./src/logic/cuotas.js", "./src/logic/buzon.js", "./src/logic/lexico.js", "./src/logic/tumes.js", "./src/ui/tumes.js",
   "./icons/icono.svg", "./icons/icono-192.png", "./icons/icono-512.png", "./icons/apple-touch-icon.png", "./icons/favicon-32.png",
   "./fonts/bricolage.woff2", "./fonts/manrope.woff2", "./fonts/caveat-brush.woff2",

@@ -151,7 +151,7 @@ export function crearVistas(st, hoy) {
     h += (sinIngreso && actual && !guiando && (st.cfg.ingresoVisto || !reales) ? `<div class="chips"><button class="pp" data-act="cargarIngreso">+ Cargar lo que cobrás</button></div>` : "") + `<form class="quick" data-form="rapido"><div class="pp${st.error ? " err" : ""}"><input id="rapido" placeholder="15mil nafta" aria-label="Anotar un gasto" autocomplete="off" enterkeyhint="done" maxlength="300"></div>` +
       (conMic ? `<button class="btn pp mic" type="button" data-act="hablar" aria-label="Hablar: decí tus gastos con la voz">${Art.icono(MIC)}</button>` : "") +
       `<button class="btn pp anotar" type="submit">Anotar</button></form>` +
-      (conMic && !st.cfg.vozAviso ? `<div class="nuevo-mic">Nuevo: tocá el micrófono y decí varios gastos juntos</div>` : "") +
+      (conMic && !st.cfg.vozAviso ? `<div class="nuevo-mic">Nuevo: tocá el micrófono y decí lo que gastaste o te entró</div>` : "") +
       (st.error ? `<div class="msg" role="alert">${esc(st.error)}</div>` : "") +
       (guiando ? "" : `<button class="traer" data-act="abrir" data-v="importar"><span aria-hidden="true">${Art.icono(ICONO_BILLETERA)}</span><span>¿Usás Mercado Pago? <b>Traé tus gastos solos</b></span><span class="chev" aria-hidden="true">›</span></button>`);
 
@@ -225,7 +225,7 @@ export function crearVistas(st, hoy) {
       crd(`<div class="stats"><div><div class="sub">Ingresos</div><b class="pos">${plata(r.ingresos)}</b></div><div><div class="sub">Gastos</div><b class="neg">${plata(r.gastos)}</b></div><div><div class="sub">Queda</div><b>${plata(r.teQueda)}</b></div></div>` +
         (() => { const d = dolarDe(referencia(st.mes, hoy)); return d && r.gastos ? `<div class="sub">≈ ${formatear(Math.round(r.gastos * 100 / d.valor), { moneda: "US$ ", oculto: st.cfg.ocultar }).replace(/,\d\d$/, "")} gastados · dólar ${nombreTipo(st.cfg.dolar.tipo).toLowerCase()} ${formatear(d.valor)}</div>` : ""; })());
     if (!r.gastos) return h + crd(`<div class="empty"><b>Sin gastos este mes</b><span>Cuando anotes, acá vas a ver en qué se te va la plata.</span></div>`);
-    h += `<button class="btn pp w alt" data-act="abrirTuMes" data-v="${st.mes}">Tu mes en MiGuita${actual ? " (hasta hoy)" : ""}</button>`;
+    h += `<div class="btnrow"><button class="btn pp alt" data-act="abrirTuMes" data-v="${st.mes}">Tu mes${actual ? " (hasta hoy)" : ""}</button><button class="btn pp alt" data-act="verPlan" data-v="analisis">Ver análisis</button></div>`;
     h += crd(lbl("Por categoría") + pc.map((c) => `<div class="crow">${Art.catIcon(c.id)}<div class="cr"><div class="row f" style="padding:0 0 3px;min-height:0"><span>${esc(nombreCat(c.id))} · ${Math.round(c.parte * 100)}%</span><span>${plata(c.monto)}</span></div>${Art.barra(c.monto / pc[0].monto)}</div></div>`).join(""));
     h += crd(lbl("Por medio de pago") + pm.map((m, i) => `<div class="row${i ? "" : " f"}"><span>${esc(nombreMedio(m.id) || "Sin medio")}</span><span>${plata(m.monto)}</span></div>`).join(""));
     h += crd(lbl("Tu ritmo") + `<div class="row f"><span>Gastás en promedio</span><span>${plata(r.promedio)} por día</span></div>` +
@@ -286,40 +286,45 @@ export function crearVistas(st, hoy) {
   }
 
   function mas() {
-    const ej = hayEjemplo();
     const n = st.cfg.notif, d = dolarDe(hoy), cp = st.cfg.copias;
     const ir = (v, t, sub, i, primera) => `<button class="srow rowb${primera ? " f" : ""}" data-act="abrir" data-v="${v}" style="width:100%;text-align:left"><span class="ri">${Art.icono(i)}</span><span class="rt"><b>${t}</b><small>${esc(sub)}</small></span><span class="chev" aria-hidden="true">›</span></button>`;
+    const accion = (act, t, sub, i) => `<button class="srow rowb" data-act="${act}" style="width:100%;text-align:left"><span class="ri">${Art.icono(i)}</span><span class="rt"><b>${t}</b><small>${esc(sub)}</small></span><span class="chev" aria-hidden="true">›</span></button>`;
     return hdr("Tu app", "Ajustes", "ok") +
-      crd(ir("notif", "Notificaciones", n.cantidad ? n.cantidad + (n.cantidad === 1 ? " aviso" : " avisos") + " por día · " + (n.forma === "sonido" ? "con sonido" : "en silencio") : "Sin avisos", '<path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20h4"/>', true) +
-        ir("seguridad", "Seguridad", st.seguridad ? (st.seguridad.modo === "clave" ? "Contraseña" : "PIN") + (st.seguridad.huella ? " y huella" : "") + " · datos cifrados" : "Sin PIN", '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/>') +
-        ir("dolar", "Dólar", nombreTipo(st.cfg.dolar.tipo) + (d ? " · " + formatear(d.valor) : " · sin valor") + (st.cfg.dolar.fuente === "manual" || st.cfg.dolar.tipo === "fijo" ? " · a mano" : " · se actualiza solo"), '<circle cx="12" cy="12" r="9"/><path d="M12 7v10M15 9.5c0-2-6-2-6 0s6 2 6 4.5-6 2.5-6 0"/>') +
-        (matchMedia("(display-mode: standalone)").matches || navigator.standalone ? "" : ir("instalar", "Instalar MiGuita", "Para tenerla en la pantalla de inicio", '<rect x="6" y="2" width="12" height="20" rx="3"/><path d="M12 8v7m0 0l-3-3m3 3l3-3"/>')) +
-        ir("tutorial", "Cómo usar MiGuita", "Todo lo que podés hacer, en un minuto", '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 0 1 5 .5c0 1.5-2.5 2-2.5 3.5M12 17h0"/>') +
-        `<button class="srow rowb" data-act="repetirGuia" style="width:100%;text-align:left"><span class="ri">${Art.icono('<path d="M4 12a8 8 0 1 0 2.5-5.8M4 4v4h4"/>')}</span><span class="rt"><b>Repetir la guía</b><small>La de la primera vez, en Inicio</small></span><span class="chev" aria-hidden="true">›</span></button>` +
-        ir("dispositivos", "Usar en otro dispositivo", st.cfg.vinculo ? (st.cfg.vinculo.error ? "Conectado · sin conexión" : "Conectado · todo al día") : "Celu y compu con los mismos datos", '<rect x="2" y="5" width="13" height="10" rx="2"/><path d="M5 19h7"/><rect x="17" y="9" width="5" height="10" rx="1.5"/>') +
-        (EN_PRUEBA ? `<button class="srow rowb" data-act="abrirComentario" style="width:100%;text-align:left"><span class="ri">${Art.icono('<path d="M4 5h16v11H9l-5 4z"/>')}</span><span class="rt"><b>Mandar un comentario</b><small>Una idea o algo que anda mal</small></span><span class="chev" aria-hidden="true">›</span></button>` : "") +
-        ir("privacidad", "Privacidad", "Qué se guarda y dónde", '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>') +
-        ir("copias", "Copias y Excel", cp.ultima ? "Última: " + new Date(cp.ultima).toLocaleDateString("es-AR") : "Todavía no hiciste ninguna", '<path d="M12 4v10m0 0l-4-4m4 4l4-4M5 19h14"/>')) +
-      crd(lbl("Tu nombre") + `<div class="quick"><div class="pp"><input class="field" data-act="nombre" value="${esc(st.cfg.nombre || "")}" placeholder="Para saludarte en Inicio" aria-label="Tu nombre" maxlength="30" autocomplete="given-name"></div></div>`) +
-      crd(lbl("Mi alias para cobrar") + `<div class="quick"><div class="pp${st.errorAlias ? " err" : ""}"><input class="field" data-act="miAlias" value="${esc(st.cfg.alias || "")}" placeholder="tu alias, nunca el CBU" aria-label="Mi alias para cobrar" maxlength="22" autocapitalize="none" autocomplete="off"></div></div>` +
+      crd(lbl("Tu nombre") + `<div class="quick"><div class="pp"><input class="field" data-act="nombre" value="${esc(st.cfg.nombre || "")}" placeholder="Para saludarte en Inicio" aria-label="Tu nombre" maxlength="30" autocomplete="given-name"></div></div>` +
+        lbl("Mi alias para cobrar") + `<div class="quick"><div class="pp${st.errorAlias ? " err" : ""}"><input class="field" data-act="miAlias" value="${esc(st.cfg.alias || "")}" placeholder="tu alias, nunca el CBU" aria-label="Mi alias para cobrar" maxlength="22" autocapitalize="none" autocomplete="off"></div></div>` +
         (st.errorAlias ? `<div class="msg" role="alert">${esc(st.errorAlias)}</div>` : "") + `<div class="hint">Se suma a los grupos que crees, para que te transfieran. Nunca pongas el CBU.</div>`) +
-      billetera() +
-      crd(`<button class="srow f rowb" data-act="abrir" data-v="categorias" style="width:100%;text-align:left"><span class="rt"><b>Categorías y medios de pago</b><small>Renombrar, ocultar o agregar</small></span><span class="chev" aria-hidden="true">›</span></button>`) +
+      crd(lbl("Tu app") +
+        ir("notif", "Notificaciones", n.cantidad ? n.cantidad + (n.cantidad === 1 ? " aviso" : " avisos") + " por día · " + (n.forma === "sonido" ? "con sonido" : "en silencio") : "Sin avisos", '<path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20h4"/>', true) +
+        ir("personalizacion", "Personalización", "Tema, billetera, categorías y medios de pago", '<circle cx="12" cy="12" r="9"/><circle cx="8.5" cy="10" r="1"/><circle cx="12" cy="7.5" r="1"/><circle cx="15.5" cy="10" r="1"/><path d="M12 21c-1.5 0-2-1-2-2s1-2 2-2h2a5 5 0 0 0 5-4"/>') +
+        ir("seguridad", "Seguridad", st.seguridad ? (st.seguridad.modo === "clave" ? "Contraseña" : "PIN") + (st.seguridad.huella ? " y huella" : "") + " · datos cifrados" : "Sin PIN", '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/>') +
+        ir("dolar", "Dólar", nombreTipo(st.cfg.dolar.tipo) + (d ? " · " + formatear(d.valor) : " · sin valor") + (st.cfg.dolar.fuente === "manual" || st.cfg.dolar.tipo === "fijo" ? " · a mano" : " · se actualiza solo"), '<circle cx="12" cy="12" r="9"/><path d="M12 7v10M15 9.5c0-2-6-2-6 0s6 2 6 4.5-6 2.5-6 0"/>')) +
+      crd(lbl("Tus datos") +
+        ir("copias", "Copias y Excel", cp.ultima ? "Última: " + new Date(cp.ultima).toLocaleDateString("es-AR") : "Todavía no hiciste ninguna", '<path d="M12 4v10m0 0l-4-4m4 4l4-4M5 19h14"/>', true) +
+        ir("dispositivos", "Usar en otro dispositivo", st.cfg.vinculo ? (st.cfg.vinculo.error ? "Conectado · sin conexión" : "Conectado · todo al día") : "Celu y compu con los mismos datos", '<rect x="2" y="5" width="13" height="10" rx="2"/><path d="M5 19h7"/><rect x="17" y="9" width="5" height="10" rx="1.5"/>') +
+        ir("privacidad", "Privacidad", "Qué se guarda y dónde, borrar todo", '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>')) +
+      crd(lbl("Ayuda") +
+        ir("tutorial", "Cómo usar MiGuita", "Todo lo que podés hacer, en un minuto", '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 0 1 5 .5c0 1.5-2.5 2-2.5 3.5M12 17h0"/>', true) +
+        accion("repetirGuia", "Repetir la guía", "La de la primera vez, en Inicio", '<path d="M4 12a8 8 0 1 0 2.5-5.8M4 4v4h4"/>') +
+        (matchMedia("(display-mode: standalone)").matches || navigator.standalone ? "" : ir("instalar", "Instalar MiGuita", "Para tenerla en la pantalla de inicio", '<rect x="6" y="2" width="12" height="20" rx="3"/><path d="M12 8v7m0 0l-3-3m3 3l3-3"/>')) +
+        (EN_PRUEBA ? accion("abrirComentario", "Mandar un comentario", "Una idea o algo que anda mal", '<path d="M4 5h16v11H9l-5 4z"/>') : ""));
+  }
+
+  /* ---------- Personalización ---------- */
+  function personalizacion() {
+    return back("Ajustes") + hdr("Ajustes", "Personalización") +
       crd(lbl("Apariencia") +
         `<div class="srow f"><span class="rt"><b>Tema</b></span>${chips("tema", [["dark", "Oscuro"], ["light", "Claro"]], st.cfg.tema, "Tema")}</div>` +
         `<div class="srow"><span class="rt"><b>Reducir movimiento</b><small>Frena el temblor de los dibujos</small></span>${interruptor("movimiento", !st.cfg.movimiento, "Reducir movimiento")}</div>` +
         `<div class="srow"><span class="rt"><b>Ocultar montos</b><small>Tapa los números en la pantalla</small></span>${interruptor("ocultar", st.cfg.ocultar, "Ocultar montos")}</div>`) +
-      crd(lbl("Tus datos") +
-        `<div class="sub">${st.persistente ? (st.cfg.vinculo ? "Tus datos se comparten, cifrados, solo con tus dispositivos conectados. Los grupos conectados también viajan cifrados." : "Tus gastos se guardan solo en este celu. Solo los grupos que conectes viajan por internet, cifrados.") : "Este navegador no deja guardar: lo que anotes se pierde al cerrar."}</div>` +
-        `<div class="btnrow">${ej ? `<button class="btn pp alt" data-act="quitarEjemplo">Quitar ejemplo</button>` : `<button class="btn pp alt" data-act="ponerEjemplo">Cargar ejemplo</button>`}` +
-        `<button class="btn pp alt del" data-act="borrarTodo">${st.confirmar === "todo" ? "Tocá de nuevo para borrar" : "Borrar todo"}</button></div>`);
+      billetera() +
+      crd(`<button class="srow f rowb" data-act="abrir" data-v="categorias" style="width:100%;text-align:left"><span class="rt"><b>Categorías y medios de pago</b><small>Renombrar, ocultar o agregar</small></span><span class="chev" aria-hidden="true">›</span></button>`);
   }
 
   /* ---------- Categorías y medios ---------- */
   function categorias() {
     const t = st.catTab;
     const items = t === "medios" ? st.cfg.medios : st.cfg.categorias[t];
-    return back("Ajustes") + hdr("Ajustes", "Categorías y medios") +
+    return back("Personalización") + hdr("Personalización", "Categorías y medios") +
       chips("catTab", [["gasto", "Gastos"], ["ingreso", "Ingresos"], ["medios", "Medios de pago"]], t, "Lista") +
       crd(items.map((c, i) => {
         const oculto = c.oculta || c.oculto;
@@ -389,7 +394,7 @@ export function crearVistas(st, hoy) {
       `</div></div>`;
   }
 
-  return { inicio, movimientos, resumen, racha, festejo, mas, categorias, editarCat, hoja, nombreCat, nombreMedio, nombreDia, mesTexto, plata, motivosApretado, estadoDelMes,
+  return { inicio, movimientos, resumen, racha, festejo, mas, personalizacion, hayEjemplo, categorias, editarCat, hoja, nombreCat, nombreMedio, nombreDia, mesTexto, plata, motivosApretado, estadoDelMes,
     guia, ayuda, ayudaHoja,
     ayudas: { back, hdr, lbl, crd, chips, interruptor, preg } };
 }

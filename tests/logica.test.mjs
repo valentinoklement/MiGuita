@@ -38,7 +38,7 @@ const CASOS = [
   ["pizza 15 mil", "gasto", 15000, "Pizza", "comida"],
   ["sueldo 620000", "ingreso", 620000, "Sueldo", "sueldo"],
   ["me pagaron 50000", "ingreso", 50000, "Me pagaron", "otros_in"],
-  ["cobré freelance 90000", "ingreso", 90000, "Cobré freelance", "extra"],
+  ["cobré freelance 90000", "ingreso", 90000, "Freelance", "extra"],
   ["2500 helado", "gasto", 2500, "Helado", "comida"],
   ["steam 7000", "gasto", 7000, "Steam", "hobbies"],
   ["expensas 85000", "gasto", 85000, "Expensas", "servicios"],

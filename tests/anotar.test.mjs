@@ -113,6 +113,29 @@ test("varios: moneda e ingresos en cada uno", () => {
   assert.deepEqual(leerVarios("cobré el sueldo 500 mil y 20 mil de nafta").map((x) => x.tipo), ["ingreso", "gasto"]);
 });
 
+test("se da cuenta si la plata entró o salió", () => {
+  const tipo = (t) => leerTexto(t).tipo;
+  for (const t of ["me pasaron 20 lucas", "Juan me pasó 20 mil", "me transfirió 15 mil mi hermana", "me entraron 50 lucas", "recibí 30 mil", "cobré 500 mil", "le cobré 10 lucas a Pedro", "me pagó 8 mil Ana", "me devolvieron 5 mil", "me regalaron 20 lucas", "vendí la bici 200 mil", "gané 40 lucas", "me dio 3 mil mi vieja", "me prestó 100 mil mi viejo", "me depositaron el sueldo 900 mil"]) assert.equal(tipo(t), "ingreso", t);
+  for (const t of ["le pasé 10 lucas a Juan", "le pagué 8 mil a Ana", "le transferí 20 mil a mi hermana", "le presté 50 lucas a Pedro", "me cobró 20 mil el plomero", "me cobraron 5 mil de luz", "gasté 3 mil", "pagué 10 mil de gas", "compré un regalo 15 mil", "le devolví 5 mil a Ana", "dejé propina 2 mil", "nafta 15 mil", "me descontaron 4 mil"]) assert.equal(tipo(t), "gasto", t);
+});
+
+test("cada plata que entra va a una categoría de ingreso", () => {
+  const cat = (t) => leerTexto(t).categoria;
+  assert.equal(cat("me depositaron el sueldo 900 mil"), "sueldo");
+  assert.equal(cat("me pagaron 900 mil"), "otros_in");
+  assert.equal(cat("Juan me pagó 8 mil"), "otros_in");
+  assert.equal(cat("me regalaron 20 lucas"), "regalo_in");
+  assert.equal(cat("hice una changa 50 lucas"), "extra");
+});
+
+test("varios: mezcla lo que entró con lo que salió", () => {
+  const ver = (t) => leerVarios(t).map((r) => [r.tipo, r.monto / 100]);
+  assert.deepEqual(ver("Me pasaron 20 lucas de Juan, gasté 15 mil de nafta y cobré 500 mil del sueldo"), [["ingreso", 20000], ["gasto", 15000], ["ingreso", 500000]]);
+  assert.deepEqual(ver("Me pasaron 20 lucas de Juan y 10 lucas de Pedro"), [["ingreso", 20000], ["ingreso", 10000]]);
+  assert.deepEqual(ver("Cobré 500 mil y 20 mil de nafta"), [["ingreso", 500000], ["gasto", 20000]]);
+  assert.deepEqual(ver("Le pasé 10 lucas a Juan y Pedro me pasó 5 mil"), [["gasto", 10000], ["ingreso", 5000]]);
+});
+
 test("aprende lo que la persona corrige", () => {
   const r = leerTexto("Carnaval 5000");
   assert.ok(quedoSinCategoria(r));

@@ -1,7 +1,7 @@
 // Las explicaciones del signo de pregunta. Cortas y con ejemplos: se leen en cualquier momento, sin perder lo que estabas haciendo.
 // Cada una tiene un título y un texto (x), pasos numerados o las dos cosas.
 export const AYUDAS = {
-  inicio: { t: "¿Cómo se usa?", pasos: ["<b>Escribí lo que gastaste</b>, como te salga: «15mil nafta» o «10 lucas birra». Tocá Anotar y listo.", "<b>O tocá el micrófono</b> y decí varios gastos juntos. Se separan solos.", "<b>Para corregir</b>, tocá el gasto en la lista y cambialo.", "<b>Si no aclarás la moneda, son pesos.</b> Para dólares, escribí «100 dólares hotel»."] },
+  inicio: { t: "¿Cómo se usa?", pasos: ["<b>Escribí lo que gastaste</b>, como te salga: «15mil nafta» o «10 lucas birra». Tocá Anotar y listo.", "<b>O tocá el micrófono</b> y decí todo junto: lo que gastaste y lo que te entró. Se separa solo.", "<b>Para corregir</b>, tocá el gasto en la lista y cambialo.", "<b>Si no aclarás la moneda, son pesos.</b> Para dólares, escribí «100 dólares hotel»."] },
   movimientos: { t: "Movimientos", x: "Todo lo que anotaste. Podés buscar por palabra, filtrar por categoría y cambiar de mes con las flechas. Tocá uno para corregirlo o borrarlo." },
   resumen: { t: "Resumen", x: "En qué se te fue la plata este mes: por categoría, por forma de pago y por día. Si cargaste lo que cobrás, también ves cuánto te queda." },
   racha: { t: "¿Qué es la racha?", x: "Los días seguidos que anotaste algo. Cada día suma un ingrediente, y cada tanto sale un premio del horno. Si un día no gastaste, tocá «No gasté hoy» y la racha sigue." },
@@ -13,6 +13,7 @@ export const AYUDAS = {
   deudas: { t: "Deudas", x: "Lo que le debés a alguien y lo que te deben a vos. Cada vez que se paga una parte, la registrás y ves cuánto falta." },
   fijos: { t: "¿Qué es un gasto fijo?", x: "Algo que pagás o cobrás todos los meses, como el alquiler, Netflix o el sueldo. Lo cargás una vez y se anota solo el día que elijas. Si el monto cambia, podés pedir que te pregunte antes." },
   cuotas: { t: "¿Cómo funcionan las cuotas?", pasos: ["<b>Cargá la compra</b>, en cuántas cuotas y con qué tarjeta.", "<b>Cada cuota se anota sola</b> cuando llega su mes. No cuenta toda de golpe.", "<b>Acá ves cuánto te falta pagar</b> en cada tarjeta y lo que tenés comprometido para los próximos meses."] },
+  analisis: { t: "Análisis", pasos: ["<b>Lo que cambió:</b> qué fue distinto en tu último mes, comparado con los anteriores.", "<b>Gastos hormiga:</b> lo chico que se repite y cuánto te sale por año.", "<b>Tu sueldo ya tiene dueño:</b> qué parte de lo que cobrás ya se va en fijos y cuotas.", "<b>En dólares:</b> con la inflación, los pesos engañan. Ahí ves si de verdad gastás más."] },
   notif: { t: "Avisos", x: "Un recordatorio para anotar tus gastos, a la hora que elijas. Nunca dice cuánto gastaste ni en qué." },
   seguridad: { t: "Seguridad", x: "Podés poner un PIN para que nadie más abra la app. Si te lo olvidás, no hay forma de recuperarlo: por eso conviene tener una copia de seguridad." },
   dolar: { t: "El dólar", x: "Elegí qué dólar usar. Cuando anotás algo en dólares, se pasa a pesos con el valor de ese día. Se actualiza solo con internet, o lo podés poner a mano." },

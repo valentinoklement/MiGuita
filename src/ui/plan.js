@@ -5,13 +5,15 @@ import { delMes, resumenMes } from "../logic/mes.js";
 import { estadoPresupuestos, infoMeta, resumenDeudas, restante } from "../logic/plan.js";
 import { resumenCuotas, infoCompra, MAX_CUOTAS, SIN_TARJETA } from "../logic/cuotas.js";
 import { esc } from "./pantallas.js";
+import { crearVistasAnalisis } from "./analisis.js";
 
-const PESTANAS = [["presupuesto", "Topes"], ["metas", "Metas"], ["deudas", "Deudas"], ["fijos", "Fijos"], ["cuotas", "Cuotas"]];
+const PESTANAS = [["presupuesto", "Topes"], ["metas", "Metas"], ["deudas", "Deudas"], ["fijos", "Fijos"], ["cuotas", "Cuotas"], ["analisis", "Análisis"]];
 
 export function crearVistasPlan(st, hoy, V) {
   const { back, hdr, lbl, crd, chips, interruptor } = V.ayudas;
   const { plata, nombreCat } = V;
   const mes = hoy.slice(0, 7);
+  const VA = crearVistasAnalisis(st, hoy, V);
   const dinero = (c, moneda) => plata(c, { moneda: moneda === "USD" ? "US$ " : "$" });
   const fecha = (f) => f.split("-").reverse().join("/");
 
@@ -106,7 +108,7 @@ export function crearVistasPlan(st, hoy, V) {
   }
 
   function plan() {
-    return encabezado() + { presupuesto, metas, deudas, fijos, cuotas }[st.planTab]();
+    return encabezado() + { presupuesto, metas, deudas, fijos, cuotas, analisis: VA.analisis }[st.planTab]();
   }
 
   /* ---------- formularios ---------- */

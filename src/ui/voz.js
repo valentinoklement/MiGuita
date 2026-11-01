@@ -10,11 +10,11 @@ export function crearVistasVoz(st, V) {
   const grande = (act, t, alt = "") => `<button class="btn pp w grande ${alt}" data-act="${act}">${t}</button>`;
   const chico = (act, t) => `<button class="link chico" data-act="${act}">${t}</button>`;
   const cabeza = (titulo, texto, ancho = 170) => `<div class="hero-b entrada">${Art.miguita("ok").replace("<svg", `<svg style="width:${ancho}px"`)}<b>${titulo}</b>${texto ? `<span>${texto}</span>` : ""}</div>`;
-  const EJEMPLO = "Por ejemplo: <i>«15 mil de nafta, 10 lucas de birra y 8 mil en el súper»</i>";
+  const EJEMPLO = "Por ejemplo: <i>«15 mil de nafta, 10 lucas de birra y Juan me pasó 20 mil»</i>";
 
   function grabar() {
     const v = st.voz || { paso: "aviso" };
-    if (v.paso === "aviso") return cabeza("Hablá en vez de escribir", "Decí todos tus gastos juntos y se anotan por separado.") +
+    if (v.paso === "aviso") return cabeza("Hablá en vez de escribir", "Decí lo que gastaste y lo que te entró, todo junto. Se anota por separado.") +
       crd(`<div class="sub voz-aviso">Tu audio se manda a nuestro servidor solo para pasarlo a texto y <b>no se guarda</b>. El celu te va a pedir permiso para usar el micrófono.</div>`) +
       `<div class="relleno"></div>` + grande("vozDale", "Dale") + chico("vozCancelar", "Cancelar");
     if (v.paso === "pidiendo") return cabeza("Un segundo…", "Si el celu te pregunta, dale permiso al micrófono.") + `<div class="relleno"></div>` + chico("vozCancelar", "Cancelar");
@@ -30,8 +30,9 @@ export function crearVistasVoz(st, V) {
   const plataDe = (x) => formatear(x.monto, { moneda: x.moneda === "USD" ? "US$ " : "$" });
 
   function editor(x, i) {
-    const e = st.varios.editando, lista = st.cfg.categorias[x.tipo].filter((c) => !c.oculta || c.id === e.categoria);
+    const e = st.varios.editando, lista = st.cfg.categorias[e.tipo].filter((c) => !c.oculta || c.id === e.categoria);
     return `<div class="vario-ed${i ? "" : " f"}">` +
+      `<div class="chips"><button class="pp" data-act="varioTipo" data-v="gasto" aria-pressed="${e.tipo === "gasto"}">Salió plata</button><button class="pp" data-act="varioTipo" data-v="ingreso" aria-pressed="${e.tipo === "ingreso"}">Entró plata</button></div>` +
       `<div class="quick"><div class="pp"><input class="field" data-act="varioCampo" data-k="detalle" value="${esc(e.detalle)}" aria-label="Qué fue" maxlength="120" placeholder="Qué fue"></div></div>` +
       `<div class="quick"><div class="pp"><input class="field" data-act="varioCampo" data-k="monto" value="${esc(e.monto)}" aria-label="Cuánto fue" inputmode="decimal" maxlength="16" placeholder="Cuánto fue"></div></div>` +
       `<div class="quick"><div class="pp"><select class="field" data-act="varioCat" aria-label="Categoría">${lista.map((c) => `<option value="${esc(c.id)}"${c.id === e.categoria ? " selected" : ""}>${esc(c.nombre)}</option>`).join("")}</select></div></div>` +
@@ -45,11 +46,13 @@ export function crearVistasVoz(st, V) {
     const fila = (x, i) => r.editando?.i === i ? editor(x, i) :
       `<button class="row rowb${i ? "" : " f"}" data-act="varioEditar" data-v="${i}"><span>${esc(x.detalle || V.nombreCat(x.categoria))}<small>${esc(V.nombreCat(x.categoria))}${x.revisar ? " · ¿está bien el monto?" : ""}</small></span>` +
       `<span class="${x.tipo === "gasto" ? "neg" : "pos"}">${x.tipo === "gasto" ? "-" : "+"}${plataDe(x)}</span></button>`;
-    const pesos = r.items.filter((x) => x.moneda !== "USD").reduce((a, x) => a + (x.tipo === "gasto" ? x.monto : 0), 0);
+    const suma = (t) => r.items.filter((x) => x.moneda !== "USD" && x.tipo === t).reduce((a, x) => a + x.monto, 0);
+    const salio = suma("gasto"), entro = suma("ingreso");
     return `<div class="top"><div><h1 class="titulo-g">Entendí esto</h1><small>Si algo está mal, tocalo y lo cambiás.</small></div></div>` +
       (r.voz && r.texto ? `<div class="sub">Escuché: <i>«${esc(r.texto)}»</i></div>` : "") +
       crd(r.items.map(fila).join("")) +
-      (pesos ? `<div class="row f total-v"><span>Total gastado</span><span>${formatear(pesos, { moneda: "$" })}</span></div>` : "") +
+      (entro ? `<div class="row f total-v"><span>Entró</span><span class="pos-v">+${formatear(entro, { moneda: "$" })}</span></div>` : "") +
+      (salio ? `<div class="row f total-v"><span>Salió</span><span>-${formatear(salio, { moneda: "$" })}</span></div>` : "") +
       (r.error ? `<div class="msg" role="alert">${esc(r.error)}</div>` : "") +
       `<div class="relleno"></div>` + grande("variosAnotar", r.items.length === 1 ? "Anotarlo" : `Anotar los ${r.items.length}`) +
       chico("variosCancelar", r.voz ? "Hablar de nuevo" : "Cancelar");

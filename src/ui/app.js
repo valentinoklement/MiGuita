@@ -1,7 +1,7 @@
 // MiGuita: estado, guardado y eventos. Las pantallas están en pantallas.js.
 import { Art } from "../art/art.js";
 import { evaluar, formatear, leerMonto, montoEnCampo } from "../logic/dinero.js";
-import { leerTexto, leerSinMonto, leerVarios, quedoSinCategoria, claveDe } from "../logic/anotar.js";
+import { leerTexto, leerSinMonto, leerVarios, adivinarCategoria, quedoSinCategoria, claveDe } from "../logic/anotar.js";
 import { pasarATexto, formatoDeAudio, MAX_SEGUNDOS } from "../logic/voz.js";
 import { DIRECCION } from "../logic/instalar.js";
 import { RESPALDO, ponerBilletera } from "../logic/categorias.js";
@@ -40,9 +40,10 @@ import { crearVistasAjustes } from "./ajustes.js";
 import { hayHuella, registrarHuella } from "./huella.js";
 import { crearVistasPrimera, instalada, navegadorActual } from "./primera.js";
 import { crearVistasVoz } from "./voz.js";
+import { resumenParaIA } from "../logic/analisis.js";
 
 const PESTANAS = [["inicio", "Inicio"], ["grupos", "Grupos"], ["plan", "Mis cuentas"], ["mas", "Ajustes"]];
-const TAB_DE = { movimientos: "inicio", resumen: "inicio", racha: "inicio", tuMes: "inicio", categorias: "mas", editarCat: "mas", form: "plan",
+const TAB_DE = { movimientos: "inicio", resumen: "inicio", racha: "inicio", tuMes: "inicio", personalizacion: "mas", categorias: "mas", editarCat: "mas", form: "plan",
   grupo: "grupos", juntada: "grupos", historial: "grupos", gform: "grupos", compartir: "grupos", unido: "grupos", quien: "grupos", whatsapp: "grupos",
   notif: "mas", seguridad: "mas", dolar: "mas", copias: "mas", dispositivos: "mas", comentario: "mas", privacidad: "mas", instalar: "mas", yaInstalada: "mas", tutorial: "mas", importar: "inicio", grabar: "inicio", revisar: "inicio" };
 const SIN_BARRA = ["tutorial", "yaInstalada", "grabar", "revisar"];
@@ -1065,6 +1066,7 @@ function dibujar() {
     dispositivos: VA.dispositivos,
     comentario: VA.comentario,
     privacidad: VA.privacidad,
+    personalizacion: V.personalizacion,
     instalar: VI.instalar,
     yaInstalada: VI.yaInstalada,
     grabar: VV.grabar,
@@ -1085,7 +1087,7 @@ function dibujar() {
     (SIN_BARRA.includes(st.pantalla) || (st.pantalla === "instalar" && st.desdePrimera) ? "" : `<nav class="nav" aria-label="Secciones">` + PESTANAS.map(([k, t]) =>
       `<button data-act="ir" data-v="${k}"${k === tab ? ' aria-current="page"' : ""}>${k === "mas" ? RUEDITA : Art.navIcon(k)}${t}</button>`).join("") + "</nav>") +
     (st.hoja ? V.hoja() : "") +
-    (st.ayuda === "noEncuentro" ? V.ayudaHoja(VI.noEncuentro()) : st.ayuda ? V.ayuda(st.ayuda) : "") +
+    (st.ayuda === "noEncuentro" ? V.ayudaHoja(VI.noEncuentro()) : st.ayuda === "ia" ? V.ayudaHoja(hojaIA()) : st.ayuda ? V.ayuda(st.ayuda) : "") +
     (guiaVisible() ? V.guia() : "") +
     (st.festejo ? V.festejo(st.festejo) : "") +
     (st.metaOk ? VP.metaLograda(st.metaOk) : "") +
@@ -1164,7 +1166,17 @@ function ponerGuia() {
   visualViewport?.addEventListener("resize", acomodar, { once: true });
 }
 
+/* ---------- preguntarle a una IA ---------- */
+function textoIA() {
+  const d = st.cfg.dolar;
+  return resumenParaIA({ movs: st.movs, fijos: st.fijos, compras: st.compras, hoy, dolar: valorPara(hoy, d.tipo, st.cotizaciones, d.manual)?.valor || 0, nombreCat: V.nombreCat, nombreMes: V.mesTexto, formatear });
+}
+const hojaIA = () => `<b class="ayuda-t">Preguntale a una IA</b><span class="ayuda-x">Se copia un resumen de tus gastos por categoría, sin el detalle de cada uno. Vos elegís dónde pegarlo. Desde acá no se manda nada.</span>` +
+  `<div class="vista-ia">${esc(textoIA())}</div><button class="btn pp w grande" data-act="copiarIA">Copiar</button><button class="link chico" data-act="cerrarAyuda">Ahora no</button>`;
+
 /* ---------- hablar en vez de escribir ---------- */
+// Al pasar de gasto a ingreso (o al revés) la categoría también cambia de lista.
+const leerSinMontoCat = (detalle, tipo) => adivinarCategoria(detalle, paraAdivinar(st.cfg.categorias, tipo));
 let grabacion = null;
 function cortarGrabacion() { grabacion?.cortar(); grabacion = null; }
 async function grabarVoz() {
@@ -1226,7 +1238,8 @@ function anotarVarios() {
   movs.forEach(guardarMov);
   st.mes = hoy.slice(0, 7);
   st.varios = null;
-  mostrarAviso(movs.length === 1 ? "Anotado" : "Anoté " + movs.length + " gastos", () => movs.forEach((m) => quitarMov(m.id)));
+  const soloGastos = movs.every((m) => m.tipo === "gasto");
+  mostrarAviso(movs.length === 1 ? "Anotado" : "Anoté " + movs.length + (soloGastos ? " gastos" : " movimientos"), () => movs.forEach((m) => quitarMov(m.id)));
   revisarFestejo(antes);
   avisarPresupuesto();
   return true;
@@ -1606,14 +1619,15 @@ raiz.addEventListener("click", (e) => {
     case "vozListo": grabacion?.parar(); return;
     case "vozCancelar": cortarGrabacion(); st.voz = null; return volver();
     /* revisar varios gastos */
-    case "varioEditar": { const x = st.varios.items[+v]; st.varios.editando = { i: +v, detalle: x.detalle, monto: formatear(x.monto, { moneda: "" }), categoria: x.categoria, error: "" }; break; }
+    case "varioEditar": { const x = st.varios.items[+v]; st.varios.editando = { i: +v, tipo: x.tipo, detalle: x.detalle, monto: formatear(x.monto, { moneda: "" }), categoria: x.categoria, error: "" }; break; }
     case "varioListo": {
       const e = st.varios.editando, c = leerMonto(e.monto), x = st.varios.items[e.i];
       if (!c) { e.error = "Revisá el monto: escribilo con números, por ejemplo 15.000."; break; }
       if (e.categoria !== x.categoria && e.detalle.trim()) aprender(e.detalle, e.categoria);
-      st.varios.items[e.i] = { ...x, detalle: e.detalle.trim(), monto: c, categoria: e.categoria, revisar: false };
+      st.varios.items[e.i] = { ...x, tipo: e.tipo, detalle: e.detalle.trim(), monto: c, categoria: e.categoria, revisar: false };
       st.varios.editando = null; break;
     }
+    case "varioTipo": { const e = st.varios.editando; if (e.tipo !== v) { e.tipo = v; e.categoria = leerSinMontoCat(e.detalle, v); } break; }
     case "varioQuitar": st.varios.items.splice(+v, 1); st.varios.editando = null; if (!st.varios.items.length) { st.varios = null; return volver(); } break;
     case "variosAnotar": if (anotarVarios()) return volver(); break;
     case "variosCancelar": { const voz = st.varios?.voz; st.varios = null; if (voz) { grabarVoz(); return; } return volver(); }
@@ -1651,6 +1665,10 @@ raiz.addEventListener("click", (e) => {
     }
     /* Plan */
     case "planTab": st.planTab = v; break;
+    case "anVer": { const [g, n] = v.split("|"); st.anVer = st.anVer?.g === g && st.anVer.i === +n ? null : { g, i: +n }; break; }
+    case "anCat": st.anCat = v; st.anVer = null; break;
+    case "abrirIA": history.pushState({ p: st.pantalla, hoja: 1 }, ""); st.ayuda = "ia"; break;
+    case "copiarIA": copiar(textoIA()).then(() => mostrarAviso("Copiado. Pegalo en la IA que quieras.")); st.ayuda = ""; if (history.state?.hoja) history.back(); return;
     case "verPlan": st.planTab = v; history.replaceState({ p: "plan" }, ""); st.pantalla = "plan"; scrollTo(0, 0); break;
     case "nuevoPlan": abrirForm(v); break;
     case "editarPlan": abrirForm(FORM_DE_TAB[st.planTab], v); break;

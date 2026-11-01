@@ -41,6 +41,12 @@ test("ningún nombre ajeno se dibuja como HTML", () => {
   st.gform = { tipo: "persona", id: "b", error: "", vals: { nombre: X, alias: "", soyYo: false, pj: null, cam: 0 } };
   limpio("persona", VG.formulario());
   limpio("cuotas", VP.plan());
+  st.planTab = "analisis"; st.cfg.categorias.gasto.find((c) => c.id === "otros").nombre = X;
+  st.metas = [{ id: "a", nombre: X, moneda: "ARS", objetivo: 1e7, ahorrado: 0, ts: 1 }];
+  st.fijos = [{ id: "f", nombre: X, tipo: "gasto", activo: true, monto: 5000, moneda: "ARS", dia: 1 }];
+  for (let i = 0; i < 6; i++) st.movs.push({ id: "h" + i, tipo: "gasto", monto: 100, detalle: X, categoria: "otros", medio: "", fecha: "2026-11-0" + (i + 1), ts: 1, mod: 1 }, { id: "o" + i, tipo: "gasto", monto: 900, detalle: "x", categoria: "otros", medio: "", fecha: "2026-10-1" + i, ts: 1, mod: 1 }, { id: "s" + i, tipo: "gasto", monto: 900, detalle: "x", categoria: "otros", medio: "", fecha: "2026-09-1" + i, ts: 1, mod: 1 });
+  limpio("análisis", VP.plan());
+  assert.ok(VP.plan().includes("Mes a mes"));
   limpio("inicio", V.inicio());
   limpio("movimientos", V.movimientos());
   st.dudaMonto = { texto: X, p: { opciones: [100, 200] } }; st.dudaCat = { id: "m", detalle: X, tipo: "gasto" };

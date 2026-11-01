@@ -388,3 +388,46 @@ em.nuevo{font-style:normal;font-size:10px;font-weight:800;text-transform:upperca
 .vario-ed.f{border-top:0}
 .vario-ed input,.vario-ed select{width:100%;border:0;background:transparent;padding:12px;min-height:44px;font:600 16px "Manrope",sans-serif;color:var(--tscr);outline:0}
 .vario-ed select option{color:#2A1608}
+
+/* ---------- análisis ---------- */
+.dark{--c-ing:#006E9A;--c-gas:#B8361A;--c-fij:#5B3F9E;--c-cuo:#A8561A;--c-libre:#2A1608}
+.light{--c-ing:#3A9BC0;--c-gas:#E3654A;--c-fij:#9A7CE0;--c-cuo:#C2842A;--c-libre:#E2C9A0}
+.c-ing{background:var(--c-ing)}.c-gas{background:var(--c-gas)}.c-fij{background:var(--c-fij)}.c-cuo{background:var(--c-cuo)}
+.chips.apretadas{gap:5px}
+.gcab-a{display:flex;align-items:center;gap:8px}
+.gcab-a b{font:800 19px/1.15 "Bricolage Grotesque",sans-serif}
+.frase{display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1.5px dashed var(--dash)}
+.frase svg{width:36px;height:auto;flex:none}
+.frase b{display:block;font:800 14px/1.2 "Bricolage Grotesque",sans-serif}
+.frase small{display:block;font-size:12px;font-weight:600;opacity:.85}
+.der{text-align:right}
+.der small{display:block;font-size:11px}
+.barras{display:flex;align-items:flex-end;gap:4px;padding-top:4px}
+.barras .col{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:3px;min-width:0;min-height:44px;color:inherit}
+.barras .col.on small{font-weight:800;text-decoration:underline}
+.barras .col small{font:700 11px "Manrope",sans-serif}
+.barras .col em{font:800 10px/1.1 "Manrope",sans-serif;font-style:normal;white-space:nowrap;min-height:11px}
+.par{display:flex;align-items:flex-end;gap:2px;justify-content:center;width:100%}
+.par i{width:12px;border-radius:4px 4px 0 0;display:block}
+.par i.ancha{width:26px}
+.pila{display:flex;flex-direction:column;gap:2px;align-items:center;width:100%}
+.pila i{width:26px;display:block}
+.pila i:first-child{border-radius:4px 4px 0 0}
+.leyenda{display:flex;gap:14px;font:700 12px "Manrope",sans-serif}
+.leyenda span{display:flex;align-items:center;gap:5px}
+.leyenda i,.pt{width:11px;height:11px;border-radius:3px;display:inline-block}
+.pt{margin-right:6px;vertical-align:-1px}
+.grande-t{font:800 18px/1.2 "Bricolage Grotesque",sans-serif}
+.tira{display:flex;gap:2px;height:22px}
+.tira i:first-child{border-radius:6px 0 0 6px}
+.tira i:last-child{border-radius:0 6px 6px 0}
+.libre{background:transparent;border:2px dashed var(--c-libre)}
+.mini{font-weight:800;margin-top:4px}
+.an-detalle{min-height:18px}
+.an-detalle.tenue{opacity:.6;font-size:12px}
+.btn.ia{font-size:14px;min-height:52px}
+.prog{display:flex;flex-direction:column;gap:4px;padding:6px 0;border-top:1.5px dashed var(--dash)}
+.prog b{display:block;font:800 14px "Bricolage Grotesque",sans-serif}
+.prog small{font-size:12px;font-weight:600;opacity:.85}
+.vista-ia{background:var(--raised);border-radius:12px;padding:10px;font:600 13px/1.4 "Manrope",sans-serif;white-space:pre-wrap;max-height:32vh;overflow-y:auto}
+.pos-v{color:var(--posscr)}

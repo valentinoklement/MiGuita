@@ -198,7 +198,9 @@ export function crearVistasAjustes(st, hoy, V) {
       p("Si activás los avisos", "El servidor guarda a dónde mandar el aviso, tus horarios, tu zona horaria y el último día que anotaste algo. Nunca montos ni movimientos. Al apagarlos se borra todo.") +
       p("Si mandás un comentario", "Se guarda lo que escribís, tu nombre y el tipo de celu, sin cifrar, para poder leerlo. No pongas datos privados.") +
       p("El precio del dólar", "La app lo pide a DolarApi o Bluelytics. Esos servicios no reciben ningún dato tuyo de gastos.") +
-      p("Borrar todo", "En Ajustes › Borrar todo se elimina lo de este dispositivo y se apagan los avisos. Las copias que hayas guardado son tuyas: van cifradas con tu contraseña.");
+      crd(`<b style="font:800 16px 'Bricolage Grotesque',sans-serif">Tus datos en este dispositivo</b><div class="sub">${st.persistente ? (st.cfg.vinculo ? "Tus datos se comparten, cifrados, solo con tus dispositivos conectados. Los grupos conectados también viajan cifrados." : "Tus gastos se guardan solo en este celu. Solo los grupos que conectes viajan por internet, cifrados.") : "Este navegador no deja guardar: lo que anotes se pierde al cerrar."}</div>` +
+        `<div class="sub">«Borrar todo» elimina lo de este dispositivo y apaga los avisos. Las copias que hayas guardado son tuyas: van cifradas con tu contraseña.</div>` +
+        `<div class="btnrow">${V.hayEjemplo() ? `<button class="btn pp alt" data-act="quitarEjemplo">Quitar ejemplo</button>` : `<button class="btn pp alt" data-act="ponerEjemplo">Cargar ejemplo</button>`}<button class="btn pp alt del" data-act="borrarTodo">${st.confirmar === "todo" ? "Tocá de nuevo para borrar" : "Borrar todo"}</button></div>`);
   }
 
   return { notif, seguridad, dolar, copias, dispositivos, comentario, privacidad };
