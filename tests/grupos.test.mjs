@@ -181,5 +181,5 @@ test("resumen para WhatsApp con el alias de quien cobra", () => {
 test("novedades al unir un código", () => {
   const a = { gastos: [{ id: "1", t: "a" }, { id: "2", t: "b" }], pagos: [], miembros: [{ id: "m" }] };
   const b = { gastos: [{ id: "1", t: "a" }, { id: "2", t: "B" }, { id: "3" }], pagos: [{ id: "p" }], miembros: [{ id: "m" }] };
-  assert.deepEqual(G.novedades(a, b), { gastos: { nuevos: 1, cambiados: 1 }, pagos: { nuevos: 1, cambiados: 0 }, miembros: { nuevos: 0, cambiados: 0 } });
+  assert.deepEqual(G.novedades(a, b), { gastos: { nuevos: 1, cambiados: 1 }, pagos: { nuevos: 1, cambiados: 0 }, miembros: { nuevos: 0, cambiados: 0 }, juntadas: { nuevos: 0, cambiados: 0 } });
 });

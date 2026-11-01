@@ -1,7 +1,8 @@
-// Pantallas de Grupos: lista, un grupo (gastos, saldos, pagos), formularios, compartir, unir y WhatsApp.
+// Pantallas de Grupos: lista, un grupo (tu situación y sus juntadas), una juntada (compras, quién entra en qué
+// y cómo quedar a mano), formularios, compartir, unir y WhatsApp.
 import { Art } from "../art/art.js";
 import { formatear, leerMonto } from "../logic/dinero.js";
-import { centavos, repartir, saldos, saldar, totalGrupo, miParte, textoWhatsApp } from "../logic/grupos.js";
+import { centavos, repartir, saldos, saldar, miParte, textoWhatsApp, juntadasVivas, gastosDe, pagosDe, haySueltos, cuentas, detalleDe, miSituacion, pagadores } from "../logic/grupos.js";
 import { sumarDias } from "../logic/mes.js";
 import { esc } from "./pantallas.js";
 
@@ -43,9 +44,9 @@ export function crearVistasGrupos(st, hoy, V) {
   function lista() {
     let h = `<div class="top"><div><small>${st.grupos.length ? st.grupos.length + (st.grupos.length === 1 ? " grupo" : " grupos") : "Dividí gastos"}</small><h1>Grupos</h1></div></div>` +
       `<div class="crew" aria-hidden="true">${["luna", "fact", "canon", "bola"].map((k) => Art.factura(k)).join("")}</div>`;
-    if (!st.grupos.length) h += crd(`<div class="empty"><b>Todavía no tenés grupos</b><span>Creá uno para el asado, el viaje o el depto, y la app calcula quién le paga a quién.</span></div>`);
+    if (!st.grupos.length) h += comoFunciona();
     h += [...st.grupos].sort((a, b) => b.ts - a.ts).map((g) => {
-      const s = g.yo ? saldos(g)[g.yo] || 0 : 0;
+      const sit = miSituacion(g), s = sit.meDeben - sit.debo;
       return `<button class="card pp gc" data-act="abrirGrupo" data-v="${esc(g.id)}"><span><b>${esc(g.nombre)}</b><small>${vivos(g).length} integrantes</small></span>` +
         `<span class="v ${s > 0 ? "pos" : s < 0 ? "neg" : ""}">${s ? plataG(g, s, { signo: true }) : "Saldado"}<small>${s > 0 ? "Te deben" : s < 0 ? "Debés" : "Todo al día"}</small></span></button>`;
     }).join("");
@@ -53,43 +54,117 @@ export function crearVistasGrupos(st, hoy, V) {
   }
 
   /* ---------- un grupo ---------- */
+  // Explicación corta, para cuando todavía no hay nada.
+  function comoFunciona() {
+    const paso = (n, t, s) => `<div class="paso"><span class="num">${n}</span><span><b>${t}</b><small>${s}</small></span></div>`;
+    return crd(lbl("Cómo funciona") +
+      paso(1, "Armá el grupo una vez", "Con tus amigos, tu pareja o los del depto.") +
+      paso(2, "Invitalos con el link", "Cada uno ve todo al instante y anota desde su celu.") +
+      paso(3, "Cada salida es una juntada", "Cargás qué se compró, quién lo pagó y quién entra en qué.") +
+      paso(4, "La app dice quién le pasa a quién", "Con el alias a mano y la menor cantidad de transferencias."));
+  }
+  const estadoSync = (g) => {
+    const s = g.sync;
+    if (s) return `<div class="estado-sync${s.error ? " mal" : ""}">${s.error === "codigo" ? "El código del grupo ya no funciona" : s.error === "red" || (s.pendiente && navigator.onLine === false) ? "Sin conexión: se manda cuando vuelva internet" : "● Conectado: todos ven lo mismo"}</div>`;
+    return g.id.startsWith("ej_") ? "" : `<button class="link estado-sync" data-act="abrirCompartir">Invitá a los demás para que vean todo al instante ›</button>`;
+  };
+  const yaVisto = (g, j) => st.cfg.vistos?.[g.id + "|" + j] || 0;
+  const hayNuevo = (g, j) => { const v = yaVisto(g, j); return gastosDe(g, j).some((x) => x.ts > v && x.por && x.por !== g.yo) || pagosDe(g, j).some((p) => p.ts > v && p.de !== g.yo && p.a !== g.yo); };
+
+  /* ---------- un grupo ---------- */
   function unGrupo() {
     const g = grupo();
     if (!g) return back("Grupos") + crd(`<div class="empty"><b>Ese grupo ya no está en este celu</b></div>`);
-    const total = totalGrupo(g), n = vivos(g).length;
-    const s = g.sync;
-    let h = `<div class="secrow">${back("Grupos")}<button class="link" data-act="editarGrupo">Editar</button></div>` + encabezado(g, g.nombre) +
-      (s ? `<div class="estado-sync${s.error ? " mal" : ""}">${s.error === "codigo" ? "El código del grupo ya no funciona" : s.error === "red" || (s.pendiente && navigator.onLine === false) ? "Sin conexión: se manda cuando vuelva internet" : "● Conectado: todos ven lo mismo"}</div>` :
-        g.id.startsWith("ej_") ? "" : `<button class="link estado-sync" data-act="abrirCompartir">Conectalo para que todos vean los gastos al instante ›</button>`) +
-      chips("grupoTab", [["gastos", "Gastos"], ["saldos", "Saldos"], ["pagos", "Pagos"]], st.grupoTab, "Parte del grupo");
-    if (st.grupoTab === "gastos") {
-      const gastos = g.gastos.filter((x) => !x.x).sort((a, b) => (b.f || "").localeCompare(a.f || "") || b.ts - a.ts);
-      h += crd(`<div class="sub">Total del grupo</div><div class="big">${plataG(g, total)}</div><div class="sub">${n ? plataG(g, Math.round(total / n)) + " por persona" : ""}</div>`);
-      h += crd(lbl("Gastos del grupo") + (gastos.length ? gastos.map((x, i) =>
-        `<button class="row rowb${i ? "" : " f"}" data-act="editarGastoG" data-v="${esc(x.id)}"><span>${esc(x.t)}<small>Pagó ${esc(nombre(g, x.p))} · entre ${x.a.length || 1}${x.f ? " · " + fecha(x.f) : ""}</small></span><span>${plataG(g, centavos(x.m))}</span></button>`).join("") :
-        `<div class="empty"><span>Sumá el primer gasto: quién pagó y entre quiénes.</span></div>`));
-      if (g.yo && g.moneda === "ARS")
-        h += crd(`<div class="srow f"><span class="rt"><b>Sumar mi parte a mis gastos</b><small>Mi parte: ${plataG(g, miParte(g))}</small></span>${interruptor("grupoLoc", !!g.loc, "Sumar mi parte a mis gastos")}</div>`);
-      h += btn("sumarGastoG", "Sumar gasto");
-    } else if (st.grupoTab === "saldos") {
-      const b = saldos(g), pagos = saldar(b);
-      h += crd(lbl("Cómo está cada uno") + vivos(g).map((m) =>
-        `<button class="mrow rowb" data-act="editarPersona" data-v="${esc(m.id)}">${dibujo(g, m.id)}<span class="rt"><b>${esc(nombre(g, m.id))}</b>${m.alias ? `<small>alias: ${esc(m.alias)}</small>` : ""}</span>` +
-        `<span class="amt ${b[m.id] > 0 ? "pos" : b[m.id] < 0 ? "neg" : ""}">${b[m.id] ? plataG(g, b[m.id], { signo: true }) : "$0"}</span></button>`).join("") +
-        `<div class="chips"><button class="pp" data-act="nuevaPersona">+ Sumar integrante</button></div>`);
-      h += crd(lbl("Para saldar") + (pagos.length ? pagos.map((p, i) => {
-        const al = g.miembros.find((m) => m.id === p.a)?.alias;
-        const texto = p.a === g.yo ? nombre(g, p.de) + " te paga" : p.de === g.yo ? "Le pagás a " + nombre(g, p.a) : nombre(g, p.de) + " le paga a " + nombre(g, p.a);
-        return `<button class="row rowb${i ? "" : " f"}" data-act="registrarPagoG" data-v="${esc(p.de + "|" + p.a + "|" + p.m)}"><span>${esc(texto)}${al ? `<small>alias: ${esc(al)}</small>` : ""}</span><span>${plataG(g, p.m)}</span></button>`;
-      }).join("") + `<div class="sub">Tocá un pago para registrarlo cuando se haga.</div>` : `<div class="empty"><b>Están todos al día</b></div>`));
-    } else {
-      const pagos = g.pagos.filter((p) => !p.x).sort((a, b) => (b.f || "").localeCompare(a.f || "") || b.ts - a.ts);
-      h += crd(lbl("Pagos registrados") + (pagos.length ? pagos.map((p, i) =>
-        `<button class="row rowb${i ? "" : " f"}" data-act="editarPagoG" data-v="${esc(p.id)}"><span>${esc(nombre(g, p.de))} le pagó a ${esc(nombre(g, p.a))}<small>${fecha(p.f)}</small></span><span>${plataG(g, centavos(p.m))}</span></button>`).join("") :
-        `<div class="empty"><span>Cuando alguien le transfiera a otro, registralo acá y se descuenta de los saldos.</span></div>`));
-      h += btn("registrarPagoG", "Registrar un pago");
+    let h = `<div class="secrow">${back("Grupos")}<button class="link" data-act="editarGrupo">Editar</button></div>` + encabezado(g, g.nombre) + estadoSync(g);
+    // Lo que más importa, arriba: cuánto tengo que pasar o me tienen que pasar.
+    if (g.yo) {
+      const { debo, meDeben } = miSituacion(g);
+      h += crd(debo || meDeben ?
+        (debo ? `<div class="sub">Tenés que pasar</div><div class="big neg-txt">${plataG(g, debo)}</div>` : "") +
+        (meDeben ? `<div class="sub">Te tienen que pasar</div><div class="big">${plataG(g, meDeben)}</div>` : "") +
+        `<div class="sub">Entrá a cada juntada para ver a quién y copiar el alias.</div>` :
+        `<div class="sub">Tu situación</div><div class="big">Estás a mano</div>`);
     }
-    return h + `<div class="btnrow">${btn("abrirCompartir", "Compartir", { alt: true })}${btn("abrirWhatsApp", "Resumen", { alt: true })}</div>`;
+    h += btn("nuevaJuntada", "Nueva juntada");
+    const js = juntadasVivas(g);
+    const fila = (id, nombre, sub, i) => {
+      const compras = gastosDe(g, id), total = compras.reduce((a, x) => a + centavos(x.m), 0);
+      const ts = cuentas(g, id), debo = ts.filter((t) => t.de === g.yo).reduce((a, t) => a + t.m, 0), meDeben = ts.filter((t) => t.a === g.yo).reduce((a, t) => a + t.m, 0);
+      const estado = !compras.length ? "Sin compras" : debo ? `<span class="neg">Debés ${plataG(g, debo)}</span>` : meDeben ? `<span class="pos">Te deben ${plataG(g, meDeben)}</span>` : ts.length ? `Faltan ${ts.length} ${ts.length === 1 ? "pago" : "pagos"}` : "A mano ✓";
+      return `<button class="row rowb${i ? "" : " f"}" data-act="abrirJuntada" data-v="${esc(id)}"><span>${esc(nombre)}${hayNuevo(g, id) ? ` <em class="nuevo">nuevo</em>` : ""}<small>${sub}</small></span><span class="der">${plataG(g, total)}<small>${estado}</small></span></button>`;
+    };
+    if (js.length || haySueltos(g))
+      h += crd(lbl("Juntadas") + js.map((j, i) => fila(j.id, j.nombre, [fecha(j.f), j.gente.length + " personas"].filter(Boolean).join(" · "), i)).join("") +
+        (haySueltos(g) ? fila("", "Gastos sueltos", "Los de antes de las juntadas", js.length) : ""));
+    else h += comoFunciona();
+    h += crd(lbl("Integrantes") + vivos(g).map((m) =>
+      `<button class="mrow rowb" data-act="editarPersona" data-v="${esc(m.id)}">${dibujo(g, m.id)}<span class="rt"><b>${esc(nombre(g, m.id))}</b><small>${m.alias ? "alias: " + esc(m.alias) : "sin alias"}</small></span><span class="chev" aria-hidden="true">›</span></button>`).join("") +
+      `<div class="chips"><button class="pp" data-act="nuevaPersona">+ Sumar integrante</button></div>`);
+    if (g.yo && g.moneda === "ARS")
+      h += crd(`<div class="srow f"><span class="rt"><b>Contar lo que me toca en mis gastos</b><small>Hasta ahora te tocó ${plataG(g, miParte(g))} en total</small></span>${interruptor("grupoLoc", !!g.loc, "Contar lo que me toca en mis gastos")}</div>`);
+    return h + btn("abrirCompartir", g.sync ? "Invitar al grupo" : "Invitar y conectar", { alt: true });
+  }
+
+  /* ---------- una juntada ---------- */
+  function juntada() {
+    const g = grupo(), jid = st.juntadaId;
+    if (!g) return back("Grupos") + crd(`<div class="empty"><b>Ese grupo ya no está en este celu</b></div>`);
+    const ju = jid ? (g.juntadas || []).find((x) => x.id === jid && !x.x) : null;
+    if (jid && !ju) return back(g.nombre) + crd(`<div class="empty"><b>Esa juntada ya no está</b><span>Alguien la borró.</span></div>`);
+    const vivosIds = new Set(vivos(g).map((m) => m.id));
+    const gente = (ju ? ju.gente.filter((i) => vivosIds.has(i)) : [...vivosIds]).sort((a, b) => (a === g.yo ? -1 : b === g.yo ? 1 : 0));
+    const compras = gastosDe(g, jid).sort((a, b) => a.ts - b.ts), pagos = pagosDe(g, jid).sort((a, b) => a.ts - b.ts);
+    const total = compras.reduce((a, x) => a + centavos(x.m), 0), ts = cuentas(g, jid), visto = st.vistoAntes || 0;
+    const alias = (id) => g.miembros.find((m) => m.id === id)?.alias || "";
+    let h = `<div class="secrow">${back(g.nombre)}${ju ? `<button class="link" data-act="editarJuntada">Editar</button>` : ""}</div>` +
+      `<div class="top"><div><small>${[ju && fecha(ju.f), gente.length + " personas", compras.length ? plataG(g, total) : ""].filter(Boolean).join(" · ")}</small><h1>${esc(ju ? ju.nombre : "Gastos sueltos")}</h1></div></div>`;
+
+    // Lo mío: a quién le paso, quién me pasa, y por qué.
+    if (g.yo && gente.includes(g.yo) && compras.length) {
+      const mias = ts.filter((t) => t.de === g.yo), aMi = ts.filter((t) => t.a === g.yo);
+      for (const t of mias)
+        h += crd(`<div class="sub">Le pasás a ${esc(nombre(g, t.a))}</div><div class="big">${plataG(g, t.m)}</div>` +
+          `<div class="sub">${alias(t.a) ? "alias: <b>" + esc(alias(t.a)) + "</b>" : "No tiene alias cargado: pedíselo."}</div>` +
+          `<div class="btnrow">${alias(t.a) ? btn("copiarAlias", "Copiar alias", { v: alias(t.a) }) : ""}${btn("yaPague", "Ya le pagué", { alt: !!alias(t.a), v: t.de + "|" + t.a + "|" + t.m })}</div>`, "tuyo");
+      if (aMi.length)
+        h += crd(lbl("Te tienen que pasar") + aMi.map((t, i) => `<div class="row${i ? "" : " f"}"><span>${esc(nombre(g, t.de))}<small>${plataG(g, t.m)}</small></span><button class="btnmini" data-act="yaPague" data-v="${esc(t.de + "|" + t.a + "|" + t.m)}">Ya me pagó</button></div>`).join(""), "tuyo");
+      if (!mias.length && !aMi.length) h += crd(`<div class="sub">Tu parte</div><div class="big">Estás a mano ✓</div>`, "tuyo");
+      const d = detalleDe(g, jid, g.yo);
+      if (d.toca || d.puso) h += `<details class="card pp porque"><summary>Por qué te toca ${plataG(g, d.toca)}</summary>` +
+        d.lineas.map((l, i) => `<div class="row${i ? "" : " f"}"><span>${esc(l.t)}<small>entre ${l.entre}</small></span><span>${plataG(g, l.parte)}</span></div>`).join("") +
+        `<div class="row"><span><b>Te toca</b></span><span><b>${plataG(g, d.toca)}</b></span></div><div class="row"><span>Pusiste</span><span>${plataG(g, d.puso)}</span></div></details>`;
+    }
+
+    // Compras.
+    h += crd(lbl("Compras") + (compras.length ? compras.map((x, i) => {
+      const quien = Object.keys(pagadores(x)).map((p) => nombre(g, p)).join(" y ");
+      const nuevo = x.ts > visto && x.por && x.por !== g.yo;
+      return `<button class="row rowb${i ? "" : " f"}" data-act="editarGastoG" data-v="${esc(x.id)}"><span>${esc(x.t)}${nuevo ? ` <em class="nuevo">nuevo</em>` : ""}<small>Pagó ${esc(quien)} · entre ${(x.a && x.a.length) || 1}</small></span><span>${plataG(g, centavos(x.m))}</span></button>`;
+    }).join("") : `<div class="empty"><span>Sumá lo que se compró y quién lo pagó: la comida, el fernet, la birra…</span></div>`));
+    h += btn("sumarGastoG", compras.length ? "+ Sumar compra" : "Sumar la primera compra", { alt: !!compras.length });
+
+    // Quién entra en qué: una grilla para marcar todo de una.
+    if (compras.length && gente.length) {
+      h += crd(lbl("¿Quién entra en qué?") + `<div class="sub">Tocá para marcar o desmarcar. Cada uno también puede marcarse desde su celu.</div>` +
+        `<div class="grilla-caja"><table class="grilla"><thead><tr><th></th>` + compras.map((x) =>
+          `<th><button data-act="columna" data-v="${esc(x.id)}" aria-label="Marcar a todos o a nadie en ${esc(x.t)}">${esc(x.t.length > 12 ? x.t.slice(0, 11) + "…" : x.t)}</button></th>`).join("") + `</tr></thead><tbody>` +
+        gente.map((p) => `<tr${p === g.yo ? ' class="yo"' : ""}><th>${esc(nombre(g, p))}</th>` + compras.map((x) => {
+          const en = (x.a || []).includes(p);
+          return `<td><button class="celda${en ? " on" : ""}" data-act="celda" data-v="${esc(x.id + "|" + p)}" aria-pressed="${en}" aria-label="${esc(nombre(g, p))} en ${esc(x.t)}">${en ? "✓" : ""}</button></td>`;
+        }).join("") + `</tr>`).join("") + `</tbody></table></div>`);
+    }
+
+    // Para quedar a mano: todo lo que falta y lo que ya se pagó.
+    if (compras.length) {
+      h += crd(lbl("Para quedar a mano") + (ts.length ? ts.map((t, i) =>
+        `<div class="row${i ? "" : " f"}"><span>${esc(nombre(g, t.de))} → ${esc(nombre(g, t.a))}<small>${alias(t.a) ? "alias: " + esc(alias(t.a)) : ""}</small></span><span class="der">${plataG(g, t.m)}<button class="link" data-act="yaPague" data-v="${esc(t.de + "|" + t.a + "|" + t.m)}">Ya se pagó</button></span></div>`).join("") :
+        `<div class="empty"><b>Están todos a mano ✓</b></div>`) +
+        (pagos.length ? `<div class="sub" style="margin-top:8px">Ya pagado</div>` + pagos.map((p) =>
+          `<button class="row rowb pagado" data-act="editarPagoG" data-v="${esc(p.id)}"><span>✓ ${esc(nombre(g, p.de))} le pasó a ${esc(nombre(g, p.a))}</span><span>${plataG(g, centavos(p.m))}</span></button>`).join("") : "") +
+        `<div class="sub">Son la menor cantidad de transferencias posible. Cada uno le paga directo a quien puso la plata.</div>`);
+      h += btn("whatsJuntada", "Mandar al grupo de WhatsApp", { alt: true });
+    }
+    return h;
   }
 
   /* ---------- formularios ---------- */
@@ -122,6 +197,7 @@ export function crearVistasGrupos(st, hoy, V) {
         pie("Guardar", "Borrar el grupo");
     },
     gasto() {
+      if (f().vals.j !== undefined) return FORMS.compra();
       const g = grupo(), v = f().vals, ids = v.a;
       const total = leerMonto(v.m);
       let reparto = "";
@@ -139,6 +215,34 @@ export function crearVistasGrupos(st, hoy, V) {
           `<button class="pp" data-act="gEntre" data-v="${esc(m.id)}" aria-pressed="${ids.includes(m.id)}">${ids.includes(m.id) ? "✓ " : ""}${esc(nombre(g, m.id))}</button>`).join("") + "</div>" +
         lbl("Cómo se reparte") + elegir("sp", REPARTOS, "Cómo se reparte") + reparto +
         pie(f().id ? "Guardar cambios" : "Guardar gasto", f().id ? "Borrar gasto" : "");
+    },
+    compra() {
+      const g = grupo(), v = f().vals;
+      const ju = (g.juntadas || []).find((x) => x.id === v.j);
+      const gente = vivos(g).filter((m) => (ju ? ju.gente.includes(m.id) : true));
+      const opciones = (k, act) => `<div class="chips" role="group">` + gente.map((m) =>
+        `<button class="pp" data-act="${act}" data-v="${esc(m.id)}" aria-pressed="${v[k].includes(m.id)}">${v[k].includes(m.id) ? "✓ " : ""}${esc(nombre(g, m.id))}</button>`).join("") + "</div>";
+      return back(ju ? ju.nombre : g.nombre) + hdr(ju ? ju.nombre : g.nombre, f().id ? "Editar compra" : "Sumar compra") +
+        campo("t", "Qué se compró", { ph: "por ejemplo: fernet", max: 80 }) +
+        campo("m", "Cuánto salió", { ph: "por ejemplo 30.000", modo: "monto", max: 16 }) +
+        lbl("¿Quién pagó?") + opciones("pagan", "gPaga") +
+        (v.pagan.length > 1 ? crd(lbl("¿Cuánto puso cada uno?") + v.pagan.map((i, k) => `<div class="row${k ? "" : " f"}"><span>${esc(nombre(g, i))}</span>` +
+          `<input class="field mini" data-act="gPP" data-k="${esc(i)}" value="${esc(v.pp[i] ?? "")}" inputmode="decimal" placeholder="$" aria-label="Cuánto puso ${esc(nombre(g, i))}" maxlength="14"></div>`).join("") +
+          `<div class="sub">Si dejás uno vacío, se completa con lo que falta.</div>`) : "") +
+        lbl("¿Entre quiénes se divide?") + opciones("a", "gEntre") +
+        `<div class="hint">Se divide en partes iguales. Después lo podés ajustar en la grilla de la juntada.</div>` +
+        pie(f().id ? "Guardar cambios" : "Sumar compra", f().id ? "Borrar compra" : "");
+    },
+    juntada() {
+      const g = grupo(), v = f().vals;
+      return back(g.nombre) + hdr(g.nombre, f().id ? "Editar juntada" : "Nueva juntada") +
+        campo("nombre", "¿Qué fue?", { ph: "por ejemplo: asado del sábado", max: 60 }) +
+        lbl("¿Cuándo?") + elegir("f", [[hoy, "Hoy"], [ayer, "Ayer"]].concat(v.f !== hoy && v.f !== ayer ? [[v.f, fecha(v.f)]] : []), "Fecha") +
+        lbl("¿Quiénes fueron?") + `<div class="chips" role="group" aria-label="Quiénes fueron">` + vivos(g).map((m) =>
+          `<button class="pp" data-act="gGente" data-v="${esc(m.id)}" aria-pressed="${v.gente.includes(m.id)}">${v.gente.includes(m.id) ? "✓ " : ""}${esc(nombre(g, m.id))}</button>`).join("") + "</div>" +
+        `<div class="quick"><div class="pp"><input class="field" data-act="gcampo" data-k="otro" value="${esc(v.otro || "")}" placeholder="¿Vino alguien más? Escribí su nombre" aria-label="Sumar a alguien que vino" maxlength="40"></div></div>` +
+        (v.otro?.trim() ? `<div class="chips"><button class="pp" data-act="gSumarOtro">+ Sumar a ${esc(v.otro.trim())}</button></div>` : "") +
+        pie(f().id ? "Guardar" : "Crear juntada", f().id ? "Borrar la juntada" : "");
     },
     pago() {
       const g = grupo(), v = f().vals;
@@ -222,11 +326,12 @@ export function crearVistasGrupos(st, hoy, V) {
 
   function whatsapp() {
     const g = grupo();
-    const texto = textoWhatsApp(g, (c) => formatear(c, { moneda: g.moneda === "USD" ? "US$ " : "$" }));
-    return back(g.nombre) + hdr(g.nombre, "Resumen para WhatsApp") + crd(`<div class="wa">${esc(texto)}</div>`) +
+    const ju = st.whatsJ !== undefined ? (g.juntadas || []).find((x) => x.id === st.whatsJ) : null;
+    const texto = textoWhatsApp(g, (c) => formatear(c, { moneda: g.moneda === "USD" ? "US$ " : "$" }), st.whatsJ);
+    return back(ju ? ju.nombre : g.nombre) + hdr(g.nombre, "Resumen para WhatsApp") + crd(`<div class="wa">${esc(texto)}</div>`) +
       `<div class="btnrow">${btn("copiarResumen", "Copiar resumen")}<a class="btn pp alt" href="https://wa.me/?text=${encodeURIComponent(texto)}" target="_blank" rel="noopener noreferrer">Abrir WhatsApp</a></div>` +
       `<div class="sub">Se ve el alias de quien cobra en cada pago.</div>`;
   }
 
-  return { lista, unGrupo, formulario, compartir, unido, quien, whatsapp };
+  return { lista, unGrupo, juntada, formulario, compartir, unido, quien, whatsapp };
 }

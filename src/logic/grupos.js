@@ -1,11 +1,14 @@
 // Grupos: dividir gastos. Portado de grp_logic.js de la app anterior (probado con 86.552 verificaciones);
 // las funciones de reparto, saldos, saldar, fusión y limpieza son las mismas, con nombres en castellano.
 //
-// Grupo: { id, nombre, moneda: "ARS"|"USD", ts, miembros, gastos, pagos, yo?, loc? }
+// Grupo: { id, nombre, moneda: "ARS"|"USD", ts, miembros, gastos, pagos, juntadas, yo?, loc?, sync? }
 //   miembro: { id, nombre, alias?, ts, x? }
 //   gasto:   { id, t (qué fue), m (monto en pesos, con decimales), p (quién pagó), a: [entre quiénes],
-//              sp: "eq"|"sh"|"pc"|"ex" (parejo, partes, porcentaje, montos), w: {id: valor}, f, ts, x?, por }
-//   pago:    { id, de, a, m, f, ts, x? }
+//              sp: "eq"|"sh"|"pc"|"ex" (parejo, partes, porcentaje, montos), w: {id: valor}, f, ts, x?, por,
+//              j? (juntada), pp? ({id: pesos} si pagaron varios) }
+//   pago:    { id, de, a, m, f, ts, x?, j? }
+//   juntada: { id, nombre, f, gente: [ids que fueron], ts, x? } — cada juntada se salda por separado;
+//            los gastos y pagos sin j son "gastos sueltos" (los de antes de que existieran las juntadas).
 // - Los montos del grupo van en pesos (como en los códigos G1 y G2 de la app anterior) y todas las cuentas
 //   se hacen en centavos enteros con centavos().
 // - x:true es una lápida: el registro está borrado, pero viaja para que el borrado llegue a todos.
@@ -38,16 +41,28 @@ export function repartir(total, tipo, ids, w) {
 
 export const totalGrupo = (g) => (g.gastos || []).reduce((a, x) => a + (x.x ? 0 : centavos(x.m)), 0);
 
+// Quién puso la plata de un gasto (centavos). Si pagaron varios y los montos suman el total, cada uno lo suyo.
+export function pagadores(x) {
+  const T = centavos(x.m);
+  if (x.pp && typeof x.pp === "object") {
+    const ids = Object.keys(x.pp).filter((i) => centavos(x.pp[i]) > 0);
+    if (ids.length && ids.reduce((a, i) => a + centavos(x.pp[i]), 0) === T) return Object.fromEntries(ids.map((i) => [i, centavos(x.pp[i])]));
+  }
+  return x.p ? { [x.p]: T } : {};
+}
+
 // Lo que le toca a cada uno en un gasto (centavos).
 export const partesDe = (x) => repartir(centavos(x.m), x.sp || "eq", (x.a && x.a.length ? x.a : [x.p]), x.w);
 
 // Saldo de cada integrante en centavos: positivo = le deben, negativo = debe. La suma siempre es 0.
-export function saldos(g) {
+// Con j: solo esa juntada (j = "" son los gastos sueltos). Sin j: todo el grupo.
+export function saldos(g, j) {
   const b = {}; (g.miembros || []).forEach((m) => { if (!m.x) b[m.id] = 0; });
   const add = (i, c) => { b[i] = (b[i] || 0) + c; };
-  (g.gastos || []).forEach((x) => { if (x.x) return; const T = centavos(x.m); if (T <= 0 || !x.p) return;
-    const sh = partesDe(x); add(x.p, T); for (const i in sh) add(i, -sh[i]); });
-  (g.pagos || []).forEach((p) => { if (p.x) return; const c = centavos(p.m); if (c <= 0 || !p.de || !p.a) return; add(p.de, c); add(p.a, -c); });
+  const va = (x) => j === undefined || (x.j || "") === j;
+  (g.gastos || []).forEach((x) => { if (x.x || !va(x)) return; const T = centavos(x.m); if (T <= 0 || !x.p) return;
+    const sh = partesDe(x), pg = pagadores(x); for (const i in pg) add(i, pg[i]); for (const i in sh) add(i, -sh[i]); });
+  (g.pagos || []).forEach((p) => { if (p.x || !va(p)) return; const c = centavos(p.m); if (c <= 0 || !p.de || !p.a) return; add(p.de, c); add(p.a, -c); });
   return b;
 }
 
@@ -63,7 +78,11 @@ export function saldar(b) {
 /* ---------- fusión ---------- */
 // Sin conflictos: unión por id; si un registro está en los dos, gana el de ts mayor
 // (empate: el de texto JSON mayor, así el resultado no depende del orden).
-function elegir(o, r) { if (!o) return r; const a = num(o.ts), b = num(r.ts); if (b > a) return r; if (b < a) return o; return JSON.stringify(r) > JSON.stringify(o) ? r : o; }
+function elegir(o, r) {
+  if (!o) return r; const a = num(o.ts), b = num(r.ts); if (b > a) return r; if (b < a) return o;
+  const ko = Object.keys(o).length, kr = Object.keys(r).length; if (ko !== kr) return kr > ko ? r : o;
+  return JSON.stringify(r) > JSON.stringify(o) ? r : o;
+}
 export function fusionarLista(x, y) {
   const m = new Map(); for (const r of (x || [])) m.set(r.id, elegir(m.get(r.id), r)); for (const r of (y || [])) m.set(r.id, elegir(m.get(r.id), r));
   return [...m.values()].sort((p, q) => num(p.ts) - num(q.ts) || (String(p.id) < String(q.id) ? -1 : 1));
@@ -72,6 +91,8 @@ export function fusionar(a, b) {
   const top = elegir({ ts: a.ts, nombre: a.nombre, moneda: a.moneda }, { ts: b.ts, nombre: b.nombre, moneda: b.moneda });
   const g = { id: a.id, yo: a.yo, loc: a.loc, sync: a.sync, nombre: top.nombre, moneda: top.moneda, ts: Math.max(num(a.ts), num(b.ts)),
     miembros: fusionarLista(a.miembros, b.miembros), gastos: fusionarLista(a.gastos, b.gastos), pagos: fusionarLista(a.pagos, b.pagos) };
+  const juntadas = fusionarLista(a.juntadas, b.juntadas);
+  if (juntadas.length) g.juntadas = juntadas;
   if (g.yo === undefined) delete g.yo;
   if (g.loc === undefined) delete g.loc;
   if (g.sync === undefined) delete g.sync;
@@ -86,7 +107,7 @@ export function novedades(antes, despues) {
     for (const r of despues[lista] || []) { if (!viejos.has(r.id)) nuevos++; else if (viejos.get(r.id) !== JSON.stringify(r)) cambiados++; }
     return { nuevos, cambiados };
   };
-  return { gastos: cuenta("gastos"), pagos: cuenta("pagos"), miembros: cuenta("miembros") };
+  return { gastos: cuenta("gastos"), pagos: cuenta("pagos"), miembros: cuenta("miembros"), juntadas: cuenta("juntadas") };
 }
 
 /* ---------- alias ---------- */
@@ -115,12 +136,25 @@ export function limpiar(o) {
   (Array.isArray(o.gastos) ? o.gastos : []).slice(0, MAX_REGISTROS).forEach((x) => {
     const i = okId(x && x.id), p = okId(x && x.p); if (!i || !p) return;
     const w = {}; if (x.w && typeof x.w === "object") for (const k in x.w) { const kk = okId(k); if (kk && Object.prototype.hasOwnProperty.call(x.w, k)) w[kk] = num(x.w[k]); }
-    g.gastos.push({ id: i, t: s(x.t, 80).trim() || "Gasto", m: Math.max(0, num(x.m)), p, a: (Array.isArray(x.a) ? x.a : []).map(okId).filter(Boolean).slice(0, MAX_MIEMBROS),
-      sp: ["eq", "sh", "ex", "pc"].includes(x.sp) ? x.sp : "eq", w, f: fecha(x.f), ts: num(x.ts), x: !!x.x, por: okId(x.por) || "" });
+    const gasto = { id: i, t: s(x.t, 80).trim() || "Gasto", m: Math.max(0, num(x.m)), p, a: (Array.isArray(x.a) ? x.a : []).map(okId).filter(Boolean).slice(0, MAX_MIEMBROS),
+      sp: ["eq", "sh", "ex", "pc"].includes(x.sp) ? x.sp : "eq", w, f: fecha(x.f), ts: num(x.ts), x: !!x.x, por: okId(x.por) || "" };
+    if (okId(x.j)) gasto.j = okId(x.j);
+    if (x.pp && typeof x.pp === "object") {
+      const pp = {}; for (const k of Object.keys(x.pp).slice(0, MAX_MIEMBROS)) { const kk = okId(k); if (kk) pp[kk] = Math.max(0, num(x.pp[k])); }
+      if (Object.keys(pp).length > 1) gasto.pp = pp;
+    }
+    g.gastos.push(gasto);
   });
   (Array.isArray(o.pagos) ? o.pagos : []).slice(0, MAX_REGISTROS).forEach((p) => {
     const i = okId(p && p.id), de = okId(p && p.de), a = okId(p && p.a); if (!i || !de || !a) return;
-    g.pagos.push({ id: i, de, a, m: Math.max(0, num(p.m)), f: fecha(p.f), ts: num(p.ts), x: !!p.x });
+    const pago = { id: i, de, a, m: Math.max(0, num(p.m)), f: fecha(p.f), ts: num(p.ts), x: !!p.x };
+    if (okId(p.j)) pago.j = okId(p.j);
+    g.pagos.push(pago);
+  });
+  (Array.isArray(o.juntadas) ? o.juntadas : []).slice(0, 500).forEach((x) => {
+    const i = okId(x && x.id); if (!i) return;
+    (g.juntadas ||= []).push({ id: i, nombre: s(x.nombre, 60).trim() || "Juntada", f: fecha(x.f),
+      gente: (Array.isArray(x.gente) ? x.gente : []).map(okId).filter(Boolean).slice(0, MAX_MIEMBROS), ts: num(x.ts), x: !!x.x });
   });
   return g;
 }
@@ -164,6 +198,43 @@ export async function decodificar(texto) {
   return g;
 }
 
+/* ---------- juntadas ---------- */
+export const juntadasVivas = (g) => (g.juntadas || []).filter((x) => !x.x).sort((a, b) => (b.f || "").localeCompare(a.f || "") || num(b.ts) - num(a.ts));
+export const gastosDe = (g, j) => (g.gastos || []).filter((x) => !x.x && (x.j || "") === j);
+export const pagosDe = (g, j) => (g.pagos || []).filter((p) => !p.x && (p.j || "") === j);
+// Hay gastos de antes de las juntadas (o de una juntada borrada): se muestran como "Gastos sueltos".
+export function haySueltos(g) {
+  const vivas = new Set(juntadasVivas(g).map((x) => x.id));
+  return (g.gastos || []).some((x) => !x.x && !vivas.has(x.j || ""));
+}
+
+// Las transferencias que faltan para quedar a mano en una juntada, en pesos enteros (sin centavos):
+// $3.333,33 pasa a $3.333. Lo que queda por menos de un peso se da por saldado.
+export function cuentas(g, j) {
+  return saldar(saldos(g, j)).map((t) => ({ ...t, m: Math.round(t.m / 100) * 100 })).filter((t) => t.m >= 100);
+}
+
+// Por qué a alguien le toca lo que le toca: cada compra donde entra, cuánto puso y cuánto le toca en total.
+export function detalleDe(g, j, id) {
+  const lineas = [];
+  let toca = 0, puso = 0;
+  for (const x of gastosDe(g, j)) {
+    const parte = partesDe(x)[id] || 0, pg = pagadores(x)[id] || 0;
+    if (parte) lineas.push({ t: x.t, parte, entre: (x.a && x.a.length) || 1 });
+    toca += parte; puso += pg;
+  }
+  return { lineas, toca, puso };
+}
+
+// Mi situación en todo el grupo: cuánto tengo que pasar y cuánto me tienen que pasar (suma de las juntadas).
+export function miSituacion(g) {
+  let debo = 0, meDeben = 0;
+  if (!g.yo) return { debo, meDeben };
+  const js = juntadasVivas(g).map((x) => x.id).concat(haySueltos(g) ? [""] : []);
+  for (const j of js) for (const t of cuentas(g, j)) { if (t.de === g.yo) debo += t.m; if (t.a === g.yo) meDeben += t.m; }
+  return { debo, meDeben };
+}
+
 /* ---------- mi parte en mis gastos ---------- */
 export function miParte(g) {
   if (!g.yo) return 0;
@@ -195,9 +266,25 @@ export function sincronizarMiParte(g, movs, categoria = "otros", hoy = "") {
 }
 
 /* ---------- resumen para WhatsApp ---------- */
-export function textoWhatsApp(g, formato) {
+// Con j: el resumen de esa juntada (las compras y quién le pasa cuánto a quién, con el alias).
+export function textoWhatsApp(g, formato, j) {
   const vivos = (g.miembros || []).filter((m) => !m.x);
   const nombre = (id) => vivos.find((m) => m.id === id)?.nombre || "?";
+  if (j !== undefined) {
+    const ju = (g.juntadas || []).find((x) => x.id === j);
+    const compras = gastosDe(g, j), total = compras.reduce((a, x) => a + centavos(x.m), 0);
+    let t = "*" + (ju ? ju.nombre : g.nombre) + "*\n";
+    for (const x of compras) t += "\n• " + x.t + ": " + formato(centavos(x.m)) + " (pagó " + Object.keys(pagadores(x)).map(nombre).join(" y ") + ", entre " + ((x.a && x.a.length) || 1) + ")";
+    t += "\nTotal " + formato(total) + "\n";
+    const ts = cuentas(g, j);
+    if (!ts.length) return t + "\nEstán todos a mano.";
+    t += "\n*Para quedar a mano:*";
+    for (const p of ts) {
+      const alias = vivos.find((m) => m.id === p.a)?.alias;
+      t += "\n" + nombre(p.de) + " → " + nombre(p.a) + ": " + formato(p.m) + (alias ? " (alias " + alias + ")" : "");
+    }
+    return t;
+  }
   const total = totalGrupo(g);
   const pagos = saldar(saldos(g));
   let t = "*" + g.nombre + "*\nTotal " + formato(total) + (vivos.length ? " · " + formato(Math.round(total / vivos.length)) + " por persona" : "");

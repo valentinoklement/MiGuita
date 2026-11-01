@@ -7,7 +7,7 @@ import { fechaLocal, cambiarMes } from "../logic/mes.js";
 import { infoRacha, salvavidasPara, festejoDeHoy } from "../logic/racha.js";
 import { correrFijos, mesDeInicio, infoMeta, restante, movimientoDeFijo } from "../logic/plan.js";
 import { abrirBase } from "../data/db.js";
-import { centavos, fusionar, novedades, decodificar, codificar, validarAlias, sincronizarMiParte } from "../logic/grupos.js";
+import { centavos, fusionar, novedades, decodificar, codificar, validarAlias, sincronizarMiParte, pagadores } from "../logic/grupos.js";
 import { nuevoCodigo, buscarCodigo, derivar, sincronizar, bajar, escuchar } from "../logic/sincro.js";
 import { datosDeEjemplo, planDeEjemplo, grupoDeEjemplo } from "./ejemplo.js";
 import { crearVistas, esc } from "./pantallas.js";
@@ -31,7 +31,7 @@ import { crearVistasPrimera, instalada } from "./primera.js";
 
 const PESTANAS = [["inicio", "Inicio"], ["grupos", "Grupos"], ["plan", "Plan"], ["mas", "Más"]];
 const TAB_DE = { movimientos: "inicio", resumen: "inicio", racha: "inicio", categorias: "mas", editarCat: "mas", form: "plan",
-  grupo: "grupos", gform: "grupos", compartir: "grupos", unido: "grupos", quien: "grupos", whatsapp: "grupos",
+  grupo: "grupos", juntada: "grupos", gform: "grupos", compartir: "grupos", unido: "grupos", quien: "grupos", whatsapp: "grupos",
   notif: "mas", seguridad: "mas", dolar: "mas", copias: "mas", instalar: "mas", tutorial: "mas", importar: "inicio" };
 const SIN_BARRA = ["bienvenida", "primerIngreso", "tutorial"];
 const PLAN = ["presupuestos", "metas", "deudas", "fijos"];
@@ -91,6 +91,9 @@ const st = {
   yoElegido: "",
   nombreNuevo: "",
   aliasQuien: "",
+  juntadaId: null,   // juntada abierta ("" = gastos sueltos)
+  vistoAntes: 0,     // cuándo se había mirado esa juntada (para marcar lo nuevo)
+  whatsJ: undefined, // resumen de WhatsApp de una juntada
   errorQuien: "",
   errorAlias: "",
 };
@@ -305,9 +308,15 @@ function restaurarGrupo(antes) {
   const act = st.grupos.find((x) => x.id === antes.id), ahora = Date.now();
   const re = (lista) => antes[lista].map((y) => { const c = act?.[lista].find((z) => z.id === y.id); return c && JSON.stringify(c) !== JSON.stringify(y) ? { ...y, ts: ahora } : y; });
   guardarGrupo({ ...antes, sync: act?.sync, ts: act && JSON.stringify([act.nombre, act.moneda]) !== JSON.stringify([antes.nombre, antes.moneda]) ? ahora : antes.ts,
-    miembros: re("miembros"), gastos: re("gastos"), pagos: re("pagos") });
+    miembros: re("miembros"), gastos: re("gastos"), pagos: re("pagos"), ...(antes.juntadas && { juntadas: re("juntadas") }) });
 }
 const copiaGrupo = (g) => structuredClone(g);
+// Lo que pasó en una juntada mientras la miro (o lo que cambio yo) no se marca como "nuevo".
+function marcarVisto() {
+  const g = grupoActual();
+  if (!g || st.juntadaId == null) return;
+  ponerConfig("vistos", Object.fromEntries(Object.entries({ ...(st.cfg.vistos || {}), [g.id + "|" + st.juntadaId]: Date.now() }).slice(-300)));
+}
 // Pone mi alias en mi persona del grupo. Devuelve el mismo grupo si no hay nada que cambiar.
 function conMiAlias(g, alias) {
   const yo = g.miembros.find((m) => m.id === g.yo);
@@ -450,6 +459,14 @@ function abrirGForm(tipo, id, vals) {
 
 function formGasto(x) {
   const g = grupoActual(), vivos = g.miembros.filter((m) => !m.x);
+  const j = x ? x.j : st.juntadaId || undefined;
+  if (j) {
+    const ju = (g.juntadas || []).find((y) => y.id === j);
+    const gente = vivos.map((m) => m.id).filter((i) => !ju || ju.gente.includes(i));
+    if (!x) return { j, t: "", m: "", pagan: g.yo && gente.includes(g.yo) ? [g.yo] : gente.slice(0, 1), pp: {}, a: gente, f: ju?.f || hoy };
+    const pg = pagadores(x), varios = Object.keys(pg).length > 1;
+    return { j, t: x.t, m: montoEnCampo(centavos(x.m)), pagan: Object.keys(pg), pp: varios ? Object.fromEntries(Object.entries(pg).map(([k, c]) => [k, montoEnCampo(c)])) : {}, a: [...x.a], f: x.f || hoy };
+  }
   if (!x) return { t: "", m: "", p: g.yo && vivos.some((m) => m.id === g.yo) ? g.yo : vivos[0]?.id, a: vivos.map((m) => m.id), sp: "eq", w: {}, f: hoy };
   const w = {};
   for (const [k, val] of Object.entries(x.w || {})) w[k] = x.sp === "ex" ? montoEnCampo(centavos(val)) : String(val);
@@ -475,13 +492,43 @@ function guardarGForm() {
     const nuevo = { id: nuevoId(), nombre: nombre.slice(0, 60), moneda: v.moneda, ts: ahora, yo: miembros[0].id, loc: false, miembros, gastos: [], pagos: [] };
     guardarGrupo(nuevo);
     st.grupoId = nuevo.id; st.grupoTab = "gastos";
-    mostrarAviso("Grupo creado. Compartilo para que los demás se sumen.");
     irA("grupo");
+    // Como en las mejores apps de este tipo: el grupo nace conectado y lo primero es invitar.
+    st.compartir = { codigo: "", svg: "", pegado: "", error: "", escaneando: false };
+    abrir("compartir");
+    conectarGrupo();
     return "listo";
   }
   if (tipo === "grupoEditar") {
     if (!v.nombre.trim()) return "Ponele un nombre al grupo.";
     guardarGrupo({ ...g, nombre: v.nombre.trim().slice(0, 60), moneda: v.moneda, ts: ahora });
+  } else if (tipo === "gasto" && v.j) {
+    const total = leerMonto(v.m);
+    if (!total) return "Revisá cuánto salió: escribilo con números, por ejemplo 30.000.";
+    if (!v.pagan.length) return "Elegí quién pagó.";
+    if (!v.a.length) return "Elegí entre quiénes se divide.";
+    let pp;
+    if (v.pagan.length > 1) {
+      const vacios = v.pagan.filter((i) => !String(v.pp[i] ?? "").trim());
+      if (vacios.length > 1) return "Poné cuánto puso cada uno (podés dejar uno solo vacío).";
+      const c = Object.fromEntries(v.pagan.filter((i) => !vacios.includes(i)).map((i) => [i, leerMonto(v.pp[i]) || 0]));
+      const suma = Object.values(c).reduce((s, n) => s + n, 0);
+      if (vacios.length) c[vacios[0]] = total - suma;
+      if (Object.values(c).some((n) => n <= 0) || Object.values(c).reduce((s, n) => s + n, 0) !== total) return "Lo que puso cada uno suma " + V.plata(suma) + " y la compra es " + V.plata(total) + ".";
+      pp = Object.fromEntries(Object.entries(c).map(([k, n]) => [k, n / 100]));
+    }
+    const x = { id: id || nuevoId(), t: (v.t.trim() || "Compra").slice(0, 80), m: total / 100, p: v.pagan[0], a: v.a, sp: "eq", w: {}, f: v.f || hoy, ts: ahora, x: false, por: g.yo || "", j: v.j, ...(pp && { pp }) };
+    guardarGrupo({ ...g, gastos: [...g.gastos.filter((y) => y.id !== x.id), x] });
+    mostrarAviso((id ? "Cambiado: " : "Sumado: ") + x.t, deshacer);
+  } else if (tipo === "juntada") {
+    const nombre = v.nombre.trim();
+    if (!nombre) return "Ponele un nombre, por ejemplo «asado del sábado».";
+    if (v.gente.length < 2) return "Marcá quiénes fueron (al menos dos).";
+    const ju = { id: id || nuevoId(), nombre: nombre.slice(0, 60), f: v.f || hoy, gente: v.gente, ts: ahora, x: false };
+    // Si alguien ya no figura como que fue, sale de las compras de esa juntada.
+    const gastos = g.gastos.map((x) => x.j === ju.id && !x.x && x.a.some((i) => !ju.gente.includes(i)) ? { ...x, a: x.a.filter((i) => ju.gente.includes(i)), ts: ahora } : x);
+    guardarGrupo({ ...g, gastos, juntadas: [...(g.juntadas || []).filter((y) => y.id !== ju.id), ju] });
+    if (!id) { st.juntadaId = ju.id; st.vistoAntes = ahora; history.replaceState({ p: "juntada" }, ""); st.pantalla = "juntada"; scrollTo(0, 0); return "listo"; }
   } else if (tipo === "gasto") {
     const total = leerMonto(v.m);
     if (!total) return "Revisá el monto: escribilo con números, por ejemplo 41.200.";
@@ -502,7 +549,8 @@ function guardarGForm() {
     const c = leerMonto(v.m);
     if (!c) return "Revisá el monto: escribilo con números.";
     if (!v.de || !v.a || v.de === v.a) return "Elegí quién paga y a quién (tienen que ser personas distintas).";
-    const p = { id: id || nuevoId(), de: v.de, a: v.a, m: c / 100, f: v.f || hoy, ts: ahora, x: false };
+    const viejo = id && g.pagos.find((y) => y.id === id);
+    const p = { id: id || nuevoId(), de: v.de, a: v.a, m: c / 100, f: v.f || hoy, ts: ahora, x: false, ...(viejo?.j && { j: viejo.j }) };
     guardarGrupo({ ...g, pagos: [...g.pagos.filter((y) => y.id !== p.id), p] });
     mostrarAviso("Pago registrado", deshacer);
   } else if (tipo === "persona") {
@@ -527,6 +575,13 @@ function borrarGForm() {
   if (tipo === "grupoEditar") {
     quitarItem("grupos", g.id);
     mostrarAviso("Borraste " + g.nombre + " de este celu.", () => ponerItem("grupos", antes));
+    history.go(-2);
+    return;
+  }
+  if (tipo === "juntada") {
+    const fuera = (lista) => lista.map((y) => (y.j === id && !y.x ? { ...y, x: true, ts: ahora } : y));
+    guardarGrupo({ ...g, juntadas: lapida(g.juntadas || []), gastos: fuera(g.gastos), pagos: fuera(g.pagos) });
+    mostrarAviso("Juntada borrada", () => restaurarGrupo(antes));
     history.go(-2);
     return;
   }
@@ -685,6 +740,7 @@ function dibujar() {
     form: VP.formulario,
     grupos: VG.lista,
     grupo: VG.unGrupo,
+    juntada: VG.juntada,
     gform: VG.formulario,
     compartir: VG.compartir,
     unido: VG.unido,
@@ -704,7 +760,7 @@ function dibujar() {
   vigilar();
   const tab = TAB_DE[st.pantalla] || st.pantalla;
   const foco = document.activeElement?.dataset?.act;
-  const enCampo = foco && /^(buscar|nombre|catNombre|catClaves|detalle|campo|gcampo|gPersona|gPeso|nombreNuevo|aliasQuien|miAlias)$/.test(foco) ? { act: foco, k: document.activeElement.dataset.k, i: document.activeElement.dataset.i, pos: document.activeElement.selectionStart } : null;
+  const enCampo = foco && /^(buscar|nombre|catNombre|catClaves|detalle|campo|gcampo|gPersona|gPeso|gPP|nombreNuevo|aliasQuien|miAlias)$/.test(foco) ? { act: foco, k: document.activeElement.dataset.k, i: document.activeElement.dataset.i, pos: document.activeElement.selectionStart } : null;
   raiz.innerHTML = `<main class="scr" id="pantalla">` +
     (st.versionNueva ? `<div class="snack pp nueva" role="status"><span>Hay una versión nueva de MiGuita</span><button class="btnmini" data-act="actualizarApp">Actualizar</button></div>` : "") +
     `${P[st.pantalla]()}</main>` +
@@ -812,6 +868,50 @@ raiz.addEventListener("click", (e) => {
     case "quitarFila": st.gform.vals.miembros.splice(+v, 1); break;
     case "editarGrupo": { const g = grupoActual(); abrirGForm("grupoEditar", g.id, { nombre: g.nombre, moneda: g.moneda }); break; }
     case "sumarGastoG": abrirGForm("gasto", null, formGasto()); break;
+    case "nuevaJuntada": {
+      const g = grupoActual();
+      abrirGForm("juntada", null, { nombre: "", f: hoy, gente: g.miembros.filter((m) => !m.x).map((m) => m.id), otro: "" }); break;
+    }
+    case "editarJuntada": {
+      const ju = grupoActual().juntadas.find((x) => x.id === st.juntadaId);
+      abrirGForm("juntada", ju.id, { nombre: ju.nombre, f: ju.f || hoy, gente: [...ju.gente], otro: "" }); break;
+    }
+    case "abrirJuntada":
+      st.juntadaId = v; st.vistoAntes = st.cfg.vistos?.[grupoActual().id + "|" + v] || 0;
+      marcarVisto(); abrir("juntada"); break;
+    case "gGente": { const x = st.gform.vals.gente; st.gform.vals.gente = x.includes(v) ? x.filter((i) => i !== v) : [...x, v]; st.gform.error = ""; break; }
+    case "gSumarOtro": {
+      const g = grupoActual(), nombre = (st.gform.vals.otro || "").trim().slice(0, 40);
+      if (!nombre) break;
+      if (g.miembros.filter((m) => !m.x).length >= 50) { st.gform.error = "Un grupo puede tener hasta 50 personas."; break; }
+      const m = { id: nuevoId(), nombre, alias: "", ts: Date.now(), x: false };
+      guardarGrupo({ ...g, miembros: [...g.miembros, m] });
+      st.gform.vals.gente = [...st.gform.vals.gente, m.id]; st.gform.vals.otro = "";
+      mostrarAviso(nombre + " se sumó al grupo."); break;
+    }
+    case "gPaga": { const x = st.gform.vals.pagan; st.gform.vals.pagan = x.includes(v) ? x.filter((i) => i !== v) : [...x, v]; st.gform.error = ""; break; }
+    case "celda": case "columna": {
+      const g = grupoActual(), [gid, pid] = v.split("|"), x = g.gastos.find((y) => y.id === gid);
+      if (!x) break;
+      let a;
+      if (act === "celda") a = x.a.includes(pid) ? x.a.filter((i) => i !== pid) : [...x.a, pid];
+      else {
+        const ju = (g.juntadas || []).find((y) => y.id === x.j), gente = g.miembros.filter((m) => !m.x && (!ju || ju.gente.includes(m.id))).map((m) => m.id);
+        a = gente.every((i) => x.a.includes(i)) ? [] : gente;
+      }
+      guardarGrupo({ ...g, gastos: g.gastos.map((y) => (y.id === gid ? { ...y, a, ts: Date.now() } : y)) });
+      marcarVisto(); break;
+    }
+    case "yaPague": {
+      const g = grupoActual(), antes = copiaGrupo(g), [de, a, m] = v.split("|");
+      const nombre = (i) => (i === g.yo ? "Vos" : g.miembros.find((y) => y.id === i)?.nombre || "?");
+      const p = { id: nuevoId(), de, a, m: +m / 100, f: hoy, ts: Date.now(), x: false, ...(st.juntadaId && { j: st.juntadaId }) };
+      guardarGrupo({ ...g, pagos: [...g.pagos, p] });
+      marcarVisto();
+      mostrarAviso("Anotado: " + nombre(de) + " le pasó " + V.plata(+m) + " a " + nombre(a) + ".", () => restaurarGrupo(antes)); break;
+    }
+    case "copiarAlias": copiar(v); mostrarAviso("Alias copiado. Pegalo en Mercado Pago."); break;
+    case "whatsJuntada": st.whatsJ = st.juntadaId ?? ""; abrir("whatsapp"); break;
     case "editarGastoG": abrirGForm("gasto", v, formGasto(grupoActual().gastos.find((x) => x.id === v))); break;
     case "gEntre": { const a = st.gform.vals.a; st.gform.vals.a = a.includes(v) ? a.filter((i) => i !== v) : [...a, v]; st.gform.error = ""; break; }
     case "gSel": st.gform.vals[b.dataset.k] = v; st.gform.error = ""; break;
@@ -832,6 +932,7 @@ raiz.addEventListener("click", (e) => {
     }
     case "guardarG": {
       const error = guardarGForm();
+      if (!error || error === "listo") marcarVisto();
       if (error === "listo") break;
       if (error) { st.gform.error = error; break; }
       return volver();
@@ -872,7 +973,7 @@ raiz.addEventListener("click", (e) => {
         .then((f) => { if (st.compartir?.escaneando) apagarCamara = f; else f(); })
         .catch(() => { cerrarCamara(); st.compartir.error = "No pude abrir la cámara. Revisá el permiso o pegá el código."; dibujar(); });
       return;
-    case "abrirWhatsApp": abrir("whatsapp"); break;
+    case "abrirWhatsApp": st.whatsJ = undefined; abrir("whatsapp"); break;
     case "copiarResumen": {
       const t = raiz.querySelector(".wa")?.textContent || "";
       copiar(t); mostrarAviso("Resumen copiado"); break;
@@ -1135,7 +1236,7 @@ raiz.addEventListener("click", (e) => {
     default: return;
   }
   dibujar();
-  if (["tecla", "cat", "medio", "fecha", "tipo", "filtro", "catTab", "tema", "borrarMov", "borrarTodo", "planTab", "formSel", "formSwitch", "fijoActivo", "borrarPlan", "grupoTab", "gSel", "gEntre", "gSoyYo", "grupoLoc", "elegirYo", "borrarG", "monedaHoja", "notifCant", "notifForma", "notifTipo", "notifNM", "pinNuevo", "tapar", "dolarTipo", "dolarFuente", "dolarConv", "copiaAuto", "copiaCada", "quitarPin", "aplicarCopia"].includes(act))
+  if (["tecla", "cat", "medio", "fecha", "tipo", "filtro", "catTab", "tema", "borrarMov", "borrarTodo", "planTab", "formSel", "formSwitch", "fijoActivo", "borrarPlan", "grupoTab", "gSel", "gEntre", "gGente", "gPaga", "celda", "columna", "gSoyYo", "grupoLoc", "elegirYo", "borrarG", "monedaHoja", "notifCant", "notifForma", "notifTipo", "notifNM", "pinNuevo", "tapar", "dolarTipo", "dolarFuente", "dolarConv", "copiaAuto", "copiaCada", "quitarPin", "aplicarCopia"].includes(act))
     raiz.querySelector(`[data-act="${act}"]${b.dataset.k ? `[data-k="${CSS.escape(b.dataset.k)}"]` : ""}${v ? `[data-v="${CSS.escape(v)}"]` : ""}`)?.focus();
 });
 
@@ -1148,6 +1249,7 @@ raiz.addEventListener("input", (e) => {
   else if (act === "gcampo") { st.gform.vals[e.target.dataset.k] = val; st.gform.error = ""; dibujar(); }
   else if (act === "gPersona") st.gform.vals.miembros[+e.target.dataset.i][e.target.dataset.k] = val;
   else if (act === "gPeso") { st.gform.vals.w[e.target.dataset.k] = val; st.gform.error = ""; dibujar(); }
+  else if (act === "gPP") { st.gform.vals.pp[e.target.dataset.k] = val; st.gform.error = ""; }
   else if (act === "pegado") { st.compartir.pegado = val; st.compartir.error = ""; }
   else if (act === "nombreNuevo") st.nombreNuevo = val;
   else if (act === "aliasQuien") { st.aliasQuien = val; st.errorQuien = ""; }

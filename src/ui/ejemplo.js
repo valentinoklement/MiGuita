@@ -62,16 +62,19 @@ export function planDeEjemplo(hoy) {
 export function grupoDeEjemplo(hoy) {
   const f = sumarDias(hoy, -1);
   return {
-    id: "ej_g1", nombre: "Asado del sábado", moneda: "ARS", ts: 1, yo: "ej_yo", loc: false,
+    id: "ej_g1", nombre: "Los amigos", moneda: "ARS", ts: 1, yo: "ej_yo", loc: false,
     miembros: [
       { id: "ej_yo", nombre: "Vos", alias: "", ts: 1, x: false },
       { id: "ej_a", nombre: "Amiga", alias: "amiga.mp", ts: 1, x: false },
-      { id: "ej_b", nombre: "Amigo", alias: "", ts: 1, x: false },
+      { id: "ej_b", nombre: "Amigo", alias: "amigo.mp", ts: 1, x: false },
+      { id: "ej_c", nombre: "Vecina", alias: "", ts: 1, x: false },
     ],
+    juntadas: [{ id: "ej_j1", nombre: "Asado del sábado", f, gente: ["ej_yo", "ej_a", "ej_b", "ej_c"], ts: 1, x: false }],
     gastos: [
-      { id: "ej_x1", t: "Carne y chorizos", m: 41400, p: "ej_yo", a: ["ej_yo", "ej_a", "ej_b"], sp: "eq", w: {}, f, ts: 2, x: false, por: "ej_yo" },
-      { id: "ej_x2", t: "Bebidas", m: 20400, p: "ej_a", a: ["ej_yo", "ej_a", "ej_b"], sp: "eq", w: {}, f, ts: 3, x: false, por: "ej_a" },
-      { id: "ej_x3", t: "Carbón, pan y postre", m: 24600, p: "ej_b", a: ["ej_yo", "ej_a", "ej_b"], sp: "eq", w: {}, f, ts: 4, x: false, por: "ej_b" },
+      { id: "ej_x1", t: "Carne y chorizos", m: 41400, p: "ej_a", a: ["ej_yo", "ej_a", "ej_b", "ej_c"], sp: "eq", w: {}, f, ts: 2, x: false, por: "ej_a", j: "ej_j1" },
+      { id: "ej_x2", t: "Fernet", m: 18000, p: "ej_b", a: ["ej_yo", "ej_a", "ej_b"], sp: "eq", w: {}, f, ts: 3, x: false, por: "ej_b", j: "ej_j1" },
+      { id: "ej_x3", t: "Birra", m: 9600, p: "ej_yo", a: ["ej_b", "ej_c"], sp: "eq", w: {}, f, ts: 4, x: false, por: "ej_yo", j: "ej_j1" },
+      { id: "ej_x4", t: "Carbón y pan", m: 8000, p: "ej_yo", a: ["ej_yo", "ej_a", "ej_b", "ej_c"], sp: "eq", w: {}, f, ts: 5, x: false, por: "ej_yo", j: "ej_j1" },
     ],
     pagos: [],
   };
