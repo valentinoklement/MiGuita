@@ -111,7 +111,7 @@ export function novedades(antes, despues) {
 }
 
 /* ---------- alias ---------- */
-// Solo alias de Mercado Pago (6 a 20 letras, números, puntos o guiones). Un CBU/CVU (22 números) nunca se guarda.
+// Solo alias de billetera o banco (6 a 20 letras, números, puntos o guiones). Un CBU/CVU (22 números) nunca se guarda.
 export function validarAlias(texto) {
   const s = String(texto ?? "").trim();
   if (!s) return { ok: true, alias: "" };
@@ -132,7 +132,7 @@ export function limpiar(o) {
     const i = okId(m && m.id); if (!i) return;
     const al = validarAlias(m.alias);
     const miembro = { id: i, nombre: s(m.nombre, 40).trim() || "?", alias: al.ok ? al.alias : "", ts: num(m.ts), x: !!m.x };
-    if (Number.isInteger(m.pj) && m.pj >= -1 && m.pj < 64) miembro.pj = m.pj; // personaje elegido (-1 = Miguita)
+    if (Number.isInteger(m.pj) && m.pj >= -4 && m.pj < 64) miembro.pj = m.pj; // personaje elegido (-1 a -4 = Miguita con o sin detalle)
     if (Number.isInteger(m.cam) && m.cam >= 1 && m.cam <= 7) miembro.cam = m.cam; // camiseta de fútbol
     g.miembros.push(miembro);
   });

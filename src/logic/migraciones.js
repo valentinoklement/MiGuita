@@ -12,7 +12,7 @@
 import { categoriasIniciales, mediosIniciales } from "./categorias.js";
 import { NOTIF_INICIAL } from "./avisos.js";
 
-export const VERSION = 5;
+export const VERSION = 6;
 
 // Nombre de cada lista guardada y su clave.
 export const LISTAS = { movs: "id", dias: "fecha", presupuestos: "id", metas: "id", deudas: "id", fijos: "id", grupos: "id", cotizaciones: "id" };
@@ -41,6 +41,8 @@ const MIGRACIONES = [
   }),
   // 4 → 5: fijos de ingreso y fijos que preguntan antes de anotarse.
   (d) => ({ ...d, fijos: (d.fijos || []).map((f) => ({ tipo: "gasto", modo: "auto", ...f })) }),
+  // 5 → 6: el medio "Mercado Pago" pasa a "Billetera virtual" (sirve también para Ualá, MODO, Naranja X…), salvo que la persona lo haya renombrado.
+  (d) => ({ ...d, config: { ...d.config, medios: (d.config?.medios || []).map((m) => (m.id === "mp" && m.nombre === "Mercado Pago" ? { ...m, nombre: "Billetera virtual" } : m)) } }),
 ];
 
 export function migrar(datos) {

@@ -1,7 +1,7 @@
 // Pantallas de Grupos: lista, un grupo (tu situación y sus juntadas), una juntada (compras, quién entra en qué
 // y cómo quedar a mano), formularios, compartir, unir y WhatsApp.
 import { Art } from "../art/art.js";
-import { amigo, BASES, DETALLES, MIGUITA, CAMISETAS } from "../art/amigos.js";
+import { amigo, BASES, DETALLES, MIGUITA, CAMISETAS, miguitaCon, personaje } from "../art/amigos.js";
 import { formatear, leerMonto } from "../logic/dinero.js";
 import { centavos, repartir, saldos, saldar, miParte, textoWhatsApp, juntadasVivas, gastosDe, pagosDe, haySueltos, cuentas, detalleDe, miSituacion, pagadores } from "../logic/grupos.js";
 import { sumarDias } from "../logic/mes.js";
@@ -27,11 +27,10 @@ export function crearVistasGrupos(st, hoy, V) {
   const nombre = (g, id) => (id === g.yo ? "Vos" : g.miembros.find((m) => m.id === id)?.nombre || "?");
   const dibujo = (g, id) => {
     const m = g.miembros.find((x) => x.id === id), pj = m?.pj, cam = m?.cam || 0;
-    if (pj === MIGUITA) return Art.miguita("ok");
-    if (Number.isInteger(pj)) return amigo(pj, cam);
-    if (id === g.yo && !cam) return Art.miguita("ok");
+    if (Number.isInteger(pj)) return personaje(pj, cam);
+    if (id === g.yo) return miguitaCon(0, cam);
     const i = vivos(g).filter((x) => x.id !== g.yo).findIndex((x) => x.id === id);
-    return amigo(id === g.yo ? 0 : i, cam);
+    return amigo(i, cam);
   };
   const fecha = (f) => f ? Number(f.slice(8, 10)) + " " + ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"][Number(f.slice(5, 7)) - 1] : "";
   const btn = (act, texto, { alt = false, v = "" } = {}) => `<button class="btn pp w${alt ? " alt" : ""}" data-act="${act}"${v ? ` data-v="${esc(v)}"` : ""}>${texto}</button>`;
@@ -189,7 +188,7 @@ export function crearVistasGrupos(st, hoy, V) {
           `<div class="persona"><input class="field" data-act="gPersona" data-i="${i}" data-k="nombre" value="${esc(m.nombre)}" placeholder="${i ? "Nombre" : "Tu nombre"}" aria-label="${i ? "Nombre de la persona " + (i + 1) : "Tu nombre"}" maxlength="40">` +
           `<input class="field" data-act="gPersona" data-i="${i}" data-k="alias" value="${esc(m.alias)}" placeholder="alias (opcional)" aria-label="Alias de ${i ? "la persona " + (i + 1) : "vos"}" maxlength="22" autocapitalize="none">` +
           (i ? `<button class="mbtn" data-act="quitarFila" data-v="${i}" aria-label="Quitar persona ${i + 1}">×</button>` : `<span class="hint">vos</span>`) + `</div>`).join("") +
-          `<div class="chips"><button class="pp" data-act="sumarFila">+ Sumar integrante</button></div><div class="hint">Podés dejarlo solo con vos: cada uno se suma con su nombre cuando le mandás el link. El alias es solo de Mercado Pago, nunca el CBU.</div>`) +
+          `<div class="chips"><button class="pp" data-act="sumarFila">+ Sumar integrante</button></div><div class="hint">Podés dejarlo solo con vos: cada uno se suma con su nombre cuando le mandás el link. Poné solo el alias (de cualquier billetera o banco), nunca el CBU.</div>`) +
         pie("Crear grupo");
     },
     grupoEditar() {
@@ -272,14 +271,16 @@ export function crearVistasGrupos(st, hoy, V) {
 
   // Elegir el personaje que te representa en el grupo (un chiche: si no elegís, se reparte solo).
   function personajes() {
-    const v = f().vals, pj = v.pj, base = Number.isInteger(pj) && pj >= 0 ? pj % 16 : pj, detalle = Number.isInteger(pj) && pj >= 0 ? Math.floor(pj / 16) : 0;
+    // pj: 0 a 63 = amigo (base + 16 × detalle); -1 a -4 = Miguita (sola, gorro, anteojos, moño).
+    const v = f().vals, pj = v.pj, elegido = Number.isInteger(pj);
+    const base = !elegido ? null : pj < 0 ? MIGUITA : pj % 16, detalle = !elegido ? 0 : pj < 0 ? -1 - pj : Math.floor(pj / 16);
     const cam = v.cam || 0;
     const opcion = (valor, dib, nombre) => `<button class="pj pp" data-act="gPj" data-v="${valor}" aria-pressed="${base === valor}" aria-label="${esc(nombre)}">${dib}</button>`;
     return crd(lbl("Personaje") + `<div class="pjs" role="group" aria-label="Personaje">` +
-      opcion(MIGUITA, Art.miguita("ok"), "Miguita") + BASES.map((n, i) => opcion(i, amigo(i + 16 * detalle, i === 3 ? 0 : cam), n)).join("") + "</div>" +
-      (Number.isInteger(base) && base >= 0 ? `<div class="chips" role="group" aria-label="Detalle">` + DETALLES.map((n, k) =>
+      opcion(MIGUITA, miguitaCon(detalle, cam), "Miguita") + BASES.map((n, i) => opcion(i, amigo(i + 16 * detalle, cam), n)).join("") + "</div>" +
+      (elegido ? `<div class="chips" role="group" aria-label="Detalle">` + DETALLES.map((n, k) =>
         `<button class="pp" data-act="gPjDetalle" data-v="${k}" aria-pressed="${detalle === k}">${n}</button>`).join("") + "</div>" : "") +
-      (base !== MIGUITA && base !== 3 ? lbl("Camiseta") + `<div class="chips" role="group" aria-label="Camiseta">` + CAMISETAS.map((n, k) =>
+      (elegido ? lbl("Camiseta") + `<div class="chips" role="group" aria-label="Camiseta">` + CAMISETAS.map((n, k) =>
         `<button class="pp" data-act="gCam" data-v="${k}" aria-pressed="${cam === k}">${n}</button>`).join("") + "</div>" : "") +
       `<div class="sub">${pj == null ? "Si no elegís, la app te asigna uno." : "Así aparece en el grupo."}${pj != null ? ` <button class="link" data-act="gPj" data-v="">Que lo elija la app</button>` : ""}</div>`);
   }

@@ -28,7 +28,7 @@ export const INGRESO = [
   ["otros_in", "Otros ingresos", []],
 ];
 
-export const MEDIOS = [["debito", "Débito"], ["efectivo", "Efectivo"], ["mp", "Mercado Pago"], ["credito", "Crédito"], ["transferencia", "Transferencia"], ["cripto", "Cripto"]];
+export const MEDIOS = [["debito", "Débito"], ["efectivo", "Efectivo"], ["mp", "Billetera virtual"], ["credito", "Crédito"], ["transferencia", "Transferencia"], ["cripto", "Cripto"]];
 
 // La última de cada lista es la de "no sé": no se puede ocultar y es la que se usa si nada coincide.
 export const RESPALDO = { gasto: "otros", ingreso: "otros_in" };

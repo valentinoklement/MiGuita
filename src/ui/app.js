@@ -1103,7 +1103,7 @@ raiz.addEventListener("click", (e) => {
       mostrarAviso("Listo: este dispositivo ya no se actualiza con los otros. Tus datos quedan acá.");
       break;
     }
-    case "copiarAlias": copiar(v); mostrarAviso("Alias copiado. Pegalo en Mercado Pago."); break;
+    case "copiarAlias": copiar(v); mostrarAviso("Alias copiado. Pegalo en tu billetera o banco."); break;
     case "whatsJuntada": st.whatsJ = st.juntadaId ?? ""; abrir("whatsapp"); break;
     case "editarGastoG": abrirGForm("gasto", v, formGasto(grupoActual().gastos.find((x) => x.id === v))); break;
     case "gEntre": { const a = st.gform.vals.a; st.gform.vals.a = a.includes(v) ? a.filter((i) => i !== v) : [...a, v]; st.gform.error = ""; break; }
@@ -1117,8 +1117,12 @@ raiz.addEventListener("click", (e) => {
     case "editarPersona": { const g = grupoActual(), m = g.miembros.find((x) => x.id === v); abrirGForm("persona", v, { nombre: m.nombre, alias: m.alias || "", soyYo: g.yo === v, pj: m.pj ?? null, cam: m.cam || 0 }); break; }
     case "nuevaPersona": abrirGForm("persona", null, { nombre: "", alias: "", soyYo: false, pj: null, cam: 0 }); break;
     case "gCam": st.gform.vals.cam = +v; break;
-    case "gPj": st.gform.vals.pj = v === "" ? null : +v; break;
-    case "gPjDetalle": { const pj = st.gform.vals.pj; if (Number.isInteger(pj) && pj >= 0) st.gform.vals.pj = (pj % 16) + 16 * +v; break; }
+    case "gPj": {
+      // Al cambiar de personaje se mantiene el detalle elegido (gorro, anteojos o moño).
+      const pj = st.gform.vals.pj, det = !Number.isInteger(pj) ? 0 : pj < 0 ? -1 - pj : Math.floor(pj / 16);
+      st.gform.vals.pj = v === "" ? null : +v < 0 ? -1 - det : +v + 16 * det; break;
+    }
+    case "gPjDetalle": { const pj = st.gform.vals.pj; if (Number.isInteger(pj)) st.gform.vals.pj = pj < 0 ? -1 - +v : (pj % 16) + 16 * +v; break; }
     case "gSoyYo": st.gform.vals.soyYo = !st.gform.vals.soyYo; break;
     case "grupoLoc": {
       const g = grupoActual();

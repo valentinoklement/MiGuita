@@ -80,6 +80,7 @@ export function amigo(i, cam = 0) {
   if (base < VIEJOS.length) {
     const k = VIEJOS[base];
     let svg = Art.factura(k);
+    if (k === "luna") return adornar(svg, GRANDES.luna, extra ? EXTRAS.indexOf(extra) : 0, cam);
     if (!CABEZA_VIEJOS[k]) return svg;
     const e = extra && extra(CABEZA_VIEJOS[k][0], CABEZA_VIEJOS[k][1]), c = camiseta(cam, CABEZA_VIEJOS[k][1][2] + 13);
     if (!e && !c) return svg;
@@ -116,6 +117,28 @@ function camiseta(k, y) {
     `<g clip-path="url(#${id})">${dibujo}</g>` + L(`<path d="${forma}" stroke-width="1.6"/>`) + "</g>";
 }
 export const CANTIDAD_DISTINTOS = (VIEJOS.length + NUEVOS.length) * EXTRAS.length;
+
+/* ---------- Miguita y la medialuna: están dibujadas al doble de tamaño ---------- */
+// Dónde va cada cosa en esos dibujos: centro, punta de arriba, ojos, cuello y cuánto agrandar los adornos.
+const GRANDES = {
+  miguita: { cx: 80, top: 3, ojos: [69, 91, 36], cuello: 60, esc: 1.8, vb: ['viewBox="0 -24 160 148"', 'viewBox="0 -50 160 174"'] },
+  luna: { cx: 80, top: 19, ojos: [72, 88, 42], cuello: 58, esc: 1.5, vb: ['viewBox="0 0 160 112"', 'viewBox="0 -30 160 142"'] },
+};
+function adornar(svg, g, detalle, cam) {
+  const llevar = (x, y, dib) => `<g transform="translate(${g.cx} ${y}) scale(${g.esc}) translate(-40 -40)">${dib}</g>`;
+  let extra = "";
+  if (cam) extra += llevar(g.cx, g.cuello, camiseta(cam, 40));
+  if (detalle === 1) { const e = EXTRAS[1](42); extra += llevar(g.cx, g.top, F(e.fl) + L(e.ln)); }
+  if (detalle === 2) { const e = EXTRAS[2](0, g.ojos); extra += L(e.ln); }
+  if (detalle === 3) { const e = EXTRAS[3](39); extra += llevar(g.cx, g.top, F(e.fl) + L(e.ln)); }
+  if (!extra) return svg;
+  svg = svg.replace(/<\/svg>$/, extra + "</svg>");
+  return detalle === 1 || detalle === 3 ? svg.replace(g.vb[0], g.vb[1]) : svg;
+}
+// Miguita con gorro, anteojos o moño (detalle 0 a 3) y camiseta.
+export const miguitaCon = (detalle = 0, cam = 0) => adornar(Art.miguita("ok"), GRANDES.miguita, detalle, cam);
+// Un personaje elegido: los negativos son Miguita (-1 sola, -2 gorro, -3 anteojos, -4 moño).
+export const personaje = (pj, cam = 0) => (pj < 0 ? miguitaCon(-1 - pj, cam) : amigo(pj, cam));
 // Para elegir personaje: los 16 de base (el número es el que va a amigo()) y los detalles que se le pueden sumar.
 export const BASES = ["Cañoncito", "Bola de fraile", "Factura", "Medialuna", ...NUEVOS.map((p) => p.nombre[0].toUpperCase() + p.nombre.slice(1))];
 export const DETALLES = ["Nada", "Gorro", "Anteojos", "Moño"];

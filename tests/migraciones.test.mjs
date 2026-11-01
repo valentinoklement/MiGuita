@@ -28,3 +28,9 @@ test("migrar dos veces no cambia nada y respeta lo que la persona editó", () =>
 test("datos de una versión más nueva se rechazan con un mensaje claro", () => {
   assert.throws(() => migrar({ schemaVersion: VERSION + 1 }), /versión más nueva/);
 });
+
+test("Mercado Pago pasa a Billetera virtual, salvo que la persona lo haya renombrado", () => {
+  const medios = (nombre) => migrar({ schemaVersion: 5, config: { medios: [{ id: "mp", nombre, oculto: false }, { id: "efectivo", nombre: "Efectivo", oculto: false }] } }).config.medios;
+  assert.deepEqual(medios("Mercado Pago").map((m) => m.nombre), ["Billetera virtual", "Efectivo"]);
+  assert.equal(medios("Ualá")[0].nombre, "Ualá");
+});
