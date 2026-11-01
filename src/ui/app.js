@@ -27,8 +27,8 @@ import { crearVistasPrimera, instalada } from "./primera.js";
 const PESTANAS = [["inicio", "Inicio"], ["grupos", "Grupos"], ["plan", "Plan"], ["mas", "Más"]];
 const TAB_DE = { movimientos: "inicio", resumen: "inicio", racha: "inicio", categorias: "mas", editarCat: "mas", form: "plan",
   grupo: "grupos", gform: "grupos", compartir: "grupos", unido: "grupos", quien: "grupos", whatsapp: "grupos",
-  notif: "mas", seguridad: "mas", dolar: "mas", copias: "mas", instalar: "mas" };
-const SIN_BARRA = ["bienvenida", "primerIngreso"];
+  notif: "mas", seguridad: "mas", dolar: "mas", copias: "mas", instalar: "mas", tutorial: "mas" };
+const SIN_BARRA = ["bienvenida", "primerIngreso", "tutorial"];
 const PLAN = ["presupuestos", "metas", "deudas", "fijos"];
 const hoy = fechaLocal();
 const raiz = document.getElementById("app");
@@ -54,6 +54,8 @@ const st = {
   dolarCargando: false,
   copiaFlujo: null,
   primera: { nombre: "", monto: "", moneda: "ARS", error: "" },
+  tutorialPaso: 0,
+  tutorialDesde: "", // a dónde se va al terminar el tutorial
   puedeInstalar: false, // Chrome ofreció instalar la app (Android y compus)
   cfg: base.datos.config,
   persistente: base.persistente,
@@ -568,6 +570,7 @@ function dibujar() {
     bienvenida: VI.bienvenida,
     primerIngreso: VI.primerIngreso,
     instalar: VI.instalar,
+    tutorial: VI.tutorial,
   };
   if (st.pantalla !== "compartir" && apagarCamara) cerrarCamara();
   const tab = TAB_DE[st.pantalla] || st.pantalla;
@@ -629,7 +632,7 @@ raiz.addEventListener("click", (e) => {
   if (!["borrarMov", "borrarTodo", "borrarPlan", "borrarG", "quitarPin", "aplicarCopia"].includes(act)) st.confirmar = "";
   switch (act) {
     case "ir": history.replaceState({ p: v }, ""); st.pantalla = v; st.error = ""; scrollTo(0, 0); break;
-    case "abrir": abrir(v); break;
+    case "abrir": if (v === "tutorial") { st.tutorialPaso = 0; st.tutorialDesde = ""; } abrir(v); break;
     case "volver": return volver();
     case "mes": st.mes = cambiarMes(st.mes, +v); break;
     case "ocultar": ponerConfig("ocultar", !st.cfg.ocultar); break;
@@ -795,7 +798,12 @@ raiz.addEventListener("click", (e) => {
       return;
     case "cancelarCopia": if (st.copiaFlujo?.url) URL.revokeObjectURL(st.copiaFlujo.url); st.copiaFlujo = null; break;
     /* primera vez */
-    case "empezar": irA("primerIngreso"); break;
+    case "empezar": st.tutorialPaso = 0; st.tutorialDesde = "primerIngreso"; irA("tutorial"); break;
+    case "tutorialPaso": st.tutorialPaso = +v; break;
+    case "saltarTutorial":
+      ponerConfig("tutorialVisto", true);
+      if (st.tutorialDesde) { irA(st.tutorialDesde); st.tutorialDesde = ""; break; }
+      return volver();
     case "conEjemplo": ponerConfig("primeraVez", hoy); cargarEjemplo(); irA("inicio"); break;
     case "primeraMoneda": st.primera.moneda = v; break;
     case "primeraSaltar": case "primeraSeguir": {
@@ -1001,6 +1009,8 @@ function cargarEjemplo() {
 }
 // La primera vez: bienvenida (con la opción de mirar la app con datos de ejemplo).
 if (!st.cfg.primeraVez) irA("bienvenida");
+// Quien ya usaba la app ve el tutorial una vez (se puede saltear).
+else if (!st.cfg.tutorialVisto) { st.tutorialPaso = 0; st.tutorialDesde = "inicio"; irA("tutorial"); }
 revisarFijos();
 revisarSalvavidas();
 // Link para unirse a un grupo: ...#g=<código>

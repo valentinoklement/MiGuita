@@ -47,5 +47,23 @@ export function crearVistasPrimera(st, V) {
     return h + `<button class="btn pp w${st.puedeInstalar ? " alt" : ""}" data-act="listoInstalar">${st.puedeInstalar ? "Ahora no" : "Listo"}</button>`;
   }
 
-  return { bienvenida, primerIngreso, instalar };
+  // Tutorial: qué se puede hacer con la app. Se puede saltear; después queda en Más › Cómo usar MiGuita.
+  const PASOS = [
+    () => [Art.miguita("ok"), "Anotá en 10 segundos", "Escribí «café 3800» y listo: la app pone la categoría sola. Así llevás la cuenta de todo lo que gastás, aunque no cargues tu sueldo."],
+    () => [Art.pan(0.6), "Mirá cuánto te queda", "Si cargás lo que cobrás, ves cuánto te queda del mes y cuánto podés gastar por día. Si te pasás, Miguita se empieza a poner fea."],
+    () => [Art.masa(0.6), "Ahorrá para algo", "En Plan ponés metas (un viaje, un fondo de emergencia), topes por categoría, deudas y gastos fijos que se anotan solos."],
+    () => [`<div class="crew">${["fact", "canon", "bola"].map((k) => Art.factura(k)).join("")}</div>`, "Dividí con amigos", "En Grupos anotan quién pagó qué y la app calcula quién le paga a quién, con el alias para transferir y el resumen para WhatsApp."],
+    () => [Art.minion(), "Sumá días de racha", "Cada día que anotás suma un ingrediente. A los 7 días horneás un miñón, y sigue."],
+    () => [Art.miguita("ok"), "Tus datos son tuyos", "Todo queda solo en tu celu. Podés cerrarla con PIN y hacer copias de seguridad desde Más."],
+  ];
+  function tutorial() {
+    const n = st.tutorialPaso, [dibujo, titulo, texto] = PASOS[n](), ultimo = n === PASOS.length - 1;
+    return `<div class="tuto"><button class="link saltar" data-act="saltarTutorial">Saltear</button>` +
+      `<div class="tuto-dibujo" aria-hidden="true">${dibujo}</div><b>${titulo}</b><span>${texto}</span>` +
+      `<div class="dots" role="img" aria-label="Paso ${n + 1} de ${PASOS.length}">${PASOS.map((_, i) => `<i class="${i === n ? "on" : ""}"></i>`).join("")}</div></div>` +
+      `<div class="btnrow">${n ? `<button class="btn pp alt" data-act="tutorialPaso" data-v="${n - 1}">Atrás</button>` : ""}` +
+      `<button class="btn pp" data-act="${ultimo ? "saltarTutorial" : "tutorialPaso"}" data-v="${n + 1}">${ultimo ? "¡Empezar!" : "Siguiente"}</button></div>`;
+  }
+
+  return { bienvenida, primerIngreso, instalar, tutorial };
 }

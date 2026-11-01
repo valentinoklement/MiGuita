@@ -237,3 +237,18 @@ body.tapado #tapa{display:flex}
 .inicio-b{flex:1;justify-content:center;padding:40px 0 10px}
 .inicio-b svg.sl{width:230px}
 .inicio-b b{font-size:38px}
+
+/* ---------- que la app se sienta app: tocar no selecciona texto ni abre la búsqueda del celu ---------- */
+body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+input,textarea,.code,.wa,.code-in{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
+.code{-webkit-user-select:all;user-select:all}
+img,svg{-webkit-user-drag:none}
+.tuto{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;position:relative;padding-top:30px}
+.tuto .saltar{position:absolute;top:0;right:0;min-height:44px;padding:0 4px}
+.tuto-dibujo{min-height:170px;display:flex;align-items:flex-end;justify-content:center}
+.tuto-dibujo svg.sl{width:180px;height:auto}
+.tuto-dibujo svg.lf{width:200px}
+.tuto-dibujo svg.dg{width:200px}
+.tuto-dibujo>svg:not(.sl):not(.lf):not(.dg){width:120px;height:auto}
+.tuto b{font:800 28px/1.15 "Bricolage Grotesque",sans-serif}
+.tuto span{font-weight:600;opacity:.9;max-width:30ch;font-size:16px}
