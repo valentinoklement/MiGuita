@@ -47,7 +47,11 @@ test("ningún nombre ajeno se dibuja como HTML", () => {
   for (let i = 0; i < 6; i++) st.movs.push({ id: "h" + i, tipo: "gasto", monto: 100, detalle: X, categoria: "otros", medio: "", fecha: "2026-11-0" + (i + 1), ts: 1, mod: 1 }, { id: "o" + i, tipo: "gasto", monto: 900, detalle: "x", categoria: "otros", medio: "", fecha: "2026-10-1" + i, ts: 1, mod: 1 }, { id: "s" + i, tipo: "gasto", monto: 900, detalle: "x", categoria: "otros", medio: "", fecha: "2026-09-1" + i, ts: 1, mod: 1 });
   limpio("análisis", VP.plan());
   assert.ok(VP.plan().includes("Mes a mes"));
+  st.cfg.saldo = { monto: 100, ts: 0, fecha: hoy }; st.fijos = [{ id: "s", nombre: X, tipo: "ingreso", categoria: "sueldo", activo: true, monto: 100, moneda: "ARS", dia: 1 }];
+  limpio("cargar plata", V.cargarPlata());
+  st.dudaSaldo = { ids: ["m"] };
   limpio("inicio", V.inicio());
+  assert.ok(V.inicio().includes("Tu plata ahora"));
   limpio("movimientos", V.movimientos());
   st.dudaMonto = { texto: X, p: { opciones: [100, 200] } }; st.dudaCat = { id: "m", detalle: X, tipo: "gasto" };
   limpio("dudas", V.inicio());

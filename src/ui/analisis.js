@@ -73,7 +73,7 @@ export function crearVistasAnalisis(st, hoy, V) {
     if (!c) return "";
     const pos = (x) => Math.min(100, x);
     if (!c.ingreso) return crd(lbl("Tu sueldo ya tiene dueño") + `<div class="row f"><span><i class="pt c-fij"></i>Fijos</span><span>${plata(c.fijos)}</span></div><div class="row"><span><i class="pt c-cuo"></i>Cuotas</span><span>${plata(c.cuotas)}</span></div>` +
-      `<div class="sub">Cargá lo que cobrás y te digo qué parte ya está comprometida.</div><div class="chips"><button class="pp" data-act="cargarIngreso" aria-pressed="true">Cargar lo que cobrás</button></div>`);
+      `<div class="sub">Cargá lo que cobrás y te digo qué parte ya está comprometida.</div><div class="chips"><button class="pp" data-act="abrir" data-v="plata" aria-pressed="true">Cargar lo que cobrás</button></div>`);
     const pf = (c.fijos / c.ingreso) * 100, pc = (c.cuotas / c.ingreso) * 100;
     return crd(lbl("Tu sueldo ya tiene dueño") + `<div class="grande-t">El ${pct(c.parte)} ya está comprometido</div>` +
       `<div class="tira" role="img" aria-label="Fijos ${Math.round(pf)}%, cuotas ${Math.round(pc)}%">${c.fijos ? `<i class="c-fij" style="width:${pos(pf)}%"></i>` : ""}${c.cuotas ? `<i class="c-cuo" style="width:${pos(pc)}%"></i>` : ""}${c.queda > 0 ? `<i class="libre" style="flex:1"></i>` : ""}</div>` +

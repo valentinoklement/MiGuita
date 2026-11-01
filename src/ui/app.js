@@ -41,10 +41,11 @@ import { hayHuella, registrarHuella } from "./huella.js";
 import { crearVistasPrimera, instalada, navegadorActual } from "./primera.js";
 import { crearVistasVoz } from "./voz.js";
 import { resumenParaIA } from "../logic/analisis.js";
+import { hayQuePreguntar } from "../logic/saldo.js";
 
 const PESTANAS = [["inicio", "Inicio"], ["grupos", "Grupos"], ["plan", "Mis cuentas"], ["mas", "Ajustes"]];
 const TAB_DE = { movimientos: "inicio", resumen: "inicio", racha: "inicio", tuMes: "inicio", personalizacion: "mas", categorias: "mas", editarCat: "mas", form: "plan",
-  grupo: "grupos", juntada: "grupos", historial: "grupos", gform: "grupos", compartir: "grupos", unido: "grupos", quien: "grupos", whatsapp: "grupos",
+  plata: "inicio", grupo: "grupos", juntada: "grupos", historial: "grupos", gform: "grupos", compartir: "grupos", unido: "grupos", quien: "grupos", whatsapp: "grupos",
   notif: "mas", seguridad: "mas", dolar: "mas", copias: "mas", dispositivos: "mas", comentario: "mas", privacidad: "mas", instalar: "mas", yaInstalada: "mas", tutorial: "mas", importar: "inicio", grabar: "inicio", revisar: "inicio" };
 const SIN_BARRA = ["tutorial", "yaInstalada", "grabar", "revisar"];
 const RUEDITA = '<svg viewBox="0 0 24 24" aria-hidden="true" style="stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><circle cx="12" cy="12" r="3.2"/><circle cx="12" cy="12" r="6.8"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M18.5 5.5l-1.7 1.7M7.2 16.8l-1.7 1.7"/></svg>';
@@ -344,8 +345,16 @@ function mostrarAviso(texto, deshacer) {
   timerAviso = setTimeout(() => { st.aviso = null; dibujar(); }, deshacer ? 6000 : 4500);
 }
 
+// Recién cargada tu plata, lo que se anota ese día puede ser de antes: se pregunta, para no restarlo dos veces.
+function preguntarSaldo(movs) {
+  const ids = movs.filter((m) => hayQuePreguntar(st.cfg.saldo, m, hoy)).map((m) => m.id);
+  if (ids.length && st.guiaPaso === null) st.dudaSaldo = { ids };
+}
+
 // Guarda un movimiento nuevo o editado, ofrece deshacer y festeja si la racha llegó a un premio.
 function anotar(mov, anterior) {
+  if (anterior?.previo) mov.previo = true;
+  if (!anterior) preguntarSaldo([mov]);
   const antes = infoRacha(st.movs, st.dias, hoy);
   guardarMov(mov);
   st.mes = mov.fecha.slice(0, 7);
@@ -1067,6 +1076,7 @@ function dibujar() {
     comentario: VA.comentario,
     privacidad: VA.privacidad,
     personalizacion: V.personalizacion,
+    plata: V.cargarPlata,
     instalar: VI.instalar,
     yaInstalada: VI.yaInstalada,
     grabar: VV.grabar,
@@ -1236,6 +1246,7 @@ function anotarVarios() {
     return mov;
   });
   movs.forEach(guardarMov);
+  preguntarSaldo(movs);
   st.mes = hoy.slice(0, 7);
   st.varios = null;
   const soloGastos = movs.every((m) => m.tipo === "gasto");
@@ -1683,6 +1694,25 @@ raiz.addEventListener("click", (e) => {
       if (m && v) { guardarMov({ ...m, categoria: v, mod: Date.now() }); aprender(st.dudaCat.detalle, v); mostrarAviso("Listo. La próxima vez ya lo sé."); }
       st.dudaCat = null; break;
     }
+    case "plataGuardar": {
+      const c = leerMonto(st.plataTexto || "");
+      if (c === null || c < 0) { st.plataError = "Escribilo con números, por ejemplo 30.000."; break; }
+      ponerConfig("saldo", { monto: c, ts: Date.now(), fecha: hoy });
+      st.plataTexto = ""; st.plataError = ""; st.dudaSaldo = null;
+      mostrarAviso("Listo. Tu plata: " + V.plata(c));
+      return volver();
+    }
+    case "plataSueldo": {
+      const f = st.fijos.find((x) => x.tipo === "ingreso" && x.categoria === "sueldo") || st.fijos.find((x) => x.tipo === "ingreso");
+      abrirForm("fijo", f?.id);
+      if (!f) Object.assign(st.form.vals, { tipo: "ingreso", nombre: "Sueldo", categoria: "sueldo", medio: "" });
+      st.form.desdePlata = true;
+      break;
+    }
+    case "saldoYa":
+      for (const id of st.dudaSaldo.ids) { const m = st.movs.find((x) => x.id === id); if (m) guardarMov({ ...m, previo: true, mod: Date.now() }); }
+      st.dudaSaldo = null; mostrarAviso("Listo, no te lo resto."); break;
+    case "saldoNo": ponerConfig("saldo", { ...st.cfg.saldo, listo: true }); st.dudaSaldo = null; break;
     case "cargarIngreso": return abrirHoja({ tipo: "ingreso", categoria: "sueldo", medio: "transferencia", detalle: "" });
     case "cerrarCartel": ponerConfig(v, true); break;
     case "tengoCopia":
@@ -1853,6 +1883,7 @@ raiz.addEventListener("input", (e) => {
   if (act === "detalle") st.hoja.detalle = val;
   else if (act === "buscar") { st.filtro.texto = val; dibujar(); }
   else if (act === "nombre") st.cfg.nombre = val;
+  else if (act === "plataMonto") { st.plataTexto = val; st.plataError = ""; }
   else if (act === "varioCampo") { st.varios.editando[e.target.dataset.k] = val; st.varios.editando.error = ""; }
   else if (act === "catNombre") itemCat().nombre = val;
   else if (act === "gcampo") { st.gform.vals[e.target.dataset.k] = val; st.gform.error = ""; dibujar(); }

@@ -10,7 +10,7 @@ import { fusionar } from "./grupos.js";
 import { derivar, cerrarObjeto, abrirObjeto, pedir, nuevoCodigo } from "./sincro.js";
 
 // Lo de la configuración que es de la persona (no de cada aparato: tema, PIN, avisos y demás quedan en cada uno).
-export const CONFIG_COMPARTIDA = ["nombre", "alias", "categorias", "medios", "dolar", "aprendidas"];
+export const CONFIG_COMPARTIDA = ["nombre", "alias", "categorias", "medios", "dolar", "aprendidas", "saldo"];
 const SAL = "MiGuita-mis-dispositivos-v1";
 const MAX_DESCOMPRIMIDO = 20_000_000;
 

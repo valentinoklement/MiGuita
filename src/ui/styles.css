@@ -431,3 +431,10 @@ em.nuevo{font-style:normal;font-size:10px;font-weight:800;text-transform:upperca
 .prog small{font-size:12px;font-weight:600;opacity:.85}
 .vista-ia{background:var(--raised);border-radius:12px;padding:10px;font:600 13px/1.4 "Manrope",sans-serif;white-space:pre-wrap;max-height:32vh;overflow-y:auto}
 .pos-v{color:var(--posscr)}
+
+/* ---------- tu plata ---------- */
+.plata-fila{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.plata-fila.sola{justify-content:flex-end}
+.plata-fila small{display:block;font-size:12px;font-weight:600;opacity:.85}
+.plata-fila b{font:800 20px "Bricolage Grotesque",sans-serif;font-variant-numeric:tabular-nums}
+.neg-v{color:var(--negscr)}

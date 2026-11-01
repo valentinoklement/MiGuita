@@ -169,7 +169,7 @@ export function crearVistasPlan(st, hoy, V) {
     fijo() {
       const v = st.form.vals, ing = v.tipo === "ingreso";
       const cats = (ing ? st.cfg.categorias.ingreso : catsGasto(v.categoria)).filter((c) => !c.oculta || c.id === v.categoria);
-      return back("Mis cuentas") + hdr("Fijos", st.form.id ? "Editar fijo" : "Nuevo fijo") +
+      return back(st.form.desdePlata ? "Cargar plata" : "Mis cuentas") + hdr("Fijos", st.form.id ? "Editar fijo" : "Nuevo fijo") +
         lbl("¿Qué es?") + opcion("tipo", [["gasto", "Un gasto"], ["ingreso", "Un ingreso"]], "Tipo") +
         campo("nombre", "Nombre", { ph: ing ? "por ejemplo: sueldo" : "por ejemplo: alquiler", max: 40 }) +
         lbl("Moneda") + opcion("moneda", [["ARS", "Pesos"], ["USD", "Dólares"]], "Moneda") +

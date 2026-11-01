@@ -1,5 +1,6 @@
 // Pantallas de MiGuita. Cada función devuelve HTML; los textos de la persona pasan siempre por esc().
 import { AYUDAS } from "./ayuda.js";
+import { tuPlata } from "../logic/saldo.js";
 import { puedeGrabar } from "./voz.js";
 import { Art } from "../art/art.js";
 import { formatear, evaluar } from "../logic/dinero.js";
@@ -103,11 +104,16 @@ export function crearVistas(st, hoy) {
       h += crd(`<b class="pregunta">¿En qué categoría va «${esc(st.dudaCat.detalle)}»?</b><div class="sub">La anoté en Otros. Si me decís, la próxima vez ya lo sé.</div><div class="chips">` +
         lista.map((c) => `<button class="pp" data-act="dudaCatSel" data-v="${esc(c.id)}">${esc(c.nombre)}</button>`).join("") + `<button class="pp" data-act="dudaCatSel" data-v="">Dejar en Otros</button></div>`, "aviso");
     }
+    if (st.dudaSaldo) {
+      const n = st.dudaSaldo.ids.length;
+      h += crd(`<b class="pregunta">¿${n > 1 ? "Estos ya estaban descontados" : "Esto ya estaba descontado"} de los ${plata(st.cfg.saldo.monto)} que cargaste?</b><div class="sub">Si lo pagaste antes de cargar tu plata, no te lo resto de nuevo.</div>` +
+        `<div class="chips"><button class="pp" data-act="saldoYa" aria-pressed="true">Sí, ya estaba</button><button class="pp" data-act="saldoNo">No, restalo</button></div>`, "aviso");
+    }
     // Un solo cartel de bienvenida por vez, para no llenar la pantalla. Lo que cobrás y tu nombre se piden acá, sin obligar.
     const reales = st.movs.filter((m) => !m.id.startsWith("ej_")).length;
     if (guiando) { /* mientras dura la guía, nada más */ }
     else if (actual && sinIngreso && reales && !st.cfg.ingresoVisto)
-      h += crd(`<b class="pregunta">¿Querés saber cuánto te queda este mes?</b><div class="sub">Cargá lo que cobrás y te lo digo. Es opcional.</div><div class="chips"><button class="pp" data-act="cargarIngreso" aria-pressed="true">Cargar</button><button class="pp" data-act="cerrarCartel" data-v="ingresoVisto">Ahora no</button></div>`, "aviso");
+      h += crd(`<b class="pregunta">¿Querés saber cuánto te queda este mes?</b><div class="sub">Cargá lo que cobrás y te lo digo. Es opcional.</div><div class="chips"><button class="pp" data-act="abrir" data-v="plata" aria-pressed="true">Cargar</button><button class="pp" data-act="cerrarCartel" data-v="ingresoVisto">Ahora no</button></div>`, "aviso");
     else if (EN_PRUEBA && !st.cfg.pruebaVisto)
       h += crd(`<b class="pregunta">Estás probando MiGuita antes que nadie</b><div class="sub">La estamos probando en un grupo chico de amigos. Si algo anda mal o se te ocurre una idea, mandala: a fin de mes, el aporte más útil se lleva una birra.</div>` +
         `<div class="chips"><button class="pp" data-act="abrirComentario" aria-pressed="true">Mandar un comentario</button><button class="pp" data-act="cerrarCartel" data-v="pruebaVisto">Después</button></div>`, "aviso");
@@ -148,7 +154,10 @@ export function crearVistas(st, hoy) {
       `<span class="sub">${sinIngreso ? "Tocá para ver en qué se fue" : actual ? "Podés gastar " + plata(r.porDia) + " por día" : "Gastaste " + plata(r.gastos)}</span></span></button>`;
 
     const conMic = !guiando && puedeGrabar();
-    h += (sinIngreso && actual && !guiando && (st.cfg.ingresoVisto || !reales) ? `<div class="chips"><button class="pp" data-act="cargarIngreso">+ Cargar lo que cobrás</button></div>` : "") + `<form class="quick" data-form="rapido"><div class="pp${st.error ? " err" : ""}"><input id="rapido" placeholder="15mil nafta" aria-label="Anotar un gasto" autocomplete="off" enterkeyhint="done" maxlength="300"></div>` +
+    const miPlata = tuPlata(st.cfg.saldo, st.movs);
+    h += (guiando ? "" : miPlata !== null ?
+      `<div class="plata-fila"><span><small>Tu plata ahora</small><b${miPlata < 0 ? ' class="neg-v"' : ""}>${plata(miPlata)}</b></span><button class="btnmini" data-act="abrir" data-v="plata">Cargar plata</button></div>` :
+      `<div class="plata-fila sola"><button class="btnmini" data-act="abrir" data-v="plata">+ Cargar plata</button></div>`) + `<form class="quick" data-form="rapido"><div class="pp${st.error ? " err" : ""}"><input id="rapido" placeholder="15mil nafta" aria-label="Anotar un gasto" autocomplete="off" enterkeyhint="done" maxlength="300"></div>` +
       (conMic ? `<button class="btn pp mic" type="button" data-act="hablar" aria-label="Hablar: decí tus gastos con la voz">${Art.icono(MIC)}</button>` : "") +
       `<button class="btn pp anotar" type="submit">Anotar</button></form>` +
       (conMic && !st.cfg.vozAviso ? `<div class="nuevo-mic">Nuevo: tocá el micrófono y decí lo que gastaste o te entró</div>` : "") +
@@ -309,6 +318,21 @@ export function crearVistas(st, hoy) {
         (EN_PRUEBA ? accion("abrirComentario", "Mandar un comentario", "Una idea o algo que anda mal", '<path d="M4 5h16v11H9l-5 4z"/>') : ""));
   }
 
+  /* ---------- Cargar plata ---------- */
+  function cargarPlata() {
+    const s = st.cfg.saldo, ahora = tuPlata(s, st.movs);
+    const sueldo = st.fijos.find((f) => f.tipo === "ingreso" && f.categoria === "sueldo") || st.fijos.find((f) => f.tipo === "ingreso");
+    const opcion = (act, t, sub) => `<button class="srow rowb" data-act="${act}" style="width:100%;text-align:left"><span class="rt"><b>${t}</b><small>${sub}</small></span><span class="chev" aria-hidden="true">›</span></button>`;
+    return back("Inicio") + hdr("Tu plata", "Cargar plata", "", "plata") +
+      crd(lbl("Lo que tengo ahora") + (s ? `<div class="row f"><span>Tu plata ahora</span><span>${plata(ahora)}</span></div>` : "") +
+        `<div class="sub">${s ? "¿No coincide? Poné lo que tenés de verdad y arranca de nuevo desde ahí." : "Sumá lo que tenés en Mercado Pago, en el banco y en efectivo. No cuenta como ingreso."}</div>` +
+        `<div class="quick"><div class="pp${st.plataError ? " err" : ""}"><input class="field" data-act="plataMonto" value="${esc(st.plataTexto || "")}" placeholder="por ejemplo 30.000" inputmode="decimal" aria-label="Lo que tengo ahora" maxlength="16"></div><button class="btn pp anotar" data-act="plataGuardar">${s ? "Actualizar" : "Guardar"}</button></div>` +
+        (st.plataError ? `<div class="msg" role="alert">${esc(st.plataError)}</div>` : "")) +
+      crd(lbl("Lo que cobrás") +
+        opcion("plataSueldo", sueldo ? "Mi sueldo: " + esc(sueldo.nombre) : "Mi sueldo", sueldo ? plata(sueldo.monto, sueldo.moneda === "USD" ? { moneda: "US$ " } : {}) + " · día " + sueldo.dia + (sueldo.activo ? "" : " · pausado") : "Cuánto cobrás y qué día. Se anota solo todos los meses.").replace("srow rowb", "srow f rowb") +
+        opcion("cargarIngreso", "Cobré algo, una sola vez", "Una changa, un regalo, lo que te transfirieron."));
+  }
+
   /* ---------- Personalización ---------- */
   function personalizacion() {
     return back("Ajustes") + hdr("Ajustes", "Personalización") +
@@ -394,7 +418,7 @@ export function crearVistas(st, hoy) {
       `</div></div>`;
   }
 
-  return { inicio, movimientos, resumen, racha, festejo, mas, personalizacion, hayEjemplo, categorias, editarCat, hoja, nombreCat, nombreMedio, nombreDia, mesTexto, plata, motivosApretado, estadoDelMes,
+  return { inicio, movimientos, resumen, racha, festejo, mas, cargarPlata, personalizacion, hayEjemplo, categorias, editarCat, hoja, nombreCat, nombreMedio, nombreDia, mesTexto, plata, motivosApretado, estadoDelMes,
     guia, ayuda, ayudaHoja,
     ayudas: { back, hdr, lbl, crd, chips, interruptor, preg } };
 }
