@@ -5,6 +5,9 @@
 // - La racha cuenta hacia atrás desde hoy; si hoy todavía no se anotó, desde ayer (todavía se puede salvar).
 // - Salvavidas: si ayer quedó sin anotar, antes de ayer había una racha de 2 días o más,
 //   la persona está "apretada" y no se regaló otro en los últimos 30 días, ayer se cubre solo.
+// - Salvavidas de regalo: quienes prueban la app reciben uno, la primera vez que se les corta una racha de 2 días o más.
+//   Tapa todos los días que faltaron, hasta una semana, y no le quita lugar al salvavidas de cada 30 días.
+// - Lo que se anota solo (cuotas y gastos fijos) no cuenta: no es que anotaste vos.
 // - Apretada = gastó el 90% o más de lo cobrado en el mes, o pasó o está llegando (80%) al tope
 //   de un presupuesto, o debe más de lo que cobra en el mes.
 import { sumarDias, delMes } from "./mes.js";
@@ -19,7 +22,7 @@ function diferencia(a, b) {
 
 export function diasAnotados(movs, dias, extra = []) {
   const s = new Set();
-  movs.forEach((x) => x.fecha && !x.cuota && s.add(x.fecha)); // una cuota se anota sola: no es que anotaste vos
+  movs.forEach((x) => x.fecha && !x.cuota && !x.fijo && s.add(x.fecha));
   dias.forEach((x) => x.fecha && s.add(x.fecha));
   extra.forEach((f) => s.add(f));
   return s;
@@ -68,9 +71,25 @@ export function salvavidasPara(movs, dias, hoy, motivos) {
   let antes = 0, d = sumarDias(hoy, -2);
   while (set.has(d)) { antes++; d = sumarDias(d, -1); }
   if (antes < 2) return null;
-  const ultimo = dias.filter((x) => x.salvavidas).map((x) => x.fecha).sort().pop();
+  const ultimo = dias.filter((x) => x.salvavidas && !x.regalo).map((x) => x.fecha).sort().pop();
   if (ultimo && diferencia(ultimo, hoy) < 30) return null;
   return motivos.length ? ayer : null;
+}
+
+// Devuelve los días que tapa el salvavidas de regalo, o null si ya se usó o no hace falta.
+export function regaloPara(movs, dias, hoy, tope = 7) {
+  if (dias.some((x) => x.regalo)) return null;
+  const set = diasAnotados(movs, dias), faltan = [];
+  let d = sumarDias(hoy, -1);
+  while (!set.has(d)) {
+    faltan.push(d);
+    if (faltan.length > tope) return null;
+    d = sumarDias(d, -1);
+  }
+  if (!faltan.length) return null;
+  let antes = 0;
+  while (set.has(d)) { antes++; d = sumarDias(d, -1); }
+  return antes >= 2 ? faltan : null;
 }
 
 // Festejo: si con lo anotado hoy la racha llega justo a un número de festejo.

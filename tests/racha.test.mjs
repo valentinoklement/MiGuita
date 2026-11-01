@@ -1,7 +1,7 @@
 // Racha, salvavidas y festejos (reglas portadas de la app anterior).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { infoRacha, apretado, salvavidasPara, festejoDeHoy } from "../src/logic/racha.js";
+import { infoRacha, apretado, salvavidasPara, regaloPara, festejoDeHoy } from "../src/logic/racha.js";
 import { sumarDias } from "../src/logic/mes.js";
 
 const HOY = "2026-10-31";
@@ -70,4 +70,27 @@ test("festejos en 7, 14, 21, 30, 60, 100, 200 y 365", () => {
   assert.equal(festejoDeHoy({ hoyHecho: false, actual: 7 }), null);
   assert.equal(festejoDeHoy({ hoyHecho: true, actual: 365 }), 365);
   assert.equal(festejoDeHoy({ hoyHecho: true, actual: 3 }), null, "el 3 de la app anterior ya no festeja");
+});
+
+test("un gasto fijo que se anota solo no suma racha", () => {
+  assert.equal(infoRacha([{ id: "fx_f_2026-11", fecha: HOY, fijo: "f" }], [], HOY).hoyHecho, false);
+  assert.equal(infoRacha([{ id: "fx_f_2026-11", fecha: HOY, fijo: "f" }], [{ fecha: HOY, anoto: true }], HOY).hoyHecho, true);
+});
+
+test("el salvavidas de regalo tapa lo que faltó, una sola vez", () => {
+  const dia = (n) => sumarDias(HOY, -n);
+  assert.deepEqual(regaloPara(atras(2, 3), [], HOY), [dia(1)]);
+  assert.deepEqual(regaloPara(atras(4, 5), [], HOY), [dia(1), dia(2), dia(3)]);
+  assert.equal(regaloPara(atras(0, 1, 2), [], HOY), null); // no se cortó
+  assert.equal(regaloPara(atras(2), [], HOY), null); // un solo día no es una racha
+  assert.equal(regaloPara(atras(9, 10), [], HOY), null); // más de una semana sin venir
+  assert.equal(regaloPara(atras(2, 3), [{ fecha: dia(40), regalo: true }], HOY), null); // ya se usó
+  assert.equal(regaloPara([], [], HOY), null);
+  const tapado = regaloPara(atras(2, 3), [], HOY).map((fecha) => ({ fecha, salvavidas: true, regalo: true }));
+  assert.equal(infoRacha(atras(2, 3), tapado, HOY).actual, 3);
+});
+
+test("el regalo no le quita lugar al salvavidas de cada 30 días", () => {
+  const dias = [{ fecha: sumarDias(HOY, -10), salvavidas: true, regalo: true }];
+  assert.equal(salvavidasPara(atras(2, 3), dias, HOY, ["motivo"]), sumarDias(HOY, -1));
 });

@@ -10,5 +10,12 @@ export function tuPlata(saldo, movs) {
   return movs.filter((m) => cuenta(saldo, m)).reduce((a, m) => a + (m.tipo === "ingreso" ? m.monto : -m.monto), saldo.monto);
 }
 
+// Cuánto queda de todo lo que tuviste desde que cargaste el número (de 0 a 1): es lo que se ve en el pan.
+export function parteDePlata(saldo, movs) {
+  if (!saldo) return 0;
+  const entro = movs.filter((m) => cuenta(saldo, m) && m.tipo === "ingreso").reduce((a, m) => a + m.monto, saldo.monto);
+  return entro > 0 ? Math.min(1, Math.max(0, tuPlata(saldo, movs) / entro)) : 0;
+}
+
 // Recién cargado el número, lo que se anota ese mismo día puede ser anterior: se pregunta hasta que digan que no.
 export const hayQuePreguntar = (saldo, mov, hoy) => !!saldo && !saldo.listo && saldo.fecha === hoy && mov.fecha === hoy;

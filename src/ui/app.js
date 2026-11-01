@@ -6,7 +6,8 @@ import { pasarATexto, formatoDeAudio, MAX_SEGUNDOS } from "../logic/voz.js";
 import { DIRECCION } from "../logic/instalar.js";
 import { RESPALDO, ponerBilletera } from "../logic/categorias.js";
 import { fechaLocal, cambiarMes } from "../logic/mes.js";
-import { infoRacha, salvavidasPara, festejoDeHoy } from "../logic/racha.js";
+import { infoRacha, salvavidasPara, regaloPara, festejoDeHoy } from "../logic/racha.js";
+import { EN_PRUEBA } from "../logic/buzon.js";
 import { correrFijos, mesDeInicio, infoMeta, restante, movimientoDeFijo } from "../logic/plan.js";
 import { correrCuotas, movsDeCompra, MAX_CUOTAS, primeraCuota } from "../logic/cuotas.js";
 import { mandarComentario } from "../logic/buzon.js";
@@ -356,6 +357,8 @@ function anotar(mov, anterior) {
   if (anterior?.previo) mov.previo = true;
   if (!anterior) preguntarSaldo([mov]);
   const antes = infoRacha(st.movs, st.dias, hoy);
+  // Un fijo que la persona anota o corrige sí cuenta para la racha (el que se anota solo, no).
+  if (mov.fijo && !st.dias.some((d) => d.fecha === mov.fecha)) ponerDia({ fecha: mov.fecha, anoto: true });
   guardarMov(mov);
   st.mes = mov.fecha.slice(0, 7);
   const texto = (anterior ? "Cambiado: " : "Anotado: ") + (mov.detalle || V.nombreCat(mov.categoria)) + " " + V.plata(mov.monto);
@@ -387,9 +390,15 @@ function revisarFestejo(antes) {
 function revisarSalvavidas() {
   const motivos = V.motivosApretado();
   const f = salvavidasPara(st.movs, st.dias, hoy, motivos);
-  if (!f) return;
-  ponerDia({ fecha: f, salvavidas: true });
-  mostrarAviso("Te regalamos un salvavidas: ayer cuenta para tu racha. Motivo: " + motivos[0] + ".");
+  if (f) {
+    ponerDia({ fecha: f, salvavidas: true });
+    mostrarAviso("Te regalamos un salvavidas: ayer cuenta para tu racha. Motivo: " + motivos[0] + ".");
+    return;
+  }
+  const regalo = EN_PRUEBA && regaloPara(st.movs.filter((m) => !m.id.startsWith("ej_")), st.dias, hoy);
+  if (!regalo) return;
+  regalo.forEach((fecha) => ponerDia({ fecha, salvavidas: true, regalo: true }));
+  st.regaloRacha = true;
 }
 
 // Anota los gastos fijos que ya llegaron a su día.
@@ -1300,6 +1309,7 @@ raiz.addEventListener("click", (e) => {
     case "deshacer": st.aviso?.deshacer?.(); st.aviso = null; clearTimeout(timerAviso); break;
     case "nuevo": return abrirHoja();
     case "luego": st.avisoLuego = Date.now() + 3600e3; break;
+    case "regaloListo": st.regaloRacha = false; break;
     case "noGaste": {
       const antes = infoRacha(st.movs, st.dias, hoy);
       ponerDia({ fecha: hoy, sinGasto: true });
@@ -1760,6 +1770,7 @@ raiz.addEventListener("click", (e) => {
       if (act === "confirmarFijo") {
         const mov = movimientoDeFijo(f, mes, cotizar);
         if (!mov) { mostrarAviso("Falta el valor del dólar para anotarlo. Cargalo en Ajustes › Dólar."); break; }
+        if (!st.dias.some((d) => d.fecha === mov.fecha)) ponerDia({ fecha: mov.fecha, anoto: true });
         if (!st.movs.some((x) => x.id === mov.id)) guardarMov(mov);
         mostrarAviso((f.tipo === "ingreso" ? "Anotado: cobraste " : "Anotado: pagaste ") + f.nombre + " " + V.plata(mov.monto), () => { quitarMov(mov.id); ponerItem("fijos", f); });
       } else mostrarAviso("Listo, este mes no se anota " + f.nombre + ".", () => ponerItem("fijos", f));

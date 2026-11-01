@@ -6,7 +6,7 @@ export function datosDelMes(movs, dias, mes) {
   const del = delMes(movs, mes);
   const gastos = del.filter((x) => x.tipo !== "ingreso").reduce((a, x) => a + x.monto, 0);
   const ingresos = del.filter((x) => x.tipo === "ingreso").reduce((a, x) => a + x.monto, 0);
-  const anotados = new Set([...del.filter((x) => !x.cuota).map((x) => x.fecha), ...dias.filter((d) => d.fecha.slice(0, 7) === mes).map((d) => d.fecha)]);
+  const anotados = new Set([...del.filter((x) => !x.cuota && !x.fijo).map((x) => x.fecha), ...dias.filter((d) => d.fecha.slice(0, 7) === mes).map((d) => d.fecha)]);
   let mejor = 0, seguidos = 0;
   for (let d = 1; d <= diasDelMes(mes); d++) {
     seguidos = anotados.has(mes + "-" + String(d).padStart(2, "0")) ? seguidos + 1 : 0;

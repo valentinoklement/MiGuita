@@ -1,6 +1,6 @@
 // Pantallas de MiGuita. Cada función devuelve HTML; los textos de la persona pasan siempre por esc().
 import { AYUDAS } from "./ayuda.js";
-import { tuPlata } from "../logic/saldo.js";
+import { parteDePlata, tuPlata } from "../logic/saldo.js";
 import { puedeGrabar } from "./voz.js";
 import { Art } from "../art/art.js";
 import { formatear, evaluar } from "../logic/dinero.js";
@@ -91,6 +91,8 @@ export function crearVistas(st, hoy) {
       `<span class="msg">${peor.nivel === "pasado" ? "Te pasaste del tope de " : "Estás llegando al tope de "}${esc(nombreCat(peor.categoria))}.</span>` +
       `<span class="sub">Gastaste ${plata(peor.gastado)} de ${plata(peor.tope)}.</span></button>`;
 
+    if (st.regaloRacha) h += crd(`<div class="crow">${Art.salvavidas}<div class="cr"><b class="pregunta">¡Te salvamos la racha!</b><div class="sub">Por ser de los primeros en probar MiGuita, te regalamos un salvavidas: tus ${ra.actual} días siguen en pie. Es uno solo, así que cuidala.</div></div></div>` +
+      `<div class="chips"><button class="pp" data-act="regaloListo" aria-pressed="true">¡Gracias!</button></div>`, "aviso");
     if (!st.persistente) h += crd(`<div class="msg" role="alert">Este navegador no deja guardar: lo que anotes se pierde al cerrar.</div>`);
     // Dudas de lo que se acaba de escribir.
     if (st.dudaMonto) {
@@ -112,7 +114,7 @@ export function crearVistas(st, hoy) {
     // Un solo cartel de bienvenida por vez, para no llenar la pantalla. Lo que cobrás y tu nombre se piden acá, sin obligar.
     const reales = st.movs.filter((m) => !m.id.startsWith("ej_")).length;
     if (guiando) { /* mientras dura la guía, nada más */ }
-    else if (actual && sinIngreso && reales && !st.cfg.ingresoVisto)
+    else if (actual && sinIngreso && reales && !st.cfg.ingresoVisto && !st.cfg.saldo)
       h += crd(`<b class="pregunta">¿Querés saber cuánto te queda este mes?</b><div class="sub">Cargá lo que cobrás y te lo digo. Es opcional.</div><div class="chips"><button class="pp" data-act="abrir" data-v="plata" aria-pressed="true">Cargar</button><button class="pp" data-act="cerrarCartel" data-v="ingresoVisto">Ahora no</button></div>`, "aviso");
     else if (EN_PRUEBA && !st.cfg.pruebaVisto)
       h += crd(`<b class="pregunta">Estás probando MiGuita antes que nadie</b><div class="sub">La estamos probando en un grupo chico de amigos. Si algo anda mal o se te ocurre una idea, mandala: a fin de mes, el aporte más útil se lleva una birra.</div>` +
@@ -120,7 +122,7 @@ export function crearVistas(st, hoy) {
     else if (!(matchMedia("(display-mode: standalone)").matches || navigator.standalone) && !st.cfg.instalarVisto && st.movs.length)
       h += crd(`<b class="pregunta">Tenela a mano en tu celu</b><div class="sub">Instalala y se abre desde un ícono, como cualquier app.</div><div class="chips"><button class="pp" data-act="abrir" data-v="instalar" aria-pressed="true">Ver cómo</button><button class="pp" data-act="cerrarCartel" data-v="instalarVisto">Ahora no</button></div>`, "aviso");
 
-    if (!guiando && reales >= 3 && !nombre && !st.cfg.nombreVisto && !(actual && sinIngreso && !st.cfg.ingresoVisto))
+    if (!guiando && reales >= 3 && !nombre && !st.cfg.nombreVisto && !(actual && sinIngreso && !st.cfg.ingresoVisto && !st.cfg.saldo))
       h += crd(`<b class="pregunta">¿Cómo te llamás?</b><div class="sub">Es para saludarte. Es opcional.</div><div class="quick"><div class="pp"><input class="field" data-act="nombre" value="" placeholder="Tu nombre" aria-label="Tu nombre" maxlength="30" autocomplete="given-name"></div></div><div class="chips"><button class="pp" data-act="cerrarCartel" data-v="nombreVisto" aria-pressed="true">Listo</button></div>`, "aviso");
 
     const cerrado = actual && mesParaMostrar(st.movs, hoy, st.cfg.mesVisto || "");
@@ -148,14 +150,16 @@ export function crearVistas(st, hoy) {
       h += crd(`<div class="sub"><b>Tus datos están solo en este celu.</b> Si lo perdés o se borra la app, se pierden. Una copia los salva.</div>` +
         `<div class="chips"><button class="pp" data-act="abrir" data-v="copias" aria-pressed="true">Hacer una copia</button><button class="pp" data-act="posponerCopia">Ahora no</button></div>`, "aviso");
 
-    // Sin ingresos cargados no tiene sentido decir "te queda menos tanto".
-    h += `<button class="card pp hr tecard" data-act="abrir" data-v="resumen" aria-label="Ver el resumen del mes">${Art.pan(r.queda)}<span class="ht"><span class="sub">${sinIngreso ? "Gastaste" : "Te queda"}</span>` +
-      `<span class="big std">${plata(sinIngreso ? r.gastos : r.teQueda)}</span>` +
-      `<span class="sub">${sinIngreso ? "Tocá para ver en qué se fue" : actual ? "Podés gastar " + plata(r.porDia) + " por día" : "Gastaste " + plata(r.gastos)}</span></span></button>`;
+    // Sin ingresos cargados no tiene sentido decir "te queda menos tanto": si cargó su plata se muestra esa, y si no, lo gastado.
+    const miPlata = tuPlata(st.cfg.saldo, st.movs);
+    const conPlata = actual && sinIngreso && miPlata !== null && !guiando;
+    h += `<button class="card pp hr tecard" data-act="abrir" data-v="resumen" aria-label="Ver el resumen del mes">${Art.pan(conPlata ? parteDePlata(st.cfg.saldo, st.movs) : r.queda)}<span class="ht"><span class="sub">${conPlata ? (miPlata < 0 ? "Te pasaste por" : "Tenés") : sinIngreso ? "Gastaste" : "Te queda"}</span>` +
+      `<span class="big std">${plata(conPlata ? Math.abs(miPlata) : sinIngreso ? r.gastos : r.teQueda)}</span>` +
+      `<span class="sub">${conPlata ? (r.gastos ? "Gastaste " + plata(r.gastos) + " este mes" : "Este mes todavía no gastaste") : sinIngreso ? "Tocá para ver en qué se fue" : actual ? "Podés gastar " + plata(r.porDia) + " por día" : "Gastaste " + plata(r.gastos)}</span></span></button>`;
 
     const conMic = !guiando && puedeGrabar();
-    const miPlata = tuPlata(st.cfg.saldo, st.movs);
-    h += (guiando ? "" : miPlata !== null ?
+    h += (guiando ? "" : conPlata ?
+      `<div class="plata-fila sola"><button class="btnmini" data-act="abrir" data-v="plata">Cargar plata</button></div>` : miPlata !== null ?
       `<div class="plata-fila"><span><small>Tu plata ahora</small><b${miPlata < 0 ? ' class="neg-v"' : ""}>${plata(miPlata)}</b></span><button class="btnmini" data-act="abrir" data-v="plata">Cargar plata</button></div>` :
       `<div class="plata-fila sola"><button class="btnmini" data-act="abrir" data-v="plata">+ Cargar plata</button></div>`) + `<form class="quick" data-form="rapido"><div class="pp${st.error ? " err" : ""}"><input id="rapido" placeholder="15mil nafta" aria-label="Anotar un gasto" autocomplete="off" enterkeyhint="done" maxlength="300"></div>` +
       (conMic ? `<button class="btn pp mic" type="button" data-act="hablar" aria-label="Hablar: decí tus gastos con la voz">${Art.icono(MIC)}</button>` : "") +
@@ -271,7 +275,7 @@ export function crearVistas(st, hoy) {
       (ra.proximo ? crd(lbl("Próximo premio") + `<div class="crow">${iProx >= 0 ? Art.premio(iProx).replace("<svg", '<svg class="st"') : ""}<div class="cr"><div class="row f" style="padding:0 0 3px;min-height:0"><span>${PREMIO_TEXTO[ra.proximo].replace(/^(un|una) /, "").replace(/^./, (c) => c.toUpperCase())} · ${ra.proximo} días</span><span>faltan ${ra.proximo - ra.actual}</span></div>${Art.barra(ra.actual / ra.proximo)}</div></div>`) : "") +
       crd(lbl("Últimas 5 semanas") + `<div class="cal" role="img" aria-label="Calendario de días anotados">${cal}</div>` +
         `<div class="stats"><div><div class="sub">Mejor racha</div><b>${ra.mejor} ${ra.mejor === 1 ? "día" : "días"}</b></div><div><div class="sub">Días anotados</div><b>${ra.total}</b></div></div>`) +
-      crd(`<div class="crow">${Art.salvavidas}<div class="cr"><b style="font:800 15px 'Bricolage Grotesque',sans-serif">Salvavidas</b><div class="sub">Se regala solo si estás complicado con la plata, una vez cada 30 días, para no perder una racha de 2 días o más. ${motivos.length ? "Ahora estás en esa situación: " + esc(motivos.join(", ")) + "." : "Ahora no lo necesitás."}</div></div></div>`) +
+      crd(`<div class="crow">${Art.salvavidas}<div class="cr"><b style="font:800 15px 'Bricolage Grotesque',sans-serif">Salvavidas</b><div class="sub">Se regala solo si estás complicado con la plata, una vez cada 30 días, para no perder una racha de 2 días o más. ${EN_PRUEBA && !st.dias.some((d) => d.regalo) ? "Y por estar probando la app, la primera vez que se te corte la racha te regalamos uno. " : ""}${motivos.length ? "Ahora estás en esa situación: " + esc(motivos.join(", ")) + "." : "Ahora no lo necesitás."}</div></div></div>`) +
       (ra.hoyHecho ? "" : `<button class="btn pp w alt" data-act="noGaste">Hoy no gasté nada</button>`);
   }
 
