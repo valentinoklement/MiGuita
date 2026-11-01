@@ -252,3 +252,19 @@ img,svg{-webkit-user-drag:none}
 .tuto-dibujo>svg:not(.sl):not(.lf):not(.dg){width:120px;height:auto}
 .tuto b{font:800 28px/1.15 "Bricolage Grotesque",sans-serif}
 .tuto span{font-weight:600;opacity:.9;max-width:30ch;font-size:16px}
+.snack.nueva{position:static;transform:none;width:auto;max-width:none}
+/* Hoja de anotar: el monto arriba y el teclado con Guardar abajo quedan siempre a la vista. */
+.sheet .top{position:sticky;top:-10px;z-index:3;background:var(--screen);padding:8px 0 6px;margin-top:-8px}
+.sheet .pad{position:sticky;bottom:calc(-16px - env(safe-area-inset-bottom,0px));z-index:3;background:var(--screen);padding:10px 0 calc(16px + env(safe-area-inset-bottom,0px));margin-bottom:calc(-16px - env(safe-area-inset-bottom,0px))}
+.sheet .pad .key{min-height:44px;padding:4px 0}
+.pregunta{font:800 17px "Bricolage Grotesque",sans-serif}
+
+/* ---------- importar resumen de billeteras ---------- */
+.traer{display:flex;align-items:center;gap:10px;width:100%;text-align:left;font:600 14px "Manrope",sans-serif;padding:8px 4px;min-height:44px;opacity:.95}
+.traer b{font-weight:800;text-decoration:underline;text-decoration-color:var(--gold);text-underline-offset:3px}
+.traer svg,.billetera svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.billetera{display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:12px;background:var(--gold);color:#2A1608;flex:none;border:2px solid #2A1608}
+.subir{position:relative;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.subir input{position:absolute;inset:0;opacity:0;cursor:pointer;z-index:3}
+.tilde{display:inline-block;width:18px;font-weight:800;color:var(--pos)}
+.row[aria-pressed="false"]{opacity:.45}

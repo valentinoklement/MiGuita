@@ -121,3 +121,20 @@ test("plan de ejemplo: ids ej_ y nada se anota solo este mes", () => {
   for (const l of Object.values(p)) assert.ok(l.every((x) => x.id.startsWith("ej_")));
   assert.equal(correrFijos(p.fijos, [], "2026-10-31").nuevos.length, 0);
 });
+
+test("fijos de ingreso y fijos que preguntan antes de anotarse", async () => {
+  const { fijosPorConfirmar, movimientoDeFijo } = await import("../src/logic/plan.js");
+  const sueldo = fijo({ id: "s1", tipo: "ingreso", modo: "recordar", nombre: "Sueldo", categoria: "sueldo", dia: 1, monto: 62000000 });
+  assert.equal(correrFijos([sueldo], [], "2026-10-31").nuevos.length, 0, "el que pregunta no se anota solo");
+  assert.deepEqual(fijosPorConfirmar([sueldo], "2026-10-31").map((f) => f.id), ["s1"]);
+  assert.deepEqual(fijosPorConfirmar([{ ...sueldo, hechos: ["2026-10"] }], "2026-10-31"), [], "ya confirmado o descartado");
+  assert.deepEqual(fijosPorConfirmar([{ ...sueldo, dia: 31 }], "2026-10-30"), [], "todavía no llegó el día");
+  assert.deepEqual(fijosPorConfirmar([{ ...sueldo, activo: false }], "2026-10-31"), []);
+  assert.deepEqual(fijosPorConfirmar([{ ...sueldo, desde: "2026-11" }], "2026-10-31"), []);
+  const mov = movimientoDeFijo(sueldo, "2026-10");
+  assert.deepEqual([mov.id, mov.tipo, mov.fecha, mov.monto, mov.categoria], ["fx_s1_2026-10", "ingreso", "2026-10-01", 62000000, "sueldo"]);
+  const auto = correrFijos([{ ...sueldo, modo: "auto" }], [], "2026-10-31").nuevos;
+  assert.equal(auto[0].tipo, "ingreso", "un ingreso fijo automático se anota como ingreso");
+  const v4 = migrar({}); v4.schemaVersion = 4; v4.fijos = [{ id: "a", nombre: "Alquiler", dia: 5, monto: 1, activo: true }];
+  assert.deepEqual(migrar(v4).fijos.map((f) => [f.tipo, f.modo]), [["gasto", "auto"]], "los fijos viejos siguen siendo gastos automáticos");
+});

@@ -2,7 +2,9 @@
 //   presupuesto: { id, categoria, tope }
 //   meta:  { id, nombre, icono, moneda: "ARS"|"USD", objetivo, ahorrado, fecha?, ts }
 //   deuda: { id, tipo: "debo"|"meDeben", quien, concepto, total, pagado, vence?, ts }
-//   fijo:  { id, nombre, monto, categoria, medio, dia (1 a 31), activo, desde "AAAA-MM", hechos: ["AAAA-MM"] }
+//   fijo:  { id, tipo: "gasto"|"ingreso", modo: "auto"|"recordar", nombre, monto, categoria, medio, dia (1 a 31), activo,
+//            desde "AAAA-MM", hechos: ["AAAA-MM"] }
+//   modo "auto": se anota solo. modo "recordar": el día que toca, Inicio pregunta y la persona lo confirma.
 import { delMes, diasDelMes, cambiarMes } from "./mes.js";
 
 /* ---------- presupuestos ---------- */
@@ -71,7 +73,7 @@ export function correrFijos(fijos, movs, hoy) {
   const nuevos = [], cambiados = [];
   const mesHoy = hoy.slice(0, 7), limite = cambiarMes(mesHoy, -11);
   for (const f of fijos) {
-    if (!f.activo || !(f.monto > 0)) continue;
+    if (!f.activo || !(f.monto > 0) || f.modo === "recordar") continue;
     const hechos = new Set(f.hechos || []);
     let cambio = false;
     for (let m = f.desde > limite ? f.desde : limite; m <= mesHoy; m = cambiarMes(m, 1)) {
@@ -80,7 +82,7 @@ export function correrFijos(fijos, movs, hoy) {
       if (fecha > hoy) continue;
       const id = "fx_" + f.id + "_" + m;
       if (!ids.has(id)) {
-        nuevos.push({ id, tipo: "gasto", monto: f.monto, detalle: f.nombre, categoria: f.categoria, medio: f.medio || "", fecha, ts: Date.parse(fecha + "T12:00:00"), mod: Date.now(), fijo: f.id });
+        nuevos.push({ id, tipo: f.tipo || "gasto", monto: f.monto, detalle: f.nombre, categoria: f.categoria, medio: f.medio || "", fecha, ts: Date.parse(fecha + "T12:00:00"), mod: Date.now(), fijo: f.id });
         ids.add(id);
       }
       hechos.add(m);
@@ -89,4 +91,17 @@ export function correrFijos(fijos, movs, hoy) {
     if (cambio) cambiados.push({ ...f, hechos: [...hechos].sort().slice(-24) });
   }
   return { nuevos, cambiados };
+}
+
+// Fijos "recordar" de este mes que ya llegaron a su día y todavía no se confirmaron ni se descartaron.
+export function fijosPorConfirmar(fijos, hoy) {
+  const mes = hoy.slice(0, 7);
+  return fijos.filter((f) => f.activo && f.modo === "recordar" && f.monto > 0 && f.desde <= mes && !(f.hechos || []).includes(mes) &&
+    mes + "-" + String(Math.min(f.dia, diasDelMes(mes))).padStart(2, "0") <= hoy);
+}
+
+// El movimiento de un fijo para un mes (mismo id que si se anotara solo, así nunca se duplica).
+export function movimientoDeFijo(f, mes) {
+  const fecha = mes + "-" + String(Math.min(f.dia, diasDelMes(mes))).padStart(2, "0");
+  return { id: "fx_" + f.id + "_" + mes, tipo: f.tipo || "gasto", monto: f.monto, detalle: f.nombre, categoria: f.categoria, medio: f.medio || "", fecha, ts: Date.parse(fecha + "T12:00:00"), mod: Date.now(), fijo: f.id };
 }

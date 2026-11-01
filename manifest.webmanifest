@@ -29,5 +29,20 @@
       "purpose": "maskable"
     }
   ],
-  "id": "./"
+  "id": "./",
+  "shortcuts": [
+    {
+      "name": "Anotar un gasto",
+      "short_name": "Anotar",
+      "description": "Abre MiGuita lista para anotar",
+      "url": "./#anotar",
+      "icons": [
+        {
+          "src": "icons/icono-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ]
 }

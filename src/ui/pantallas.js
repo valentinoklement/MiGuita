@@ -4,8 +4,9 @@ import { formatear, evaluar } from "../logic/dinero.js";
 import { RESPALDO } from "../logic/categorias.js";
 import { sumarDias, delMes, referencia, resumenMes, gastosPor, gastosPorDia, estadoMiguita, porDiaAgrupado } from "../logic/mes.js";
 import { infoRacha, apretado, PREMIOS } from "../logic/racha.js";
-import { estadoPresupuestos, estadoConPresupuestos, resumenDeudas, restante } from "../logic/plan.js";
+import { estadoPresupuestos, estadoConPresupuestos, resumenDeudas, restante, fijosPorConfirmar } from "../logic/plan.js";
 import { valorPara, aPesos, nombreTipo } from "../logic/dolar.js";
+import { ICONO_BILLETERA } from "./importar.js";
 
 const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 const DIAS = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
@@ -86,6 +87,12 @@ export function crearVistas(st, hoy) {
       h += crd(`<b>¿Ya anotaste tus gastos de hoy?</b><div class="sub">Tu racha de ${ra.actual} ${ra.actual === 1 ? "día" : "días"} se corta si hoy no anotás nada.</div>` +
         `<div class="chips"><button class="pp" data-act="nuevo" aria-pressed="true">Anotar</button><button class="pp" data-act="noGaste">No gasté hoy</button><button class="pp" data-act="luego">Más tarde</button></div>`, "aviso");
 
+    // Fijos que preguntan antes de anotarse.
+    if (actual) for (const f of fijosPorConfirmar(st.fijos, hoy)) {
+      const ing = f.tipo === "ingreso";
+      h += crd(`<div class="sec">${ing ? "Ingreso fijo" : "Gasto fijo"} · día ${f.dia}</div><b class="pregunta">${ing ? "¿Ya cobraste " : "¿Ya pagaste "}${esc(f.nombre)}?</b><div class="sub">${plata(f.monto)}</div>` +
+        `<div class="chips"><button class="pp" data-act="confirmarFijo" data-v="${esc(f.id)}" aria-pressed="true">Sí, anotar</button><button class="pp" data-act="cambiarFijo" data-v="${esc(f.id)}">Otro monto</button><button class="pp" data-act="saltearFijo" data-v="${esc(f.id)}">Este mes no</button></div>`, "aviso");
+    }
     const c = st.cfg.copias;
     if (actual && c.auto && (!c.ultima || Date.now() - Date.parse(c.ultima) >= (c.cada === "mes" ? 30 : 7) * 864e5))
       h += crd(`<span>Toca hacer tu copia de seguridad</span><button class="btnmini" data-act="abrir" data-v="copias">Hacerla</button>`, "banner");
@@ -96,7 +103,8 @@ export function crearVistas(st, hoy) {
 
     h += `<form class="quick" data-form="rapido"><div class="pp${st.error ? " err" : ""}"><input id="rapido" placeholder="nafta 20000" aria-label="Anotar un gasto" autocomplete="off" enterkeyhint="done" maxlength="120"></div>` +
       `<button class="btn pp" type="submit">Anotar</button></form>` +
-      (st.error ? `<div class="msg" role="alert">${esc(st.error)}</div>` : "");
+      (st.error ? `<div class="msg" role="alert">${esc(st.error)}</div>` : "") +
+      `<button class="traer" data-act="abrir" data-v="importar"><span aria-hidden="true">${Art.icono(ICONO_BILLETERA)}</span><span>¿Usás Mercado Pago? <b>Traé tus gastos solos</b></span><span class="chev" aria-hidden="true">›</span></button>`;
 
     h += crd(`<div class="sec secrow"><span>Últimos movimientos</span>${movs.length ? `<button class="link" data-act="abrir" data-v="movimientos">Ver todos ›</button>` : ""}</div>` +
       (movs.length ? movs.slice(0, 5).map((x, i) => fila(x, i === 0, subInicio)).join("") :
@@ -191,7 +199,7 @@ export function crearVistas(st, hoy) {
         ir("dolar", "Dólar", nombreTipo(st.cfg.dolar.tipo) + (d ? " · " + formatear(d.valor) : " · sin valor") + (st.cfg.dolar.fuente === "manual" || st.cfg.dolar.tipo === "fijo" ? " · a mano" : " · se actualiza solo"), '<circle cx="12" cy="12" r="9"/><path d="M12 7v10M15 9.5c0-2-6-2-6 0s6 2 6 4.5-6 2.5-6 0"/>') +
         (matchMedia("(display-mode: standalone)").matches || navigator.standalone ? "" : ir("instalar", "Instalar MiGuita", "Para tenerla en la pantalla de inicio", '<rect x="6" y="2" width="12" height="20" rx="3"/><path d="M12 8v7m0 0l-3-3m3 3l3-3"/>')) +
         ir("tutorial", "Cómo usar MiGuita", "Todo lo que podés hacer, en un minuto", '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 0 1 5 .5c0 1.5-2.5 2-2.5 3.5M12 17h0"/>') +
-        ir("copias", "Copias de seguridad", cp.ultima ? "Última: " + new Date(cp.ultima).toLocaleDateString("es-AR") : "Todavía no hiciste ninguna", '<path d="M12 4v10m0 0l-4-4m4 4l4-4M5 19h14"/>')) +
+        ir("copias", "Copias y Excel", cp.ultima ? "Última: " + new Date(cp.ultima).toLocaleDateString("es-AR") : "Todavía no hiciste ninguna", '<path d="M12 4v10m0 0l-4-4m4 4l4-4M5 19h14"/>')) +
       crd(lbl("Tu nombre") + `<div class="quick"><div class="pp"><input class="field" data-act="nombre" value="${esc(st.cfg.nombre || "")}" placeholder="Para saludarte en Inicio" aria-label="Tu nombre" maxlength="30" autocomplete="given-name"></div></div>`) +
       crd(lbl("Mi alias para cobrar") + `<div class="quick"><div class="pp${st.errorAlias ? " err" : ""}"><input class="field" data-act="miAlias" value="${esc(st.cfg.alias || "")}" placeholder="solo alias de Mercado Pago" aria-label="Mi alias para cobrar" maxlength="22" autocapitalize="none" autocomplete="off"></div></div>` +
         (st.errorAlias ? `<div class="msg" role="alert">${esc(st.errorAlias)}</div>` : "") + `<div class="hint">Se suma a los grupos que crees, para que te transfieran. Nunca pongas el CBU.</div>`) +

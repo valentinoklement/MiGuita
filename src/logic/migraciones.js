@@ -12,7 +12,7 @@
 import { categoriasIniciales, mediosIniciales } from "./categorias.js";
 import { NOTIF_INICIAL } from "./avisos.js";
 
-export const VERSION = 4;
+export const VERSION = 5;
 
 // Nombre de cada lista guardada y su clave.
 export const LISTAS = { movs: "id", dias: "fecha", presupuestos: "id", metas: "id", deudas: "id", fijos: "id", grupos: "id", cotizaciones: "id" };
@@ -39,6 +39,8 @@ const MIGRACIONES = [
       ...d.config,
     },
   }),
+  // 4 → 5: fijos de ingreso y fijos que preguntan antes de anotarse.
+  (d) => ({ ...d, fijos: (d.fijos || []).map((f) => ({ tipo: "gasto", modo: "auto", ...f })) }),
 ];
 
 export function migrar(datos) {

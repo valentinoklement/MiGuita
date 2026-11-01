@@ -64,16 +64,23 @@ export function crearVistasPlan(st, hoy, V) {
   }
 
   function fijos() {
-    if (!st.fijos.length) return vacio("Sin gastos fijos", "Cargá lo que pagás todos los meses, como el alquiler o el gimnasio, y se anota solo el día que elijas.") + nuevo("fijo", "+ Nuevo gasto fijo");
-    const activos = st.fijos.filter((f) => f.activo), total = activos.reduce((a, f) => a + f.monto, 0);
+    if (!st.fijos.length) return vacio("Sin fijos", "Cargá lo que pagás o cobrás todos los meses, como el alquiler o el sueldo. Se anotan solos el día que elijas, o te preguntamos antes.") + nuevo("fijo", "+ Nuevo fijo");
+    const activos = st.fijos.filter((f) => f.activo);
+    const suma = (t) => activos.filter((f) => (f.tipo || "gasto") === t).reduce((a, f) => a + f.monto, 0);
+    const gastos = suma("gasto"), ingresosFijos = suma("ingreso");
     const ingresos = resumenMes(st.movs, hoy).ingresos;
-    return crd(`<div class="stats"><div><div class="sub">Fijos por mes</div><b>${plata(total)}</b></div>${ingresos ? `<div><div class="sub">De tus ingresos del mes</div><b>${Math.round(total / ingresos * 100)}%</b></div>` : ""}</div>`) +
-      crd(lbl("Se anotan solos cada mes") + [...st.fijos].sort((a, b) => a.dia - b.dia).map((f, i) =>
+    const lista = (t, titulo) => {
+      const fs = [...st.fijos].filter((f) => (f.tipo || "gasto") === t).sort((a, b) => a.dia - b.dia);
+      return fs.length ? crd(lbl(titulo) + fs.map((f, i) =>
         `<div class="srow${i ? "" : " f"}"><button class="rt rowb" data-act="editarPlan" data-v="${esc(f.id)}" style="text-align:left"><b>${esc(f.nombre)}</b>` +
-        `<small>${f.activo ? "Día " + f.dia + ((f.hechos || []).includes(mes) ? " · ya anotado este mes ✓" : "") : "Pausado"}</small></button>` +
-        `<span class="amt">${plata(f.monto)}</span>${interruptor("fijoActivo", f.activo, (f.activo ? "Pausar " : "Activar ") + f.nombre, f.id)}</div>`).join("")) +
-      nuevo("fijo", "+ Nuevo gasto fijo");
+        `<small>${f.activo ? "Día " + f.dia + " · " + (f.modo === "recordar" ? "te preguntamos" : "se anota solo") + ((f.hechos || []).includes(mes) ? " · listo este mes ✓" : "") : "Pausado"}</small></button>` +
+        `<span class="amt${t === "ingreso" ? " pos" : ""}">${plata(f.monto)}</span>${interruptor("fijoActivo", f.activo, (f.activo ? "Pausar " : "Activar ") + f.nombre, f.id)}</div>`).join("")) : "";
+    };
+    return crd(`<div class="stats"><div><div class="sub">Gastos fijos por mes</div><b>${plata(gastos)}</b></div>` +
+        (ingresosFijos ? `<div><div class="sub">Ingresos fijos</div><b class="pos">${plata(ingresosFijos)}</b></div>` : ingresos ? `<div><div class="sub">De tus ingresos del mes</div><b>${Math.round(gastos / ingresos * 100)}%</b></div>` : "") + `</div>`) +
+      lista("ingreso", "Ingresos fijos") + lista("gasto", "Gastos fijos") + nuevo("fijo", "+ Nuevo fijo");
   }
+
 
   function plan() {
     return encabezado() + { presupuesto, metas, deudas, fijos }[st.planTab]();
@@ -134,15 +141,19 @@ export function crearVistasPlan(st, hoy, V) {
         pie("Guardar deuda");
     },
     fijo() {
-      const v = st.form.vals;
-      return back("Plan") + hdr("Gastos fijos", st.form.id ? "Editar gasto fijo" : "Nuevo gasto fijo") +
-        campo("nombre", "Nombre", { ph: "por ejemplo: alquiler", max: 40 }) +
+      const v = st.form.vals, ing = v.tipo === "ingreso";
+      const cats = (ing ? st.cfg.categorias.ingreso : catsGasto(v.categoria)).filter((c) => !c.oculta || c.id === v.categoria);
+      return back("Plan") + hdr("Fijos", st.form.id ? "Editar fijo" : "Nuevo fijo") +
+        lbl("¿Qué es?") + opcion("tipo", [["gasto", "Un gasto"], ["ingreso", "Un ingreso"]], "Tipo") +
+        campo("nombre", "Nombre", { ph: ing ? "por ejemplo: sueldo" : "por ejemplo: alquiler", max: 40 }) +
         campo("monto", "Monto por mes", { modo: "monto", max: 16 }) +
-        selector("categoria", "Categoría", catsGasto(v.categoria).map((c) => [c.id, c.nombre])) +
-        campo("dia", "Día del mes en que se paga", { ph: "1 a 31", modo: "num", max: 2 }) +
+        selector("categoria", "Categoría", cats.map((c) => [c.id, c.nombre])) +
+        campo("dia", ing ? "Día del mes en que cobrás" : "Día del mes en que se paga", { ph: "1 a 31", modo: "num", max: 2 }) +
         selector("medio", "Medio de pago (opcional)", [["", "Ninguno"], ...mediosVisibles(v.medio).map((m) => [m.id, m.nombre])]) +
-        crd(`<div class="srow f"><span class="rt"><b>Anotarlo solo todos los meses</b><small>${v.activo ? "Se anota el día " + (v.dia || "elegido") + " de cada mes" : "Pausado: no se anota"}</small></span>${interruptor("formSwitch", !!v.activo, "Anotarlo solo todos los meses", "activo")}</div>`) +
-        pie("Guardar gasto fijo");
+        lbl("Cuando llega el día") + opcion("modo", [["auto", "Que se anote solo"], ["recordar", "Que me pregunte"]], "Cuando llega el día") +
+        `<div class="hint">${v.modo === "recordar" ? "Ese día te aparece en Inicio: lo confirmás (también con otro monto) o lo salteás ese mes." : "Se anota solo ese día, aunque no abras la app."}</div>` +
+        crd(`<div class="srow f"><span class="rt"><b>Activo</b><small>${v.activo ? "Todos los meses, el día " + (v.dia || "elegido") : "Pausado: no se anota ni pregunta"}</small></span>${interruptor("formSwitch", !!v.activo, "Activo", "activo")}</div>`) +
+        pie("Guardar");
     },
     ahorro() {
       const m = st.metas.find((x) => x.id === st.form.id);

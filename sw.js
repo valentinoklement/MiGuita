@@ -1,16 +1,21 @@
 // Guarda la app para que funcione sin internet. Subir VERSION cada vez que cambia un archivo.
-const VERSION = "miguita-e6-5";
+const VERSION = "miguita-e7-2";
 const ARCHIVOS = [
   "./", "./index.html", "./manifest.webmanifest",
-  "./src/ui/styles.css", "./src/ui/app.js", "./src/ui/pantallas.js", "./src/ui/plan.js", "./src/ui/grupos.js", "./src/ui/qr.js", "./src/ui/ajustes.js", "./src/ui/bloqueo.js", "./src/ui/huella.js", "./src/ui/primera.js", "./src/vendor/qrcode.js", "./src/vendor/jsQR.js", "./src/ui/ejemplo.js", "./src/art/art.js", "./src/data/db.js",
-  "./src/logic/dinero.js", "./src/logic/anotar.js", "./src/logic/categorias.js", "./src/logic/mes.js", "./src/logic/racha.js", "./src/logic/migraciones.js", "./src/logic/plan.js", "./src/logic/grupos.js", "./src/logic/cifrado.js", "./src/logic/dolar.js", "./src/logic/avisos.js",
+  "./src/ui/styles.css", "./src/ui/app.js", "./src/ui/pantallas.js", "./src/ui/plan.js", "./src/ui/grupos.js", "./src/ui/qr.js", "./src/ui/ajustes.js", "./src/ui/bloqueo.js", "./src/ui/huella.js", "./src/ui/primera.js", "./src/ui/importar.js", "./src/vendor/qrcode.js", "./src/vendor/jsQR.js", "./src/ui/ejemplo.js", "./src/art/art.js", "./src/data/db.js",
+  "./src/logic/dinero.js", "./src/logic/anotar.js", "./src/logic/categorias.js", "./src/logic/mes.js", "./src/logic/racha.js", "./src/logic/migraciones.js", "./src/logic/plan.js", "./src/logic/grupos.js", "./src/logic/cifrado.js", "./src/logic/dolar.js", "./src/logic/avisos.js", "./src/logic/exportar.js", "./src/logic/importar.js",
   "./icons/icono.svg", "./icons/icono-192.png", "./icons/icono-512.png", "./icons/apple-touch-icon.png", "./icons/favicon-32.png",
   "./fonts/bricolage.woff2", "./fonts/manrope.woff2", "./fonts/caveat-brush.woff2",
 ];
 
 self.addEventListener("install", (e) => {
   // cache: "reload" para no guardar copias viejas que el navegador tenga en su memoria.
-  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(ARCHIVOS.map((u) => new Request(u, { cache: "reload" })))).then(() => self.skipWaiting()));
+  // La versión nueva queda esperando: la app muestra "Hay una versión nueva" y la activa cuando la persona toca Actualizar.
+  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(ARCHIVOS.map((u) => new Request(u, { cache: "reload" })))));
+});
+
+self.addEventListener("message", (e) => {
+  if (e.data?.tipo === "actualizar") self.skipWaiting();
 });
 
 self.addEventListener("activate", (e) => {

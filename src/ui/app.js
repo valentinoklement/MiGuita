@@ -5,7 +5,7 @@ import { leerTexto } from "../logic/anotar.js";
 import { RESPALDO } from "../logic/categorias.js";
 import { fechaLocal, cambiarMes } from "../logic/mes.js";
 import { infoRacha, salvavidasPara, festejoDeHoy } from "../logic/racha.js";
-import { correrFijos, mesDeInicio, infoMeta, restante } from "../logic/plan.js";
+import { correrFijos, mesDeInicio, infoMeta, restante, movimientoDeFijo } from "../logic/plan.js";
 import { abrirBase } from "../data/db.js";
 import { centavos, fusionar, novedades, decodificar, codificar, validarAlias, sincronizarMiParte } from "../logic/grupos.js";
 import { datosDeEjemplo, planDeEjemplo, grupoDeEjemplo } from "./ejemplo.js";
@@ -18,6 +18,9 @@ import { estadoPresupuestos } from "../logic/plan.js";
 import { buscarDolar, necesitaConfirmar, tocaActualizar, valorPara, aPesos } from "../logic/dolar.js";
 import { presupuestosPorAvisar, enNoMolestar } from "../logic/avisos.js";
 import { validarPin, armarCopia, abrirCopia } from "../logic/cifrado.js";
+import { movimientosCSV } from "../logic/exportar.js";
+import { leerCSV, leerXLSX, armarMovimientos } from "../logic/importar.js";
+import { crearVistaImportar } from "./importar.js";
 import { migrar } from "../logic/migraciones.js";
 import { pantallaBloqueo } from "./bloqueo.js";
 import { crearVistasAjustes } from "./ajustes.js";
@@ -27,7 +30,7 @@ import { crearVistasPrimera, instalada } from "./primera.js";
 const PESTANAS = [["inicio", "Inicio"], ["grupos", "Grupos"], ["plan", "Plan"], ["mas", "Más"]];
 const TAB_DE = { movimientos: "inicio", resumen: "inicio", racha: "inicio", categorias: "mas", editarCat: "mas", form: "plan",
   grupo: "grupos", gform: "grupos", compartir: "grupos", unido: "grupos", quien: "grupos", whatsapp: "grupos",
-  notif: "mas", seguridad: "mas", dolar: "mas", copias: "mas", instalar: "mas", tutorial: "mas" };
+  notif: "mas", seguridad: "mas", dolar: "mas", copias: "mas", instalar: "mas", tutorial: "mas", importar: "inicio" };
 const SIN_BARRA = ["bienvenida", "primerIngreso", "tutorial"];
 const PLAN = ["presupuestos", "metas", "deudas", "fijos"];
 const hoy = fechaLocal();
@@ -56,7 +59,10 @@ const st = {
   primera: { nombre: "", monto: "", moneda: "ARS", error: "" },
   tutorialPaso: 0,
   tutorialDesde: "", // a dónde se va al terminar el tutorial
-  puedeInstalar: false, // Chrome ofreció instalar la app (Android y compus)
+  imp: { movs: [], elegidos: new Set(), soloGastos: true, medio: "mp", error: "", leyendo: false },
+  puedeInstalar: false,
+  versionNueva: null, // el modo sin internet ya bajó una versión nueva y espera
+ // Chrome ofreció instalar la app (Android y compus)
   cfg: base.datos.config,
   persistente: base.persistente,
   pantalla: "inicio",
@@ -92,6 +98,7 @@ let apagarCamara = null, videoCamara = null;
 let timerAviso = 0;
 const VA = crearVistasAjustes(st, hoy, V);
 const VI = crearVistasPrimera(st, V);
+const importarVista = crearVistaImportar(st, V);
 // Lo que se guarda (cifrado, si hay PIN) y lo que va en una copia.
 base.leerEstado = () => ({ schemaVersion: VERSION, movs: st.movs, dias: st.dias, presupuestos: st.presupuestos, metas: st.metas, deudas: st.deudas,
   fijos: st.fijos, grupos: st.grupos, cotizaciones: st.cotizaciones, config: st.cfg });
@@ -196,7 +203,7 @@ function abrirForm(tipo, id) {
     presupuesto: () => x ? { categoria: x.categoria, tope: m(x.tope) } : { categoria: (st.cfg.categorias.gasto.find((c) => !c.oculta && !usadas.has(c.id)) || {}).id || "otros", tope: "" },
     meta: () => x ? { nombre: x.nombre, icono: x.icono, moneda: x.moneda, objetivo: m(x.objetivo), ahorrado: m(x.ahorrado), fecha: x.fecha || "" } : { nombre: "", icono: "meta", moneda: "ARS", objetivo: "", ahorrado: "", fecha: "" },
     deuda: () => x ? { tipo: x.tipo, quien: x.quien, concepto: x.concepto, total: m(x.total), pagado: m(x.pagado), vence: x.vence || "" } : { tipo: "debo", quien: "", concepto: "", total: "", pagado: "", vence: "" },
-    fijo: () => x ? { nombre: x.nombre, monto: m(x.monto), categoria: x.categoria, dia: String(x.dia), medio: x.medio, activo: x.activo } : { nombre: "", monto: "", categoria: "servicios", dia: "", medio: "", activo: true },
+    fijo: () => x ? { tipo: x.tipo || "gasto", modo: x.modo || "auto", nombre: x.nombre, monto: m(x.monto), categoria: x.categoria, dia: String(x.dia), medio: x.medio, activo: x.activo } : { tipo: "gasto", modo: "auto", nombre: "", monto: "", categoria: "servicios", dia: "", medio: "", activo: true },
     ahorro: () => ({ monto: "" }),
     pago: () => ({ monto: m(restante(x)), anotar: true }),
   }[tipo]();
@@ -238,10 +245,10 @@ function guardarForm() {
       if (!Number.isInteger(dia) || dia < 1 || dia > 31) throw "El día tiene que ser un número del 1 al 31.";
       const antes = st.fijos.find((x) => x.id === id);
       const reactivado = v.activo && (!antes || !antes.activo);
-      const f = { id: id || nuevoId(), nombre: v.nombre.trim(), monto: monto("monto", "el monto"), categoria: v.categoria, medio: v.medio, dia, activo: !!v.activo,
+      const f = { id: id || nuevoId(), tipo: v.tipo, modo: v.modo, nombre: v.nombre.trim(), monto: monto("monto", "el monto"), categoria: v.categoria, medio: v.medio, dia, activo: !!v.activo,
         desde: reactivado || !antes ? mesDeInicio(dia, hoy) : antes.desde, hechos: antes?.hechos || [] };
       ponerItem("fijos", f);
-      mostrarAviso("Gasto fijo guardado. " + (f.activo ? (f.desde === hoy.slice(0, 7) ? "Empieza este mes." : "Empieza el mes que viene.") : "Está pausado."), deshacerItem("fijos", antes, f));
+      mostrarAviso("Fijo guardado. " + (f.activo ? (f.desde === hoy.slice(0, 7) ? "Empieza este mes." : "Empieza el mes que viene.") : "Está pausado."), deshacerItem("fijos", antes, f));
       revisarFijos();
     } else if (tipo === "ahorro") {
       const antes = st.metas.find((x) => x.id === id);
@@ -571,18 +578,21 @@ function dibujar() {
     primerIngreso: VI.primerIngreso,
     instalar: VI.instalar,
     tutorial: VI.tutorial,
+    importar: importarVista,
   };
   if (st.pantalla !== "compartir" && apagarCamara) cerrarCamara();
   const tab = TAB_DE[st.pantalla] || st.pantalla;
   const foco = document.activeElement?.dataset?.act;
   const enCampo = foco && /^(buscar|nombre|catNombre|catClaves|detalle|campo|gcampo|gPersona|gPeso|nombreNuevo|miAlias)$/.test(foco) ? { act: foco, k: document.activeElement.dataset.k, i: document.activeElement.dataset.i, pos: document.activeElement.selectionStart } : null;
-  raiz.innerHTML = `<main class="scr" id="pantalla">${P[st.pantalla]()}</main>` +
+  raiz.innerHTML = `<main class="scr" id="pantalla">` +
+    (st.versionNueva ? `<div class="snack pp nueva" role="status"><span>Hay una versión nueva de MiGuita</span><button class="btnmini" data-act="actualizarApp">Actualizar</button></div>` : "") +
+    `${P[st.pantalla]()}</main>` +
     (SIN_BARRA.includes(st.pantalla) ? "" : `<nav class="nav" aria-label="Secciones">` + PESTANAS.map(([k, t]) =>
       `<button data-act="ir" data-v="${k}"${k === tab ? ' aria-current="page"' : ""}>${Art.navIcon(k)}${t}</button>`).join("") + "</nav>") +
     (st.hoja ? V.hoja() : "") +
     (st.festejo ? V.festejo(st.festejo) : "") +
     (st.metaOk ? VP.metaLograda(st.metaOk) : "") +
-    (st.aviso ? `<div class="snack pp" role="status"><span>${esc(st.aviso.texto)}</span>${st.aviso.deshacer ? `<button class="btnmini" data-act="deshacer">Deshacer</button>` : ""}</div>` : "");
+    (st.aviso && !st.hoja ? `<div class="snack pp" role="status"><span>${esc(st.aviso.texto)}</span>${st.aviso.deshacer ? `<button class="btnmini" data-act="deshacer">Deshacer</button>` : ""}</div>` : "");
   raiz.querySelectorAll(".pp").forEach((e) => e.style.setProperty("--dl", (-Math.random() * 2.5).toFixed(2) + "s"));
   // La cámara sigue andando aunque se redibuje la pantalla.
   if (videoCamara) raiz.querySelector("video.cam")?.replaceWith(videoCamara);
@@ -787,6 +797,26 @@ raiz.addEventListener("click", (e) => {
     /* copias */
     case "copiaAuto": ponerConfig("copias", { ...st.cfg.copias, auto: !st.cfg.copias.auto }); break;
     case "copiaCada": ponerConfig("copias", { ...st.cfg.copias, cada: v }); break;
+    /* importar el resumen de una billetera o banco */
+    case "impSolo": st.imp.soloGastos = v === "si"; break;
+    case "impMedio": st.imp.medio = v; st.imp.movs.forEach((m) => (m.medio = v)); break;
+    case "impElegir": if (st.imp.elegidos.has(v)) st.imp.elegidos.delete(v); else st.imp.elegidos.add(v); break;
+    case "impOtro": st.imp = { ...st.imp, movs: [], elegidos: new Set(), error: "" }; break;
+    case "impAnotar": {
+      const lista = st.imp.movs.filter((m) => st.imp.elegidos.has(m.id) && (!st.imp.soloGastos || m.tipo === "gasto"));
+      lista.forEach((m) => guardarMov({ ...m, medio: st.imp.medio }));
+      mostrarAviso("Anotaste " + lista.length + (lista.length === 1 ? " movimiento" : " movimientos") + " del resumen.", () => lista.forEach((m) => quitarMov(m.id)));
+      st.imp = { ...st.imp, movs: [], elegidos: new Set(), error: "" };
+      if (lista.length) st.mes = lista[0].fecha.slice(0, 7);
+      return volver();
+    }
+    case "exportarExcel": {
+      const nombre = "MiGuita-movimientos-" + hoy + ".csv";
+      const archivo = new File([movimientosCSV(st.movs, V.nombreCat, V.nombreMedio)], nombre, { type: "text/csv" });
+      st.exportado = { nombre, archivo, url: URL.createObjectURL(archivo), compartible: !!navigator.canShare?.({ files: [archivo] }) };
+      break;
+    }
+    case "compartirExcel": navigator.share({ files: [st.exportado.archivo], title: "Mis movimientos de MiGuita" }).catch(() => {}); return;
     case "hacerCopia": st.copiaFlujo = { paso: "crear", c1: "", c2: "", error: "" }; break;
     case "crearCopia": crearCopia().then(dibujar); return;
     case "compartirCopia": navigator.share({ files: [st.copiaFlujo.archivo], title: "Copia de MiGuita" }).catch(() => {}); return;
@@ -826,6 +856,7 @@ raiz.addEventListener("click", (e) => {
       irA(st.desdePrimera ? "instalar" : "inicio");
       break;
     }
+    case "actualizarApp": base.terminar().then(() => st.versionNueva.postMessage({ tipo: "actualizar" })); return;
     case "instalarYa":
       if (!pedidoInstalar) break;
       pedidoInstalar.prompt();
@@ -864,7 +895,28 @@ raiz.addEventListener("click", (e) => {
       revisarFijos();
       break;
     }
-    case "formSel": st.form.vals[b.dataset.k] = v; st.form.error = ""; break;
+    case "formSel":
+      st.form.vals[b.dataset.k] = v; st.form.error = "";
+      // Al pasar de gasto a ingreso, la categoría tiene que ser del tipo correcto.
+      if (st.form.tipo === "fijo" && b.dataset.k === "tipo") st.form.vals.categoria = v === "ingreso" ? "sueldo" : "servicios";
+      break;
+    case "confirmarFijo": case "saltearFijo": {
+      const f = st.fijos.find((x) => x.id === v), mes = hoy.slice(0, 7);
+      if (!f) break;
+      if (act === "confirmarFijo") {
+        const mov = movimientoDeFijo(f, mes);
+        if (!st.movs.some((x) => x.id === mov.id)) guardarMov(mov);
+        mostrarAviso((f.tipo === "ingreso" ? "Anotado: cobraste " : "Anotado: pagaste ") + f.nombre + " " + V.plata(f.monto), () => { quitarMov(mov.id); ponerItem("fijos", f); });
+      } else mostrarAviso("Listo, este mes no se anota " + f.nombre + ".", () => ponerItem("fijos", f));
+      ponerItem("fijos", { ...f, hechos: [...(f.hechos || []), mes].slice(-24) });
+      break;
+    }
+    case "cambiarFijo": {
+      // Confirmar con otro monto: se abre la hoja de anotar con los datos del fijo.
+      const f = st.fijos.find((x) => x.id === v), mov = movimientoDeFijo(f, hoy.slice(0, 7));
+      ponerItem("fijos", { ...f, hechos: [...(f.hechos || []), hoy.slice(0, 7)].slice(-24) });
+      return abrirHoja({ tipo: mov.tipo, expr: f.monto % 100 ? "" : String(f.monto / 100), tocada: false, centavos: f.monto, categoria: mov.categoria, medio: mov.medio, fecha: mov.fecha, detalle: f.nombre });
+    }
     case "formSwitch": st.form.vals[v] = !st.form.vals[v]; break;
     case "guardarPlan": {
       const error = guardarForm();
@@ -979,6 +1031,21 @@ raiz.addEventListener("change", (e) => {
   else if (act === "dolarManual") {
     const c = leerMonto(e.target.value);
     st.cfg.dolar.manual = c && c >= 100 && c <= 1e9 ? c : 0; ponerConfig("dolar", st.cfg.dolar); dibujar();
+  } else if (act === "impArchivo") {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    if (f.size > 10e6) { st.imp.error = "Ese archivo es muy grande. Bajá el resumen de menos meses."; return dibujar(); }
+    st.imp.leyendo = true; st.imp.error = ""; dibujar();
+    f.arrayBuffer().then(async (buf) => {
+      const u8 = new Uint8Array(buf);
+      const filas = u8[0] === 0x50 && u8[1] === 0x4b ? await leerXLSX(u8) : leerCSV(new TextDecoder().decode(u8));
+      const movs = armarMovimientos(filas, st.cfg.categorias, st.movs, st.imp.medio);
+      if (!movs.length && !filas.length) throw new Error("vacío");
+      st.imp.movs = movs;
+      st.imp.elegidos = new Set(movs.map((m) => m.id));
+      if (!movs.length) st.imp.error = "No encontré movimientos nuevos en ese archivo. Si ya lo habías traído, está todo anotado.";
+    }).catch(() => { st.imp.error = "No pude leer ese archivo. Probá bajarlo en Excel (.xlsx) o CSV."; })
+      .finally(() => { st.imp.leyendo = false; dibujar(); });
   } else if (act === "copiaArchivo") {
     const a = e.target.files?.[0];
     if (!a) return;
@@ -1035,6 +1102,15 @@ if (tocaActualizar(st.cfg.dolar, st.cotizaciones, hoy, horaAhora())) actualizarD
 dibujar();
 anotarDesdeAviso();
 
+// Versión nueva: el modo sin internet la baja en segundo plano y la app ofrece actualizar con un toque.
 if ("serviceWorker" in navigator && location.protocol !== "file:") {
-  navigator.serviceWorker.register("./sw.js").catch(() => {});
+  const habia = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register("./sw.js").then((reg) => {
+    const avisar = () => { if (reg.waiting && habia) { st.versionNueva = reg.waiting; dibujar(); } };
+    avisar();
+    reg.addEventListener("updatefound", () => reg.installing?.addEventListener("statechange", avisar));
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) reg.update().catch(() => {}); });
+  }).catch(() => {});
+  let recargando = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => { if (habia && !recargando) { recargando = true; location.reload(); } });
 }

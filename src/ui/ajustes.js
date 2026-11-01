@@ -91,7 +91,11 @@ export function crearVistasAjustes(st, hoy, V) {
   /* ---------- copias ---------- */
   function copias() {
     const c = st.cfg.copias, f = st.copiaFlujo;
-    let h = back("Más") + hdr("Ajustes", "Copias de seguridad") +
+    const ex = st.exportado;
+    let h = back("Más") + hdr("Ajustes", "Copias y Excel") +
+      crd(lbl("Para Excel") + `<div class="sub">Todos tus movimientos en una planilla que se abre con Excel o Google Sheets. No va cifrada: guardala donde nadie más la vea.</div>` +
+        (ex ? `<div class="btnrow">${ex.compartible ? `<button class="btn pp" data-act="compartirExcel">Mandar</button>` : ""}<a class="btn pp${ex.compartible ? " alt" : ""}" href="${ex.url}" download="${esc(ex.nombre)}">Descargar</a></div>` :
+          `<button class="btn pp w alt" data-act="exportarExcel">Exportar a Excel</button>`)) +
       crd(lbl("Tus datos") + `<div class="sub">${c.ultima ? "Última copia: " + fechaHora(c.ultima) : "Todavía no hiciste ninguna copia."}</div>`) +
       crd(fila("Recordarme hacer la copia", c.auto ? "Te avisamos en Inicio cuando toca" : "Apagado", interruptor("copiaAuto", c.auto, "Recordarme hacer la copia"), true) +
         (c.auto ? `<div class="chips">${["semana", "mes"].map((x) => `<button class="pp" data-act="copiaCada" data-v="${x}" aria-pressed="${c.cada === x}">Cada ${x}</button>`).join("")}</div>` : ""));
