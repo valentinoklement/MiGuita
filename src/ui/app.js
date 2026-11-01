@@ -1238,9 +1238,12 @@ if ("serviceWorker" in navigator && location.protocol !== "file:") {
   const habia = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.register("./sw.js").then((reg) => {
     const avisar = () => { if (reg.waiting && habia) { st.versionNueva = reg.waiting; dibujar(); } };
+    // La versión nueva puede haber empezado a bajarse antes de que la app llegue a escuchar: se sigue también esa.
+    const seguir = (w) => w?.addEventListener("statechange", avisar);
     avisar();
-    reg.addEventListener("updatefound", () => reg.installing?.addEventListener("statechange", avisar));
-    document.addEventListener("visibilitychange", () => { if (!document.hidden) reg.update().catch(() => {}); });
+    seguir(reg.installing);
+    reg.addEventListener("updatefound", () => seguir(reg.installing));
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) reg.update().catch(() => {}).then(avisar); });
   }).catch(() => {});
   let recargando = false;
   navigator.serviceWorker.addEventListener("controllerchange", () => { if (habia && !recargando) { recargando = true; location.reload(); } });
