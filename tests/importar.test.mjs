@@ -28,8 +28,8 @@ test("CSV con punto y coma, comillas y encabezado de Mercado Pago o banco", () =
   assert.deepEqual(filas[1], ["31/10/2026", "Pago en Coto; sucursal 12", "-38.500,00"]);
   const movs = armarMovimientos(filas, cats);
   assert.deepEqual(movs.map((m) => [m.fecha, m.tipo, m.monto, m.categoria, m.detalle]), [
-    ["2026-10-31", "gasto", 3850000, "super", "Pago en Coto; sucursal 12"],
-    ["2026-10-30", "ingreso", 62000000, "otros_in", "Transferencia recibida"],
+    ["2026-10-31", "gasto", 3850000, "super", "Coto; sucursal 12"],
+    ["2026-10-30", "ingreso", 62000000, "otros_in", "Transferencia de una cuenta"],
     ["2026-10-30", "gasto", 2000000, "auto", "YPF"],
   ]);
 });
@@ -95,4 +95,48 @@ test("Excel (.xlsx), con y sin compresión, con fechas como número", async () =
     assert.deepEqual(movs.map((m) => [m.fecha, m.monto, m.categoria]), [["2026-10-31", 4521050, "super"], ["2026-10-30", 450000, "transporte"]]);
   }
   await assert.rejects(leerXLSX(new TextEncoder().encode("no soy un excel")));
+});
+
+test("PDF tipo «Resumen de cuenta»: descripción en dos renglones, número de operación y saldo", async () => {
+  const { filasDesdePDF } = await import("../src/logic/importar.js");
+  const it = (x, y, s) => ({ x, y, s });
+  const pagina1 = [
+    it(258, 800, "RESUMEN DE CUENTA EN PESOS"), it(175, 700, "Entradas:"), it(208, 700, "$ 100.000,00"),
+    it(197, 652, "ID de la"), it(41, 645, "Fecha"), it(89, 645, "Descripción"), it(312, 645, "Valor"), it(384, 645, "Saldo"), it(197, 638, "operación"),
+    it(89, 620, "Rendimientos"), it(41, 612, "01-10-2026"), it(197, 612, "1234567890123"), it(307, 612, "$ 57,29"), it(363, 612, "$ 107.244,92"),
+    it(89, 590, "Transferencia enviada Persona"), it(41, 582, "01-10-2026"), it(197, 582, "123456789012"), it(299, 582, "$ -666,00"), it(362, 582, "$ 106.578,92"), it(89, 574, "Uno"),
+    it(41, 550, "01-10-2026"), it(89, 550, "Pago en YPF"), it(197, 550, "123456789013"), it(295, 550, "$ -20.000,00"), it(362, 550, "$ 86.578,92"),
+    it(398, 30, "1/2"),
+  ];
+  const pagina2 = [ // sin títulos: usa las columnas de la página anterior
+    it(89, 760, "Pago Farmacia"), it(41, 752, "02-10-2026"), it(197, 752, "123456789014"), it(294, 752, "$ -7.700,00"), it(365, 752, "$ 78.878,92"),
+  ];
+  const filas = filasDesdePDF([pagina1, pagina2]);
+  assert.deepEqual(filas.slice(1), [
+    ["2026-10-01", "Rendimientos", "$ 57,29"],
+    ["2026-10-01", "Transferencia enviada Persona Uno", "$ -666,00"],
+    ["2026-10-01", "Pago en YPF", "$ -20.000,00"],
+    ["2026-10-02", "Pago Farmacia", "$ -7.700,00"],
+  ]);
+  const movs = armarMovimientos(filas, cats);
+  assert.deepEqual(movs.map((m) => [m.tipo, m.monto, m.categoria]), [["gasto", 770000, "salud"], ["ingreso", 5729, "otros_in"], ["gasto", 66600, "otros"], ["gasto", 2000000, "auto"]]);
+  assert.deepEqual(filasDesdePDF([[it(10, 10, "nada que ver")]]), [["Fecha", "Descripción", "Monto"]], "un PDF cualquiera no inventa movimientos");
+});
+
+test("descripciones de billetera: limpias, transferencias marcadas y lo que la persona corrigió", async () => {
+  const { limpiarDetalle, claveComercio } = await import("../src/logic/importar.js");
+  assert.deepEqual(limpiarDetalle("Pago Merpago*heladeriaxyz"), { detalle: "Heladeriaxyz", comercio: "heladeriaxyz", transferencia: false });
+  assert.deepEqual(limpiarDetalle("Transferencia enviada Persona Uno"), { detalle: "Transferencia a Persona Uno", comercio: "", transferencia: true });
+  assert.equal(limpiarDetalle("Transferencia recibida Persona").detalle, "Transferencia de Persona");
+  assert.equal(limpiarDetalle("Pago de cuota Créditos de Mercado Pago").detalle, "Cuota de crédito");
+  assert.equal(limpiarDetalle("Pago con QR Farmacity").detalle, "Farmacity");
+  const filas = [["Fecha", "Descripción", "Monto"], ["01/10/2026", "Pago de cuota Créditos de Mercado Pago", "-62.466,42"], ["02/10/2026", "Pago Merpago*heladeriaxyz", "-3.000"],
+    ["03/10/2026", "Transferencia enviada Persona Uno", "-666"], ["04/10/2026", "Pago con QR Rappi", "-9.800"]];
+  let movs = armarMovimientos(filas, cats);
+  assert.deepEqual(movs.map((m) => [m.detalle, m.categoria, !!m.transferencia]), [
+    ["Rappi", "comida", false], ["Transferencia a Persona Uno", "otros", true], ["Heladeriaxyz", "otros", false], ["Cuota de crédito", "deudas", false]]);
+  // La persona corrigió: la heladería es "Salidas" y esa transferencia es "Regalos". La próxima vez ya vienen así.
+  const aprendidas = { [claveComercio("Heladeriaxyz")]: "salidas", [claveComercio("Transferencia a Persona Uno")]: "regalos", otra: "no-existe" };
+  movs = armarMovimientos(filas, cats, [], "mp", aprendidas);
+  assert.deepEqual(movs.map((m) => m.categoria), ["comida", "regalos", "salidas", "deudas"]);
 });

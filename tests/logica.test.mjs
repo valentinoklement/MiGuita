@@ -161,5 +161,6 @@ test("la app guarda para usar sin internet todos sus archivos", () => {
   const sw = readFileSync(new URL("../sw.js", import.meta.url), "utf8");
   const listar = (dir) => readdirSync(new URL(dir, import.meta.url)).flatMap((f) =>
     statSync(new URL(dir + f, import.meta.url)).isDirectory() ? listar(dir + f + "/") : [dir + f]);
-  for (const f of [...listar("../src/"), ...listar("../fonts/")]) assert.ok(sw.includes('"./' + f.slice(3) + '"'), "falta en sw.js: " + f);
+  // pdf.js pesa casi 2 MB: se baja solo la primera vez que se importa un PDF, no se guarda para usar sin internet.
+  for (const f of [...listar("../src/"), ...listar("../fonts/")].filter((f) => !f.includes("/vendor/pdfjs/"))) assert.ok(sw.includes('"./' + f.slice(3) + '"'), "falta en sw.js: " + f);
 });

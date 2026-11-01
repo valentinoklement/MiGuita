@@ -75,6 +75,45 @@ export async function leerXLSX(bytes) {
   return filas.filter((f) => f.some((x) => String(x).trim()));
 }
 
+/* ---------- PDF (por ejemplo, el «Resumen de cuenta» de Mercado Pago) ---------- */
+// Recibe, por página, los pedazos de texto con su posición: [[{ x, y, s }]] (y crece hacia arriba, como en el PDF).
+// Busca el renglón de títulos (Fecha, Descripción, Valor o Monto) y arma una tabla [fecha, descripción, monto].
+// La descripción puede ocupar varios renglones arriba y abajo de la fecha: cada pedazo va al movimiento más cercano.
+export function filasDesdePDF(paginas) {
+  const filas = [["Fecha", "Descripción", "Monto"]];
+  let cols = null;
+  for (const items of paginas) {
+    const t = items.filter((i) => String(i.s).trim());
+    const titulo = (re) => t.find((i) => re.test(sinTildes(i.s).trim()));
+    const fecha = titulo(/^fecha$/), desc = titulo(/^(descripcion|detalle|concepto)$/), monto = titulo(/^(valor|monto|importe)$/);
+    const conTitulos = fecha && desc && monto;
+    if (conTitulos) {
+      const siguiente = Math.min(...t.filter((i) => i.x > desc.x + 5 && Math.abs(i.y - desc.y) < 12).map((i) => i.x), monto.x);
+      cols = { y: Math.max(fecha.y, desc.y, monto.y), fecha: fecha.x, desc: [desc.x - 3, siguiente - 3], monto: monto.x };
+    }
+    if (!cols) continue;
+    // En la página de los títulos, solo lo que está debajo; en las siguientes, toda la página.
+    const debajo = conTitulos ? t.filter((i) => i.y < cols.y - 2) : t;
+    const conFecha = debajo.filter((i) => i.x < cols.desc[0] && leerFecha(i.s)).map((i) => ({ y: i.y, fecha: leerFecha(i.s), desc: [], monto: null }));
+    if (!conFecha.length) continue;
+    for (const i of debajo) {
+      if (i.x >= cols.desc[0] && i.x < cols.desc[1]) {
+        const cerca = conFecha.reduce((a, b) => (Math.abs(b.y - i.y) < Math.abs(a.y - i.y) ? b : a));
+        if (Math.abs(cerca.y - i.y) < 30) cerca.desc.push(i);
+      }
+    }
+    for (const f of conFecha) {
+      // El monto: en el mismo renglón, con coma decimal o signo $, lo más cerca de la columna Valor.
+      const candidatos = debajo.filter((i) => Math.abs(i.y - f.y) <= 3 && i.x >= cols.desc[1] - 3 && /\$|,\d{2}\b/.test(i.s) && leerImporte(i.s) !== null);
+      const m = candidatos.sort((a, b) => Math.abs(a.x - cols.monto) - Math.abs(b.x - cols.monto))[0];
+      if (!m) continue;
+      const texto = f.desc.sort((a, b) => b.y - a.y || a.x - b.x).map((i) => i.s.trim()).join(" ");
+      filas.push([f.fecha, texto, m.s]);
+    }
+  }
+  return filas;
+}
+
 /* ---------- fechas y montos escritos de mil maneras ---------- */
 export function leerFecha(v) {
   const s = String(v ?? "").trim();
@@ -117,7 +156,7 @@ export function leerImporte(v) {
 const sinTildes = (s) => String(s).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 const NOMBRES = {
   fecha: /fecha|date|dia\b/,
-  detalle: /descrip|detalle|concepto|referencia|motivo|titulo|title|comercio|operacion|tipo de operacion/,
+  detalle: /descrip|detalle|detail|concepto|referencia|motivo|titulo|title|comercio|store_name|operacion|tipo de operacion/,
   monto: /monto|importe|valor|neto|amount|total|credito|debito|movimiento/,
 };
 
@@ -139,11 +178,29 @@ export function encontrarColumnas(filas) {
   return { encabezado: -1, fecha: mejor(pf), monto: mejor(pm), detalle: mejor(pd) };
 }
 
+/* ---------- descripciones de billetera: más legibles y mejor categorizadas ---------- */
+const mayuscula = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
+// "Pago Merpago*comercio" → "Comercio" · "Transferencia enviada Ana" → "Transferencia a Ana" · cuota de crédito → deudas.
+export function limpiarDetalle(texto) {
+  let d = String(texto ?? "").replace(/\s+/g, " ").trim();
+  const t = /^transferencia (enviada|recibida)\s*(.*)$/i.exec(d);
+  if (t) return { detalle: "Transferencia " + (/enviada/i.test(t[1]) ? "a " : "de ") + (t[2] || "una cuenta"), comercio: "", transferencia: true };
+  if (/cuota.*cr[eé]dito/i.test(d)) return { detalle: "Cuota de crédito", comercio: "cuota prestamo", transferencia: false };
+  d = d.replace(/^pago con (qr|tarjeta( de (d[eé]bito|cr[eé]dito))?|dinero (en|disponible)( cuenta)?)\s*/i, "")
+    .replace(/^pago (de |en |a )?/i, "").replace(/\b(merpago|mercadopago|mp)\s*\*\s*/gi, "").trim();
+  const comercio = d.replace(/mercado ?pago/gi, " ").replace(/\s+/g, " ").trim();
+  return { detalle: mayuscula(d) || "Pago", comercio, transferencia: false };
+}
+
+// Clave con la que la app recuerda qué categoría eligió la persona para un comercio o una persona.
+export const claveComercio = (detalle) => sinTildes(detalle).replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim().slice(0, 60);
+
 /* ---------- armar los movimientos ---------- */
 const huella = (s) => { let h = 0x811c9dc5; for (const c of s) { h ^= c.codePointAt(0); h = Math.imul(h, 16777619) >>> 0; } return h.toString(36); };
 
-// Devuelve [{ id, tipo, monto, detalle, categoria, medio, fecha, nuevo }], sin los que ya estaban anotados.
-export function armarMovimientos(filas, cats, existentes = [], medio = "mp") {
+// Devuelve [{ id, tipo, monto, detalle, categoria, medio, fecha, transferencia }], sin los que ya estaban anotados.
+// aprendidas: { claveComercio: categoría } que la persona corrigió antes; manda sobre lo que se adivina.
+export function armarMovimientos(filas, cats, existentes = [], medio = "mp", aprendidas = {}) {
   const c = encontrarColumnas(filas);
   if (c.fecha < 0 || c.monto < 0) return [];
   const ya = new Set(existentes.map((x) => x.id));
@@ -152,14 +209,18 @@ export function armarMovimientos(filas, cats, existentes = [], medio = "mp") {
   for (const f of filas.slice(c.encabezado + 1)) {
     const fecha = leerFecha(f[c.fecha]), importe = leerImporte(f[c.monto]);
     if (!fecha || !importe) continue;
-    const detalle = String(c.detalle >= 0 ? f[c.detalle] ?? "" : "").replace(/\s+/g, " ").trim().slice(0, 80);
+    const original = String(c.detalle >= 0 ? f[c.detalle] ?? "" : "").replace(/\s+/g, " ").trim().slice(0, 80);
     const tipo = importe < 0 ? "gasto" : "ingreso";
-    const clave = fecha + "|" + importe + "|" + sinTildes(detalle);
+    const clave = fecha + "|" + importe + "|" + sinTildes(original);
     const n = (vistos.get(clave) || 0) + 1; vistos.set(clave, n); // dos compras iguales el mismo día son dos movimientos
     const id = "imp_" + huella(clave + "|" + n);
     if (ya.has(id)) continue;
-    out.push({ id, tipo, monto: Math.abs(importe), detalle: detalle ? detalle[0].toUpperCase() + detalle.slice(1) : "Movimiento importado",
-      categoria: adivinarCategoria(detalle, paraAdivinar(cats, tipo)), medio, fecha, ts: Date.parse(fecha + "T12:00:00") + n, mod: Date.now() });
+    const l = limpiarDetalle(original);
+    const detalle = (original ? l.detalle : "Movimiento importado").slice(0, 80);
+    const valida = (cat) => cats[tipo].some((x) => x.id === cat) && cat;
+    const categoria = valida(aprendidas[claveComercio(detalle)]) || adivinarCategoria(l.transferencia ? "" : l.comercio || original, paraAdivinar(cats, tipo));
+    out.push({ id, tipo, monto: Math.abs(importe), detalle, categoria, medio, fecha, ts: Date.parse(fecha + "T12:00:00") + n, mod: Date.now(),
+      ...(l.transferencia && { transferencia: true }) });
   }
   return out.sort((a, b) => b.fecha.localeCompare(a.fecha));
 }

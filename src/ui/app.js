@@ -19,7 +19,8 @@ import { buscarDolar, necesitaConfirmar, tocaActualizar, valorPara, aPesos } fro
 import { presupuestosPorAvisar, enNoMolestar } from "../logic/avisos.js";
 import { validarPin, armarCopia, abrirCopia } from "../logic/cifrado.js";
 import { movimientosCSV } from "../logic/exportar.js";
-import { leerCSV, leerXLSX, armarMovimientos } from "../logic/importar.js";
+import { leerCSV, leerXLSX, armarMovimientos, filasDesdePDF, claveComercio } from "../logic/importar.js";
+import { textoDePDF } from "./pdf.js";
 import { crearVistaImportar } from "./importar.js";
 import { migrar } from "../logic/migraciones.js";
 import { pantallaBloqueo } from "./bloqueo.js";
@@ -59,7 +60,7 @@ const st = {
   primera: { nombre: "", monto: "", moneda: "ARS", error: "" },
   tutorialPaso: 0,
   tutorialDesde: "", // a dónde se va al terminar el tutorial
-  imp: { movs: [], elegidos: new Set(), soloGastos: true, medio: "mp", error: "", leyendo: false },
+  imp: { movs: [], elegidos: new Set(), soloGastos: true, sinTransf: false, medio: "mp", error: "", leyendo: false },
   puedeInstalar: false,
   versionNueva: null, // el modo sin internet ya bajó una versión nueva y espera
  // Chrome ofreció instalar la app (Android y compus)
@@ -799,11 +800,12 @@ raiz.addEventListener("click", (e) => {
     case "copiaCada": ponerConfig("copias", { ...st.cfg.copias, cada: v }); break;
     /* importar el resumen de una billetera o banco */
     case "impSolo": st.imp.soloGastos = v === "si"; break;
+    case "impTransf": st.imp.sinTransf = v === "sacar"; break;
     case "impMedio": st.imp.medio = v; st.imp.movs.forEach((m) => (m.medio = v)); break;
     case "impElegir": if (st.imp.elegidos.has(v)) st.imp.elegidos.delete(v); else st.imp.elegidos.add(v); break;
     case "impOtro": st.imp = { ...st.imp, movs: [], elegidos: new Set(), error: "" }; break;
     case "impAnotar": {
-      const lista = st.imp.movs.filter((m) => st.imp.elegidos.has(m.id) && (!st.imp.soloGastos || m.tipo === "gasto"));
+      const lista = st.imp.movs.filter((m) => st.imp.elegidos.has(m.id) && (!st.imp.soloGastos || m.tipo === "gasto") && (!st.imp.sinTransf || !m.transferencia));
       lista.forEach((m) => guardarMov({ ...m, medio: st.imp.medio }));
       mostrarAviso("Anotaste " + lista.length + (lista.length === 1 ? " movimiento" : " movimientos") + " del resumen.", () => lista.forEach((m) => quitarMov(m.id)));
       st.imp = { ...st.imp, movs: [], elegidos: new Set(), error: "" };
@@ -980,6 +982,8 @@ raiz.addEventListener("click", (e) => {
         mov.monto = aPesos(total, c.valor);
         mov.usd = { monto: total, valor: c.valor, fecha: c.fecha, tipo: d.tipo, fuente: c.fuente, estimado: c.estimado };
       }
+      if (anterior?.id.startsWith("imp_") && anterior.categoria !== mov.categoria && mov.detalle)
+        ponerConfig("aprendidas", Object.fromEntries(Object.entries({ ...(st.cfg.aprendidas || {}), [claveComercio(mov.detalle)]: mov.categoria }).slice(-500)));
       anotar(mov, anterior);
       cerrarHoja();
       break;
@@ -1038,13 +1042,14 @@ raiz.addEventListener("change", (e) => {
     st.imp.leyendo = true; st.imp.error = ""; dibujar();
     f.arrayBuffer().then(async (buf) => {
       const u8 = new Uint8Array(buf);
-      const filas = u8[0] === 0x50 && u8[1] === 0x4b ? await leerXLSX(u8) : leerCSV(new TextDecoder().decode(u8));
-      const movs = armarMovimientos(filas, st.cfg.categorias, st.movs, st.imp.medio);
+      const esPDF = u8[0] === 0x25 && u8[1] === 0x50 && u8[2] === 0x44 && u8[3] === 0x46; // "%PDF"
+      const filas = esPDF ? filasDesdePDF(await textoDePDF(u8)) : u8[0] === 0x50 && u8[1] === 0x4b ? await leerXLSX(u8) : leerCSV(new TextDecoder().decode(u8));
+      const movs = armarMovimientos(filas, st.cfg.categorias, st.movs, st.imp.medio, st.cfg.aprendidas || {});
       if (!movs.length && !filas.length) throw new Error("vacío");
       st.imp.movs = movs;
       st.imp.elegidos = new Set(movs.map((m) => m.id));
       if (!movs.length) st.imp.error = "No encontré movimientos nuevos en ese archivo. Si ya lo habías traído, está todo anotado.";
-    }).catch(() => { st.imp.error = "No pude leer ese archivo. Probá bajarlo en Excel (.xlsx) o CSV."; })
+    }).catch(() => { st.imp.error = navigator.onLine === false ? "Para leer un PDF por primera vez hace falta internet. Probá de nuevo con conexión." : "No pude leer ese archivo. Usá el «Resumen de cuenta» en PDF, o un Excel o CSV."; })
       .finally(() => { st.imp.leyendo = false; dibujar(); });
   } else if (act === "copiaArchivo") {
     const a = e.target.files?.[0];
