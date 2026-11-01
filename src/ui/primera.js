@@ -12,6 +12,7 @@ export function crearVistasPrimera(st, V) {
     return `<div class="hero-b inicio-b">${Art.miguita("ok")}<b>MiGuita</b><span>Anotá lo que gastás en 10 segundos.</span></div>` +
       `<button class="btn pp w" data-act="empezar">Empezar</button>` +
       `<button class="btn pp w alt" data-act="conEjemplo">Mirar con datos de ejemplo</button>` +
+      `<button class="link" data-act="yaUsoMiguita" style="display:block;margin:6px auto 10px">¿Ya usás MiGuita en otro dispositivo? Conectalo</button>` +
       `<div class="sub" style="text-align:center">Tus datos se guardan solo en este celu. Sin cuentas ni publicidad.</div>`;
   }
 

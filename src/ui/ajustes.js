@@ -1,4 +1,4 @@
-// Pantallas de Más: avisos, seguridad (PIN, huella, bloqueo), dólar y copias de seguridad.
+// Pantallas de Más: avisos, seguridad (PIN, huella, bloqueo), dólar, copias de seguridad y mis dispositivos.
 import { Art } from "../art/art.js";
 import { formatear } from "../logic/dinero.js";
 import { TIPOS, FUENTES, nombreTipo, valorPara } from "../logic/dolar.js";
@@ -124,5 +124,37 @@ export function crearVistasAjustes(st, hoy, V) {
     return h + `<div class="hint">La copia va cifrada con tu contraseña. MiGuita no la guarda en ningún servidor.</div>`;
   }
 
-  return { notif, seguridad, dolar, copias };
+  /* ---------- mis dispositivos ---------- */
+  function dispositivos() {
+    const vin = st.cfg.vinculo, f = st.vinc || (st.vinc = { pegado: "", error: "", trabajando: false, verCodigo: false });
+    let h = back("Más") + hdr("Ajustes", "Usar en otro dispositivo");
+    if (!vin) {
+      h += crd(`<b style="font:800 17px 'Bricolage Grotesque',sans-serif">Tus datos en el celu y en la compu</b>` +
+          `<div class="sub">Conectá dos o más dispositivos y van a ver lo mismo: lo que anotás en uno aparece en los otros. Sin mail ni contraseña, con un código.</div>` +
+          `<div class="sub">Viaja cifrado: solo lo pueden abrir tus dispositivos. El tema, el PIN y los avisos quedan en cada uno.</div>`) +
+        lbl("¿Es el primero?") + btn("crearVinculo", f.trabajando ? "Conectando…" : "Conectar otro dispositivo") +
+        `<div class="hint">Te damos un código para poner en el otro.</div>` +
+        crd(lbl("¿Ya tenés un código?") +
+          `<div class="quick"><div class="pp"><input class="field" data-act="codigoVinculo" value="${esc(f.pegado)}" placeholder="XXXX-XXXX-XXXX-XXXX" aria-label="Código de tus dispositivos" maxlength="40" autocapitalize="characters" autocomplete="off" spellcheck="false"></div></div>` +
+          (f.error ? `<div class="msg" role="alert">${esc(f.error)}</div>` : "") +
+          btn("unirVinculo", f.trabajando ? "Conectando…" : "Conectar este dispositivo") +
+          `<div class="sub">Si en este ya anotaste cosas, se juntan con las del otro: no se pierde nada.</div>`);
+      return h;
+    }
+    const estado = vin.error === "version" ? "Otro dispositivo tiene una versión más nueva: actualizá MiGuita acá." :
+      vin.error === "codigo" ? "El código ya no funciona." : vin.error === "red" || navigator.onLine === false ? "Sin conexión: se manda cuando vuelva internet." :
+      vin.ultimo ? "Al día · " + fechaHora(vin.ultimo) : "Conectando…";
+    h += crd(`<div class="sub">${vin.error ? "" : "● "}Conectado con tus otros dispositivos</div><b style="font:800 17px 'Bricolage Grotesque',sans-serif">${esc(estado)}</b>`) +
+      crd(lbl("Para sumar otro dispositivo") +
+        `<div class="sub">En el otro: abrí MiGuita, andá a Más › Usar en otro dispositivo y poné este código.</div>` +
+        (f.verCodigo ? `<div class="code corto">${esc(vin.codigo)}</div>` + (f.svg ? f.svg + `<div class="sub" style="text-align:center">O escanealo con la cámara del otro celu.</div>` : "") +
+          `<div class="btnrow">${btn("copiarCodigoVinculo", "Copiar código")}${btn("verCodigoVinculo", "Ocultar", true)}</div>` :
+          btn("verCodigoVinculo", "Mostrar el código")) +
+        `<div class="msg">Quien tenga este código ve y cambia todos tus datos. No se lo mandes a nadie.</div>`) +
+      `<button class="btn pp w alt del" data-act="desconectarVinculo">${st.confirmar === "vinculo" ? "Tocá de nuevo para desconectar" : "Desconectar este dispositivo"}</button>` +
+      `<div class="hint">Si desconectás, tus datos quedan en este dispositivo pero dejan de actualizarse con los otros.</div>`;
+    return h;
+  }
+
+  return { notif, seguridad, dolar, copias, dispositivos };
 }

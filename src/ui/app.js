@@ -8,7 +8,8 @@ import { infoRacha, salvavidasPara, festejoDeHoy } from "../logic/racha.js";
 import { correrFijos, mesDeInicio, infoMeta, restante, movimientoDeFijo } from "../logic/plan.js";
 import { abrirBase } from "../data/db.js";
 import { centavos, fusionar, novedades, decodificar, codificar, validarAlias, sincronizarMiParte, pagadores } from "../logic/grupos.js";
-import { nuevoCodigo, buscarCodigo, derivar, sincronizar, bajar, escuchar } from "../logic/sincro.js";
+import { nuevoCodigo, buscarCodigo, derivar, sincronizar, bajar, escuchar, pedir } from "../logic/sincro.js";
+import { CONFIG_COMPARTIDA, nuevoCodigoVinculo, leerCodigoVinculo, derivarVinculo, aplanar, huellas, huella, sincronizarDatos } from "../logic/vinculo.js";
 import { datosDeEjemplo, planDeEjemplo, grupoDeEjemplo } from "./ejemplo.js";
 import { crearVistas, esc } from "./pantallas.js";
 import { crearVistasPlan } from "./plan.js";
@@ -33,7 +34,7 @@ import { crearVistasPrimera, instalada } from "./primera.js";
 const PESTANAS = [["inicio", "Inicio"], ["grupos", "Grupos"], ["plan", "Plan"], ["mas", "Más"]];
 const TAB_DE = { movimientos: "inicio", resumen: "inicio", racha: "inicio", categorias: "mas", editarCat: "mas", form: "plan",
   grupo: "grupos", juntada: "grupos", gform: "grupos", compartir: "grupos", unido: "grupos", quien: "grupos", whatsapp: "grupos",
-  notif: "mas", seguridad: "mas", dolar: "mas", copias: "mas", instalar: "mas", tutorial: "mas", importar: "inicio" };
+  notif: "mas", seguridad: "mas", dolar: "mas", copias: "mas", dispositivos: "mas", instalar: "mas", tutorial: "mas", importar: "inicio" };
 const SIN_BARRA = ["bienvenida", "primerIngreso", "tutorial"];
 const PLAN = ["presupuestos", "metas", "deudas", "fijos"];
 const hoy = fechaLocal();
@@ -119,28 +120,149 @@ function guardarMov(mov) {
   const i = st.movs.findIndex((x) => x.id === mov.id);
   if (i >= 0) st.movs[i] = mov; else st.movs.push(mov);
   base.poner("movs", mov);
+  programarVinculo();
 }
 function quitarMov(id) {
   st.movs = st.movs.filter((x) => x.id !== id);
   base.quitar("movs", id);
+  programarVinculo();
 }
 function ponerDia(d) {
   st.dias = st.dias.filter((x) => x.fecha !== d.fecha).concat(d);
   base.poner("dias", d);
+  programarVinculo();
 }
 // Presupuestos, metas, deudas y fijos.
 function ponerItem(lista, obj) {
   const i = st[lista].findIndex((x) => x.id === obj.id);
   if (i >= 0) st[lista][i] = obj; else st[lista].push(obj);
   base.poner(lista, obj);
+  programarVinculo();
 }
 function quitarItem(lista, id) {
   st[lista] = st[lista].filter((x) => x.id !== id);
   base.quitar(lista, id);
+  programarVinculo();
 }
 function ponerConfig(k, v) {
   st.cfg[k] = v;
   base.guardarConfig(k);
+  if (CONFIG_COMPARTIDA.includes(k)) programarVinculo();
+}
+
+/* ---------- mis dispositivos conectados ---------- */
+// Se juntan con el servidor al abrir, al volver a la app, al volver internet, cuando otro dispositivo guarda
+// (aviso al instante) y un ratito después de cada cambio propio.
+let llaveVinculo = null, vinculoTimer = 0, vinculoCola = Promise.resolve(), aplicandoRemoto = false, escuchaVinculo = null;
+function llaveV() {
+  const c = st.cfg.vinculo?.codigo;
+  if (llaveVinculo?.codigo !== c) llaveVinculo = { codigo: c, p: derivarVinculo(c) };
+  return llaveVinculo.p;
+}
+function programarVinculo() {
+  if (!st.cfg?.vinculo || aplicandoRemoto) return;
+  clearTimeout(vinculoTimer);
+  vinculoTimer = setTimeout(sincronizarVinculo, 2000);
+}
+function sincronizarVinculo() {
+  vinculoCola = vinculoCola.then(vinculoUna).catch(() => {});
+  return vinculoCola;
+}
+async function vinculoUna() {
+  const vin = st.cfg.vinculo;
+  if (!vin || navigator.onLine === false) return;
+  const local = structuredClone(base.leerEstado()), antes = huellas(aplanar(local));
+  let r;
+  try { r = await sincronizarDatos(await llaveV(), local, vin.base); }
+  catch (e) {
+    const error = e.message === "version" ? "version" : /403/.test(e.message) ? "codigo" : "red";
+    if (st.cfg.vinculo?.codigo === vin.codigo && st.cfg.vinculo.error !== error) { ponerConfig("vinculo", { ...st.cfg.vinculo, error }); dibujar(); }
+    return;
+  }
+  if (st.cfg.vinculo?.codigo !== vin.codigo) return;
+  // Se aplica lo que llegó, salvo lo que se cambió acá mientras viajaba (eso se manda en la próxima).
+  const ahora = aplanar(base.leerEstado());
+  let cambio = false, otraVez = false;
+  aplicandoRemoto = true;
+  try {
+    for (const k of new Set([...r.M.keys(), ...ahora.keys()])) {
+      const hAhora = ahora.has(k) ? huella(ahora.get(k)) : undefined;
+      if (antes[k] !== hAhora) { otraVez = true; continue; }
+      const m = r.M.get(k);
+      if ((m === undefined ? undefined : huella(m)) === hAhora) continue;
+      aplicarRemoto(k, m);
+      cambio = true;
+    }
+  } finally { aplicandoRemoto = false; }
+  ponerConfig("vinculo", { codigo: vin.codigo, v: r.v, base: r.base, ultimo: new Date().toISOString() });
+  if (otraVez) programarVinculo();
+  if (cambio || vin.error) dibujar();
+}
+function aplicarRemoto(k, x) {
+  const i = k.indexOf("|"), lista = k.slice(0, i), id = k.slice(i + 1);
+  if (lista === "config") { if (x !== undefined) ponerConfig(id, x); return; }
+  if (lista === "dias") {
+    if (x) ponerDia(x); else { st.dias = st.dias.filter((d) => d.fecha !== id); base.quitar("dias", id); }
+    return;
+  }
+  if (lista === "grupos") {
+    const local = st.grupos.find((g) => g.id === id);
+    if (!x) { if (local) quitarItem("grupos", id); return; }
+    const g = local ? { ...fusionar(local, x), yo: x.yo ?? local.yo, loc: x.loc ?? local.loc } : x; // ya se decidió al juntar: gana lo que llegó
+    if (!g.yo) delete g.yo;
+    if (!g.sync && x.sync) g.sync = { codigo: x.sync.codigo };
+    guardarGrupo(g, false);
+    if (g.sync) sincronizarGrupo(g.id);
+    return;
+  }
+  if (x) ponerItem(lista, x); else quitarItem(lista, id);
+}
+// Mientras la app está a la vista, escucha: si otro dispositivo guarda algo, aparece solo.
+function vigilarVinculo() {
+  const c = !document.hidden && st.cfg.vinculo?.codigo;
+  if ((escuchaVinculo?.codigo || false) === c) return;
+  escuchaVinculo?.cortar?.(); escuchaVinculo = null;
+  if (!c) return;
+  const e = (escuchaVinculo = { codigo: c, cortar: null });
+  llaveV().then((d) => { if (escuchaVinculo === e) e.cortar = escuchar(d, (v) => { if (st.cfg.vinculo && v !== st.cfg.vinculo.v) sincronizarVinculo(); }); });
+}
+async function prepararVinculo() {
+  const c = st.cfg.vinculo?.codigo;
+  if (!c) return;
+  const svg = await svgQR(location.origin + location.pathname + "#v=" + c).catch(() => null);
+  if (st.vinc && st.pantalla === "dispositivos") { st.vinc.svg = svg; dibujar(); }
+}
+async function crearVinculo() {
+  ponerConfig("vinculo", { codigo: nuevoCodigoVinculo(), v: 0, base: {} });
+  st.vinc = { ...st.vinc, error: "", trabajando: true, verCodigo: true }; dibujar();
+  await sincronizarVinculo();
+  st.vinc.trabajando = false;
+  if (st.cfg.vinculo?.error) st.vinc.error = "No pude conectarme. Revisá internet: se va a mandar cuando vuelva.";
+  else mostrarAviso("Listo. Ahora poné el código en tu otro dispositivo.");
+  vigilarVinculo(); prepararVinculo(); dibujar();
+}
+async function unirVinculo() {
+  const codigo = leerCodigoVinculo(st.vinc.pegado);
+  if (!codigo) { st.vinc.error = "El código tiene 16 letras y números, por ejemplo K7QM-3XPA-9TRB-2HDW."; return dibujar(); }
+  st.vinc.trabajando = true; st.vinc.error = ""; dibujar();
+  try {
+    const r = await pedir(await derivarVinculo(codigo), "GET");
+    if (r.estado === 404) throw new Error("no");
+    if (r.estado !== 200) throw new Error("red");
+  } catch (e) {
+    st.vinc.trabajando = false;
+    st.vinc.error = e.message === "no" ? "No encontré ese código. Fijate que esté bien escrito." : "No pude conectarme. Revisá internet y probá de nuevo.";
+    return dibujar();
+  }
+  // Lo de ejemplo no se junta con los datos de verdad.
+  st.movs.filter((x) => x.id.startsWith("ej_")).forEach((x) => quitarMov(x.id));
+  PLAN.forEach((l) => st[l].filter((x) => x.id.startsWith("ej_")).forEach((x) => quitarItem(l, x.id)));
+  st.grupos.filter((x) => x.id.startsWith("ej_")).forEach((x) => quitarItem("grupos", x.id));
+  ponerConfig("vinculo", { codigo, v: 0, base: {} });
+  await sincronizarVinculo();
+  st.vinc = { pegado: "", error: st.cfg.vinculo?.error ? "Se conectó, pero no se pudo traer todo. Se reintenta solo." : "", trabajando: false, verCodigo: false };
+  if (!st.cfg.vinculo?.error) mostrarAviso("¡Listo! Este dispositivo ya ve tus datos.");
+  vigilarVinculo(); prepararVinculo(); dibujar();
 }
 
 function mostrarAviso(texto, deshacer) {
@@ -662,6 +784,7 @@ document.addEventListener("visibilitychange", async () => {
     ocultaDesde = Date.now();
     if (st.cfg.tapar) document.body.classList.add("tapado");
     dejarDeEscuchar();
+    escuchaVinculo?.cortar?.(); escuchaVinculo = null;
     if (st.seguridad?.bloqueo === "salir") await base.terminar();
     return;
   }
@@ -671,8 +794,10 @@ document.addEventListener("visibilitychange", async () => {
   if (fechaLocal() !== hoy || Date.now() - ocultaDesde >= minutos * 60000) { await base.terminar(); location.reload(); return; }
   vigilar();
   sincronizarTodos();
+  vigilarVinculo();
+  sincronizarVinculo();
 });
-addEventListener("online", sincronizarTodos);
+addEventListener("online", () => { sincronizarTodos(); sincronizarVinculo(); });
 // Si la app queda abierta pasada la medianoche, se recarga con el día nuevo (salvo que esté anotando algo).
 setInterval(async () => {
   if (fechaLocal() !== hoy && !st.hoja && !document.hidden) { await base.terminar(); location.reload(); }
@@ -763,6 +888,7 @@ function dibujar() {
     seguridad: VA.seguridad,
     dolar: VA.dolar,
     copias: VA.copias,
+    dispositivos: VA.dispositivos,
     bienvenida: VI.bienvenida,
     primerIngreso: VI.primerIngreso,
     instalar: VI.instalar,
@@ -848,10 +974,10 @@ raiz.addEventListener("click", (e) => {
   if (!b || b.tagName === "INPUT" || b.tagName === "SELECT") return;
   const act = b.dataset.act, v = b.dataset.v;
   const s = st.hoja;
-  if (!["borrarMov", "borrarTodo", "borrarPlan", "borrarG", "quitarPin", "aplicarCopia", "desconectarGrupo"].includes(act)) st.confirmar = "";
+  if (!["borrarMov", "borrarTodo", "borrarPlan", "borrarG", "quitarPin", "aplicarCopia", "desconectarGrupo", "desconectarVinculo"].includes(act)) st.confirmar = "";
   switch (act) {
     case "ir": history.replaceState({ p: v }, ""); st.pantalla = v; st.error = ""; scrollTo(0, 0); break;
-    case "abrir": if (v === "tutorial") { st.tutorialPaso = 0; st.tutorialDesde = ""; } abrir(v); break;
+    case "abrir": if (v === "tutorial") { st.tutorialPaso = 0; st.tutorialDesde = ""; } abrir(v); if (v === "dispositivos") prepararVinculo(); break;
     case "volver": return volver();
     case "mes": st.mes = cambiarMes(st.mes, +v); break;
     case "ocultar": ponerConfig("ocultar", !st.cfg.ocultar); break;
@@ -885,6 +1011,7 @@ raiz.addEventListener("click", (e) => {
     case "borrarTodo":
       if (st.confirmar !== "todo") { st.confirmar = "todo"; break; }
       st.confirmar = "";
+      if (st.cfg.vinculo) { escuchaVinculo?.cortar?.(); escuchaVinculo = null; ponerConfig("vinculo", null); }
       [...st.movs].forEach((x) => quitarMov(x.id));
       [...st.dias].forEach((d) => base.quitar("dias", d.fecha));
       st.dias = [];
@@ -951,6 +1078,18 @@ raiz.addEventListener("click", (e) => {
       st.chiste = { n: toques, texto, giro: !!ESPECIALES[toques] };
       chisteTimer = setTimeout(() => { st.chiste = null; if (st.pantalla === "inicio") dibujar(); }, 4500);
       toquesTimer = setTimeout(() => { toques = 0; }, 20000);
+      break;
+    }
+    case "crearVinculo": crearVinculo(); return;
+    case "unirVinculo": unirVinculo(); return;
+    case "verCodigoVinculo": st.vinc.verCodigo = !st.vinc.verCodigo; break;
+    case "copiarCodigoVinculo": copiar(st.cfg.vinculo.codigo); mostrarAviso("Código copiado. Pegalo solo en tus dispositivos."); break;
+    case "desconectarVinculo": {
+      if (st.confirmar !== "vinculo") { st.confirmar = "vinculo"; break; }
+      st.confirmar = "";
+      escuchaVinculo?.cortar?.(); escuchaVinculo = null;
+      ponerConfig("vinculo", null);
+      mostrarAviso("Listo: este dispositivo ya no se actualiza con los otros. Tus datos quedan acá.");
       break;
     }
     case "copiarAlias": copiar(v); mostrarAviso("Alias copiado. Pegalo en Mercado Pago."); break;
@@ -1106,6 +1245,10 @@ raiz.addEventListener("click", (e) => {
       return;
     case "cancelarCopia": if (st.copiaFlujo?.url) URL.revokeObjectURL(st.copiaFlujo.url); st.copiaFlujo = null; break;
     /* primera vez */
+    case "yaUsoMiguita":
+      // Dispositivo nuevo de alguien que ya usa la app: directo a poner el código.
+      ponerConfig("primeraVez", hoy); ponerConfig("tutorialVisto", true);
+      irA("inicio"); st.vinc = { pegado: st.vinc?.pegado || "", error: "", trabajando: false, verCodigo: false }; abrir("dispositivos"); break;
     case "empezar": st.tutorialPaso = 0; st.tutorialDesde = "primerIngreso"; irA("tutorial"); break;
     case "tutorialPaso": st.tutorialPaso = +v; break;
     case "saltarTutorial":
@@ -1305,6 +1448,7 @@ raiz.addEventListener("input", (e) => {
   else if (act === "gPeso") { st.gform.vals.w[e.target.dataset.k] = val; st.gform.error = ""; dibujar(); }
   else if (act === "gPP") { st.gform.vals.pp[e.target.dataset.k] = val; st.gform.error = ""; }
   else if (act === "pegado") { st.compartir.pegado = val; st.compartir.error = ""; }
+  else if (act === "codigoVinculo") { st.vinc.pegado = val; st.vinc.error = ""; }
   else if (act === "nombreNuevo") st.nombreNuevo = val;
   else if (act === "aliasQuien") { st.aliasQuien = val; st.errorQuien = ""; }
   else if (act === "miAlias") { st.errorAlias = ""; }
@@ -1381,6 +1525,16 @@ else if (!st.cfg.tutorialVisto) { st.tutorialPaso = 0; st.tutorialDesde = "inici
 revisarFijos();
 revisarSalvavidas();
 sincronizarTodos();
+sincronizarVinculo();
+vigilarVinculo();
+// Link para conectar este dispositivo: ...#v=<código>
+if (location.hash.startsWith("#v=")) {
+  const codigo = decodeURIComponent(location.hash.slice(3));
+  history.replaceState({ p: "inicio" }, "", location.pathname + location.search);
+  st.vinc = { pegado: codigo, error: "", trabajando: false, verCodigo: false };
+  if (!st.cfg.primeraVez) { ponerConfig("primeraVez", hoy); ponerConfig("tutorialVisto", true); irA("inicio"); }
+  abrir("dispositivos");
+}
 // Link para unirse a un grupo: ...#g=<código largo> o ...#u=<código corto>
 if (location.hash.startsWith("#g=") || location.hash.startsWith("#u=")) {
   const codigo = decodeURIComponent(location.hash.slice(3));

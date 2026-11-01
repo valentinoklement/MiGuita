@@ -8,14 +8,15 @@ const LETRAS = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"; // sin I, L, O ni U para no c
 const MAX_DESCOMPRIMIDO = 2_000_000;
 
 /* ---------- código corto ---------- */
-export function nuevoCodigo() {
-  const r = crypto.getRandomValues(new Uint8Array(12));
+// largo 12 para grupos; 16 para conectar mis dispositivos (ahí viajan todos mis datos).
+export function nuevoCodigo(largo = 12) {
+  const r = crypto.getRandomValues(new Uint8Array(largo));
   return [...r].map((b) => LETRAS[b & 31]).join("").replace(/(.{4})(?=.)/g, "$1-");
 }
 // Acepta el código con guiones, espacios, minúsculas o con O/I/L en vez de 0/1. null si no es un código.
 export function leerCodigo(texto) {
   const s = String(texto ?? "").toUpperCase().replace(/[\s-]/g, "").replace(/O/g, "0").replace(/[IL]/g, "1");
-  if (!/^[0-9A-HJKMNP-TV-Z]{12}$/.test(s)) return null;
+  if (!/^([0-9A-HJKMNP-TV-Z]{12}|[0-9A-HJKMNP-TV-Z]{16})$/.test(s)) return null;
   return s.replace(/(.{4})(?=.)/g, "$1-");
 }
 // Busca un código corto dentro de un texto (un mensaje de WhatsApp, un link #u=...).
@@ -26,32 +27,36 @@ export function buscarCodigo(texto) {
 
 const hex = (u8) => [...u8].map((b) => b.toString(16).padStart(2, "0")).join("");
 // Del código salen: id (dónde está), token (permiso) y clave (para cifrar). Lento a propósito, para que adivinar cueste.
-export async function derivar(codigo) {
+export async function derivar(codigo, sal = "MiGuita-grupo-v1") {
   const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(leerCodigo(codigo)), "PBKDF2", false, ["deriveBits"]);
-  const bits = new Uint8Array(await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: new TextEncoder().encode("MiGuita-grupo-v1"), iterations: 100000 }, base, 512));
+  const bits = new Uint8Array(await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: new TextEncoder().encode(sal), iterations: 100000 }, base, 512));
   const clave = await crypto.subtle.importKey("raw", bits.slice(32), "AES-GCM", false, ["encrypt", "decrypt"]);
   return { id: hex(bits.slice(0, 16)), token: hex(bits.slice(16, 32)), clave };
 }
 
 /* ---------- caja cifrada ---------- */
-export async function cerrar(g, clave) {
-  const u8 = new TextEncoder().encode(JSON.stringify(limpiar(g)));
+export const cerrar = (g, clave) => cerrarObjeto(limpiar(g), clave);
+export async function cerrarObjeto(obj, clave) {
+  const u8 = new TextEncoder().encode(JSON.stringify(obj));
   const z = await transformar(u8, new CompressionStream("deflate-raw"), Infinity);
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const c = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, clave, z));
   const out = new Uint8Array(12 + c.length); out.set(iv); out.set(c, 12);
   return b64(out);
 }
-export async function abrir(datos, clave) {
+export async function abrirObjeto(datos, clave, max = MAX_DESCOMPRIMIDO) {
   const u8 = unb64(datos);
   const z = new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv: u8.slice(0, 12) }, clave, u8.slice(12)));
-  const g = limpiar(JSON.parse(new TextDecoder().decode(await transformar(z, new DecompressionStream("deflate-raw"), MAX_DESCOMPRIMIDO))));
+  return JSON.parse(new TextDecoder().decode(await transformar(z, new DecompressionStream("deflate-raw"), max)));
+}
+export async function abrir(datos, clave) {
+  const g = limpiar(await abrirObjeto(datos, clave));
   if (!g) throw new Error("grupo inválido");
   return g;
 }
 
 /* ---------- servidor ---------- */
-async function pedir(d, metodo, cuerpo, ir = fetch) {
+export async function pedir(d, metodo, cuerpo, ir = fetch) {
   const r = await ir(SERVIDOR + "/g/" + d.id, { method: metodo, headers: { Authorization: "Bearer " + d.token, ...(cuerpo && { "Content-Type": "application/json" }) }, body: cuerpo && JSON.stringify(cuerpo), cache: "no-store" });
   const j = await r.json().catch(() => ({}));
   return { estado: r.status, ...j };

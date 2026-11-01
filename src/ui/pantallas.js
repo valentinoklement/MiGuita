@@ -204,6 +204,7 @@ export function crearVistas(st, hoy) {
         ir("dolar", "Dólar", nombreTipo(st.cfg.dolar.tipo) + (d ? " · " + formatear(d.valor) : " · sin valor") + (st.cfg.dolar.fuente === "manual" || st.cfg.dolar.tipo === "fijo" ? " · a mano" : " · se actualiza solo"), '<circle cx="12" cy="12" r="9"/><path d="M12 7v10M15 9.5c0-2-6-2-6 0s6 2 6 4.5-6 2.5-6 0"/>') +
         (matchMedia("(display-mode: standalone)").matches || navigator.standalone ? "" : ir("instalar", "Instalar MiGuita", "Para tenerla en la pantalla de inicio", '<rect x="6" y="2" width="12" height="20" rx="3"/><path d="M12 8v7m0 0l-3-3m3 3l3-3"/>')) +
         ir("tutorial", "Cómo usar MiGuita", "Todo lo que podés hacer, en un minuto", '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 0 1 5 .5c0 1.5-2.5 2-2.5 3.5M12 17h0"/>') +
+        ir("dispositivos", "Usar en otro dispositivo", st.cfg.vinculo ? (st.cfg.vinculo.error ? "Conectado · sin conexión" : "Conectado · todo al día") : "Celu y compu con los mismos datos", '<rect x="2" y="5" width="13" height="10" rx="2"/><path d="M5 19h7"/><rect x="17" y="9" width="5" height="10" rx="1.5"/>') +
         ir("copias", "Copias y Excel", cp.ultima ? "Última: " + new Date(cp.ultima).toLocaleDateString("es-AR") : "Todavía no hiciste ninguna", '<path d="M12 4v10m0 0l-4-4m4 4l4-4M5 19h14"/>')) +
       crd(lbl("Tu nombre") + `<div class="quick"><div class="pp"><input class="field" data-act="nombre" value="${esc(st.cfg.nombre || "")}" placeholder="Para saludarte en Inicio" aria-label="Tu nombre" maxlength="30" autocomplete="given-name"></div></div>`) +
       crd(lbl("Mi alias para cobrar") + `<div class="quick"><div class="pp${st.errorAlias ? " err" : ""}"><input class="field" data-act="miAlias" value="${esc(st.cfg.alias || "")}" placeholder="solo alias de Mercado Pago" aria-label="Mi alias para cobrar" maxlength="22" autocapitalize="none" autocomplete="off"></div></div>` +
@@ -214,7 +215,7 @@ export function crearVistas(st, hoy) {
         `<div class="srow"><span class="rt"><b>Reducir movimiento</b><small>Frena el temblor de los dibujos</small></span>${interruptor("movimiento", !st.cfg.movimiento, "Reducir movimiento")}</div>` +
         `<div class="srow"><span class="rt"><b>Ocultar montos</b><small>Tapa los números en la pantalla</small></span>${interruptor("ocultar", st.cfg.ocultar, "Ocultar montos")}</div>`) +
       crd(lbl("Tus datos") +
-        `<div class="sub">${st.persistente ? "Tus gastos se guardan solo en este celu. Solo los grupos que conectes viajan por internet, cifrados." : "Este navegador no deja guardar: lo que anotes se pierde al cerrar."}</div>` +
+        `<div class="sub">${st.persistente ? (st.cfg.vinculo ? "Tus datos se comparten, cifrados, solo con tus dispositivos conectados. Los grupos conectados también viajan cifrados." : "Tus gastos se guardan solo en este celu. Solo los grupos que conectes viajan por internet, cifrados.") : "Este navegador no deja guardar: lo que anotes se pierde al cerrar."}</div>` +
         `<div class="btnrow">${ej ? `<button class="btn pp alt" data-act="quitarEjemplo">Quitar ejemplo</button>` : `<button class="btn pp alt" data-act="ponerEjemplo">Cargar ejemplo</button>`}` +
         `<button class="btn pp alt del" data-act="borrarTodo">${st.confirmar === "todo" ? "Tocá de nuevo para borrar" : "Borrar todo"}</button></div>`);
   }
