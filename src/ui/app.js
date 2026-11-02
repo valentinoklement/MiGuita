@@ -42,7 +42,7 @@ import { hayHuella, registrarHuella } from "./huella.js";
 import { crearVistasPrimera, instalada, navegadorActual } from "./primera.js";
 import { crearVistasVoz } from "./voz.js";
 import { resumenParaIA } from "../logic/analisis.js";
-import { hayQuePreguntar } from "../logic/saldo.js";
+import { hayQuePreguntar, enMetas, ahorroSinPreguntar } from "../logic/saldo.js";
 
 const PESTANAS = [["inicio", "Inicio"], ["grupos", "Grupos"], ["plan", "Mis cuentas"], ["mas", "Ajustes"]];
 const TAB_DE = { movimientos: "inicio", resumen: "inicio", racha: "inicio", tuMes: "inicio", personalizacion: "mas", categorias: "mas", editarCat: "mas", form: "plan",
@@ -163,11 +163,18 @@ function ponerItem(lista, obj) {
   if (i >= 0) st[lista][i] = obj; else st[lista].push(obj);
   base.poner(lista, obj);
   programarVinculo();
+  if (lista === "metas") ajustarAhorros();
 }
 function quitarItem(lista, id) {
   st[lista] = st[lista].filter((x) => x.id !== id);
   base.quitar(lista, id);
   programarVinculo();
+  if (lista === "metas") ajustarAhorros();
+}
+// Si bajó lo guardado en metas, esa plata vuelve a estar para usar.
+function ajustarAhorros() {
+  const s = st.cfg.saldo, total = enMetas(st.metas);
+  if (s && ((s.vistas || 0) > total || (s.aparte || 0) > total)) ponerConfig("saldo", { ...s, vistas: Math.min(s.vistas || 0, total), aparte: Math.min(s.aparte || 0, total) });
 }
 function ponerConfig(k, v) {
   st.cfg[k] = v;
@@ -543,6 +550,8 @@ function guardarForm() {
       const antes = st.metas.find((x) => x.id === id);
       const m = { ...antes, ahorrado: antes.ahorrado + monto("monto", "el monto") };
       ponerItem("metas", m);
+      // Sumar a una meta mueve plata que ya tenés: no hace falta preguntar nada.
+      if (st.cfg.saldo && m.moneda === "ARS") ponerConfig("saldo", { ...st.cfg.saldo, vistas: (st.cfg.saldo.vistas || 0) + m.ahorrado - antes.ahorrado });
       mostrarAviso("Sumaste " + V.plata(m.ahorrado - antes.ahorrado, { moneda: m.moneda === "USD" ? "US$ " : "$" }) + " a " + m.nombre, () => ponerItem("metas", antes));
       if (infoMeta(m, hoy).cumplida && !infoMeta(antes, hoy).cumplida) st.metaOk = m;
     } else if (tipo === "pago") {
@@ -1723,6 +1732,11 @@ raiz.addEventListener("click", (e) => {
       for (const id of st.dudaSaldo.ids) { const m = st.movs.find((x) => x.id === id); if (m) guardarMov({ ...m, previo: true, mod: Date.now() }); }
       st.dudaSaldo = null; mostrarAviso("Listo, no te lo resto."); break;
     case "saldoNo": ponerConfig("saldo", { ...st.cfg.saldo, listo: true }); st.dudaSaldo = null; break;
+    case "ahorroAdentro": case "ahorroAparte": {
+      const s = st.cfg.saldo, falta = ahorroSinPreguntar(s, st.metas);
+      ponerConfig("saldo", { ...s, vistas: enMetas(st.metas), aparte: (s.aparte || 0) + (act === "ahorroAparte" ? falta : 0) });
+      break;
+    }
     case "cargarIngreso": return abrirHoja({ tipo: "ingreso", categoria: "sueldo", medio: "transferencia", detalle: "" });
     case "cerrarCartel": ponerConfig(v, true); break;
     case "tengoCopia":

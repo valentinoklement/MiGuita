@@ -1,6 +1,6 @@
 // Pantallas de MiGuita. Cada función devuelve HTML; los textos de la persona pasan siempre por esc().
 import { AYUDAS } from "./ayuda.js";
-import { parteDePlata, tuPlata } from "../logic/saldo.js";
+import { apartado, enMetas, podesUsar, ahorroSinPreguntar, parteDePlata, tuPlata } from "../logic/saldo.js";
 import { puedeGrabar } from "./voz.js";
 import { Art } from "../art/art.js";
 import { formatear, evaluar } from "../logic/dinero.js";
@@ -111,6 +111,9 @@ export function crearVistas(st, hoy) {
       h += crd(`<b class="pregunta">¿${n > 1 ? "Estos ya estaban descontados" : "Esto ya estaba descontado"} de los ${plata(st.cfg.saldo.monto)} que cargaste?</b><div class="sub">Si lo pagaste antes de cargar tu plata, no te lo resto de nuevo.</div>` +
         `<div class="chips"><button class="pp" data-act="saldoYa" aria-pressed="true">Sí, ya estaba</button><button class="pp" data-act="saldoNo">No, restalo</button></div>`, "aviso");
     }
+    const sinPreguntar = guiando ? 0 : ahorroSinPreguntar(st.cfg.saldo, st.metas);
+    if (sinPreguntar) h += crd(`<b class="pregunta">¿Lo que guardaste para tus metas está dentro de tu plata?</b><div class="sub">Son ${plata(sinPreguntar)}. Si está adentro, te muestro solo lo que podés usar.</div>` +
+      `<div class="chips"><button class="pp" data-act="ahorroAdentro" aria-pressed="true">Sí, está adentro</button><button class="pp" data-act="ahorroAparte">No, lo tengo aparte</button></div>`, "aviso");
     // Un solo cartel de bienvenida por vez, para no llenar la pantalla. Lo que cobrás y tu nombre se piden acá, sin obligar.
     const reales = st.movs.filter((m) => !m.id.startsWith("ej_")).length;
     if (guiando) { /* mientras dura la guía, nada más */ }
@@ -150,12 +153,19 @@ export function crearVistas(st, hoy) {
       h += crd(`<div class="sub"><b>Tus datos están solo en este celu.</b> Si lo perdés o se borra la app, se pierden. Una copia los salva.</div>` +
         `<div class="chips"><button class="pp" data-act="abrir" data-v="copias" aria-pressed="true">Hacer una copia</button><button class="pp" data-act="posponerCopia">Ahora no</button></div>`, "aviso");
 
-    // Sin ingresos cargados no tiene sentido decir "te queda menos tanto": si cargó su plata se muestra esa, y si no, lo gastado.
+    // Con su plata cargada se ve un solo número: lo que puede usar. Sin eso, "te queda" sale de lo cobrado; sin ingresos, se muestra lo gastado.
     const miPlata = tuPlata(st.cfg.saldo, st.movs);
-    const conPlata = actual && sinIngreso && miPlata !== null && !guiando;
-    h += `<button class="card pp hr tecard" data-act="abrir" data-v="resumen" aria-label="Ver el resumen del mes">${Art.pan(conPlata ? parteDePlata(st.cfg.saldo, st.movs) : r.queda)}<span class="ht"><span class="sub">${conPlata ? (miPlata < 0 ? "Te pasaste por" : "Tenés") : sinIngreso ? "Gastaste" : "Te queda"}</span>` +
-      `<span class="big std">${plata(conPlata ? Math.abs(miPlata) : sinIngreso ? r.gastos : r.teQueda)}</span>` +
-      `<span class="sub">${conPlata ? (r.gastos ? "Gastaste " + plata(r.gastos) + " este mes" : "Este mes todavía no gastaste") : sinIngreso ? "Tocá para ver en qué se fue" : actual ? "Podés gastar " + plata(r.porDia) + " por día" : "Gastaste " + plata(r.gastos)}</span></span></button>`;
+    const conPlata = actual && miPlata !== null && !guiando;
+    if (conPlata) {
+      const usar = podesUsar(st.cfg.saldo, st.movs, st.metas), ars = enMetas(st.metas), usd = enMetas(st.metas, "USD");
+      const guardado = [ars && plata(ars), usd && plata(usd, { moneda: "US$ " })].filter(Boolean).join(" y ");
+      h += `<button class="card pp hr tecard" data-act="abrir" data-v="resumen" aria-label="Ver el resumen del mes">${Art.pan(parteDePlata(st.cfg.saldo, st.movs, st.mes, st.metas))}<span class="ht"><span class="sub">${usar < 0 ? "Te pasaste por" : "Podés usar"}</span>` +
+        `<span class="big std">${plata(Math.abs(usar))}</span>` +
+        `<span class="sub">${usar > 0 ? "Podés gastar " + plata(Math.floor(usar / r.faltan / 100) * 100) + " por día" : "Tocá para ver en qué se fue"}</span>` +
+        (guardado ? `<span class="sub">Ahorros para tus metas: ${guardado}</span>` : "") + `</span></button>`;
+    } else h += `<button class="card pp hr tecard" data-act="abrir" data-v="resumen" aria-label="Ver el resumen del mes">${Art.pan(r.queda)}<span class="ht"><span class="sub">${sinIngreso ? "Gastaste" : "Te queda"}</span>` +
+      `<span class="big std">${plata(sinIngreso ? r.gastos : r.teQueda)}</span>` +
+      `<span class="sub">${sinIngreso ? "Tocá para ver en qué se fue" : actual ? "Podés gastar " + plata(r.porDia) + " por día" : "Gastaste " + plata(r.gastos)}</span></span></button>`;
 
     const conMic = !guiando && puedeGrabar();
     h += (guiando ? "" : conPlata ?
@@ -329,6 +339,7 @@ export function crearVistas(st, hoy) {
     const opcion = (act, t, sub) => `<button class="srow rowb" data-act="${act}" style="width:100%;text-align:left"><span class="rt"><b>${t}</b><small>${sub}</small></span><span class="chev" aria-hidden="true">›</span></button>`;
     return back("Inicio") + hdr("Tu plata", "Cargar plata", "", "plata") +
       crd(lbl("Lo que tengo ahora") + (s ? `<div class="row f"><span>Tu plata ahora</span><span>${plata(ahora)}</span></div>` : "") +
+        (s && apartado(s, st.metas) ? `<div class="row"><span>Para tus metas</span><span>${plata(apartado(s, st.metas))}</span></div><div class="row"><span>Podés usar</span><span>${plata(podesUsar(s, st.movs, st.metas))}</span></div>` : "") +
         `<div class="sub">${s ? "¿No coincide? Poné lo que tenés de verdad y arranca de nuevo desde ahí." : "Sumá lo que tenés en Mercado Pago, en el banco y en efectivo. No cuenta como ingreso."}</div>` +
         `<div class="quick"><div class="pp${st.plataError ? " err" : ""}"><input class="field" data-act="plataMonto" value="${esc(st.plataTexto || "")}" placeholder="por ejemplo 30.000" inputmode="decimal" aria-label="Lo que tengo ahora" maxlength="16"></div><button class="btn pp anotar" data-act="plataGuardar">${s ? "Actualizar" : "Guardar"}</button></div>` +
         (st.plataError ? `<div class="msg" role="alert">${esc(st.plataError)}</div>` : "")) +
