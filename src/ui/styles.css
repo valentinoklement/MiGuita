@@ -435,6 +435,13 @@ em.nuevo{font-style:normal;font-size:10px;font-weight:800;text-transform:upperca
 /* ---------- tu plata ---------- */
 .plata-fila{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .plata-fila.sola{justify-content:flex-end}
+.tecard.solo{gap:12px;min-height:124px}
+.tecard.solo>svg{flex:1 1 0;min-width:0;max-width:176px;width:auto;height:auto}
+.tecard.solo .ht{flex:none;margin-left:auto;text-align:right}
+.ver-res{display:flex;align-items:center;gap:8px;min-height:44px;text-align:left;font:700 13px/1.2 "Bricolage Grotesque",sans-serif}
+.ver-res i{font:800 26px/1 "Bricolage Grotesque",sans-serif;font-style:normal;color:var(--gold)}
+.motion .ver-res i{animation:subeF 1.1s ease-in-out infinite}
+@keyframes subeF{50%{transform:translateY(-5px)}}
 .plata-fila small{display:block;font-size:12px;font-weight:600;opacity:.85}
 .plata-fila b{font:800 20px "Bricolage Grotesque",sans-serif;font-variant-numeric:tabular-nums}
 .neg-v{color:var(--negscr)}

@@ -158,7 +158,7 @@ export function crearVistas(st, hoy) {
     const conPlata = actual && miPlata !== null && !guiando;
     if (conPlata) {
       const usar = podesUsar(st.cfg.saldo, st.movs, st.metas);
-      h += `<button class="card pp hr tecard" data-act="abrir" data-v="resumen" aria-label="Ver el resumen del mes">${Art.pan(parteDePlata(st.cfg.saldo, st.movs, st.mes, st.metas))}<span class="ht"><span class="sub">${usar < 0 ? "Te pasaste por" : "Podés usar"}</span>` +
+      h += `<button class="card pp hr tecard solo" data-act="abrir" data-v="resumen" aria-label="Ver el resumen del mes">${Art.pan(parteDePlata(st.cfg.saldo, st.movs, st.mes, st.metas))}<span class="ht"><span class="sub">${usar < 0 ? "Te pasaste por" : "Podés usar"}</span>` +
         `<span class="big std">${plata(Math.abs(usar))}</span></span></button>`;
     } else h += `<button class="card pp hr tecard" data-act="abrir" data-v="resumen" aria-label="Ver el resumen del mes">${Art.pan(r.queda)}<span class="ht"><span class="sub">${sinIngreso ? "Gastaste" : "Te queda"}</span>` +
       `<span class="big std">${plata(sinIngreso ? r.gastos : r.teQueda)}</span>` +
@@ -166,7 +166,7 @@ export function crearVistas(st, hoy) {
 
     const conMic = !guiando && puedeGrabar();
     h += (guiando ? "" : conPlata ?
-      `<div class="plata-fila sola"><button class="btnmini" data-act="abrir" data-v="plata">Cargar plata</button></div>` : miPlata !== null ?
+      `<div class="plata-fila"><button class="ver-res" data-act="abrir" data-v="resumen"><i aria-hidden="true">↑</i>Tocá para ver tu resumen</button><button class="btnmini" data-act="abrir" data-v="plata">Cargar plata</button></div>` : miPlata !== null ?
       `<div class="plata-fila"><span><small>Tu plata ahora</small><b${miPlata < 0 ? ' class="neg-v"' : ""}>${plata(miPlata)}</b></span><button class="btnmini" data-act="abrir" data-v="plata">Cargar plata</button></div>` :
       `<div class="plata-fila sola"><button class="btnmini" data-act="abrir" data-v="plata">+ Cargar plata</button></div>`) + `<form class="quick" data-form="rapido"><div class="pp${st.error ? " err" : ""}"><input id="rapido" placeholder="15mil nafta" aria-label="Anotar un gasto" autocomplete="off" enterkeyhint="done" maxlength="300"></div>` +
       (conMic ? `<button class="btn pp mic" type="button" data-act="hablar" aria-label="Hablar: decí tus gastos con la voz">${Art.icono(MIC)}</button>` : "") +
