@@ -44,7 +44,7 @@ import { crearVistasVoz } from "./voz.js";
 import { resumenParaIA } from "../logic/analisis.js";
 import { hayQuePreguntar, enMetas, ahorroSinPreguntar } from "../logic/saldo.js";
 
-const PESTANAS = [["inicio", "Inicio"], ["grupos", "Grupos"], ["plan", "Mis cuentas"], ["mas", "Ajustes"]];
+const PESTANAS = [["inicio", "Inicio"], ["plan", "Mis cuentas"], ["grupos", "Grupos"], ["mas", "Ajustes"]];
 const TAB_DE = { movimientos: "inicio", resumen: "inicio", racha: "inicio", tuMes: "inicio", personalizacion: "mas", categorias: "mas", editarCat: "mas", form: "plan",
   plata: "inicio", grupo: "grupos", juntada: "grupos", historial: "grupos", gform: "grupos", compartir: "grupos", unido: "grupos", quien: "grupos", whatsapp: "grupos",
   notif: "mas", seguridad: "mas", dolar: "mas", copias: "mas", dispositivos: "mas", comentario: "mas", privacidad: "mas", instalar: "mas", yaInstalada: "mas", tutorial: "mas", importar: "inicio", grabar: "inicio", revisar: "inicio" };

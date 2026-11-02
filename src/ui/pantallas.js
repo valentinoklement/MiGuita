@@ -1,6 +1,6 @@
 // Pantallas de MiGuita. Cada función devuelve HTML; los textos de la persona pasan siempre por esc().
 import { AYUDAS } from "./ayuda.js";
-import { apartado, enMetas, podesUsar, ahorroSinPreguntar, parteDePlata, tuPlata } from "../logic/saldo.js";
+import { apartado, podesUsar, ahorroSinPreguntar, parteDePlata, tuPlata } from "../logic/saldo.js";
 import { puedeGrabar } from "./voz.js";
 import { Art } from "../art/art.js";
 import { formatear, evaluar } from "../logic/dinero.js";
@@ -157,12 +157,9 @@ export function crearVistas(st, hoy) {
     const miPlata = tuPlata(st.cfg.saldo, st.movs);
     const conPlata = actual && miPlata !== null && !guiando;
     if (conPlata) {
-      const usar = podesUsar(st.cfg.saldo, st.movs, st.metas), ars = enMetas(st.metas), usd = enMetas(st.metas, "USD");
-      const guardado = [ars && plata(ars), usd && plata(usd, { moneda: "US$ " })].filter(Boolean).join(" y ");
+      const usar = podesUsar(st.cfg.saldo, st.movs, st.metas);
       h += `<button class="card pp hr tecard" data-act="abrir" data-v="resumen" aria-label="Ver el resumen del mes">${Art.pan(parteDePlata(st.cfg.saldo, st.movs, st.mes, st.metas))}<span class="ht"><span class="sub">${usar < 0 ? "Te pasaste por" : "Podés usar"}</span>` +
-        `<span class="big std">${plata(Math.abs(usar))}</span>` +
-        `<span class="sub">${usar > 0 ? "Podés gastar " + plata(Math.floor(usar / r.faltan / 100) * 100) + " por día" : "Tocá para ver en qué se fue"}</span>` +
-        (guardado ? `<span class="sub">Ahorros para tus metas: ${guardado}</span>` : "") + `</span></button>`;
+        `<span class="big std">${plata(Math.abs(usar))}</span></span></button>`;
     } else h += `<button class="card pp hr tecard" data-act="abrir" data-v="resumen" aria-label="Ver el resumen del mes">${Art.pan(r.queda)}<span class="ht"><span class="sub">${sinIngreso ? "Gastaste" : "Te queda"}</span>` +
       `<span class="big std">${plata(sinIngreso ? r.gastos : r.teQueda)}</span>` +
       `<span class="sub">${sinIngreso ? "Tocá para ver en qué se fue" : actual ? "Podés gastar " + plata(r.porDia) + " por día" : "Gastaste " + plata(r.gastos)}</span></span></button>`;
@@ -246,6 +243,7 @@ export function crearVistas(st, hoy) {
     const max = Math.max(...dias), diaMax = dias.indexOf(max);
     let h = back("Inicio") + hdr(mesNav(), "Resumen", estadoDelMes(st.mes, r), "resumen") +
       crd(`<div class="stats"><div><div class="sub">Ingresos</div><b class="pos">${plata(r.ingresos)}</b></div><div><div class="sub">Gastos</div><b class="neg">${plata(r.gastos)}</b></div><div><div class="sub">Queda</div><b>${plata(r.teQueda)}</b></div></div>` +
+        (() => { const usar = actual ? podesUsar(st.cfg.saldo, st.movs, st.metas) : null; return usar > 0 ? `<div class="sub">Podés gastar ${plata(Math.floor(usar / r.faltan / 100) * 100)} por día hasta fin de mes.</div>` : ""; })() +
         (() => { const d = dolarDe(referencia(st.mes, hoy)); return d && r.gastos ? `<div class="sub">≈ ${formatear(Math.round(r.gastos * 100 / d.valor), { moneda: "US$ ", oculto: st.cfg.ocultar }).replace(/,\d\d$/, "")} gastados · dólar ${nombreTipo(st.cfg.dolar.tipo).toLowerCase()} ${formatear(d.valor)}</div>` : ""; })());
     if (!r.gastos) return h + crd(`<div class="empty"><b>Sin gastos este mes</b><span>Cuando anotes, acá vas a ver en qué se te va la plata.</span></div>`);
     h += `<div class="btnrow"><button class="btn pp alt" data-act="abrirTuMes" data-v="${st.mes}">Tu mes${actual ? " (hasta hoy)" : ""}</button><button class="btn pp alt" data-act="verPlan" data-v="analisis">Ver análisis</button></div>`;
