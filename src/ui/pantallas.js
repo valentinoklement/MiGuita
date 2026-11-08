@@ -130,6 +130,9 @@ export function crearVistas(st, hoy) {
       `<div class="chips"><button class="pp" data-act="ahorroAdentro" aria-pressed="true">Sí, está adentro</button><button class="pp" data-act="ahorroAparte">No, lo tengo aparte</button></div>`, "aviso");
     // Un solo cartel de bienvenida por vez, para no llenar la pantalla. Lo que cobrás y tu nombre se piden acá, sin obligar.
     const reales = st.movs.filter((m) => !m.id.startsWith("ej_")).length;
+    // Quien tenía PIN en la dirección vieja no puede quedar sin protección sin enterarse.
+    if (!guiando && st.cfg.pinViejo && !st.cfg.pinAvisado && !st.seguridad)
+      h += crd(`<b class="pregunta">Volvé a ponerle PIN</b><div class="sub">En la dirección vieja tenías MiGuita cerrada con PIN. Acá todavía está abierta.</div><div class="chips"><button class="pp" data-act="abrir" data-v="seguridad" aria-pressed="true">Poner PIN</button><button class="pp" data-act="cerrarCartel" data-v="pinAvisado">Ahora no</button></div>`, "aviso");
     const conPlataEfectiva = saldoEfectivo(st.cfg.saldo, st.movs);
     const instalar = guiando ? "" : cartelInstalar();
     const antesDelCartel = h.length;

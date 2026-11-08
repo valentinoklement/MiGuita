@@ -14,17 +14,21 @@ export function crearMudanza({ st, hoy, V, ponerConfig, sincronizarVinculo, unir
   const { crd, lbl } = V.ayudas;
   const cabeza = (t, x) => `<div class="hero-b entrada">${Art.miguita("ok").replace("<svg", '<svg style="width:150px"')}<b>${t}</b>${x ? `<span>${x}</span>` : ""}</div>`;
   const paso = (n, t) => `<div class="srow paso-i${n === 1 ? " f" : ""}"><span class="stn">${n}</span><span class="rt">${t}</span></div>`;
-  const destino = () => { const m = st.cfg.mudada; return m?.fecha === hoy ? NUEVA + "#m=" + encodeURIComponent(m.codigo) + (m.seguir ? "&s=1" : "") : NUEVA; };
+  // El link trae los datos solo el día de la mudanza: más tarde, volver a juntarlos podría traer de vuelta lo que ya se borró.
+  const destino = () => { const m = st.cfg.mudada; return m?.fecha === hoy ? NUEVA + "#m=" + encodeURIComponent(m.codigo) + (m.seguir ? "&s=1" : "") + (m.pin ? "&p=1" : "") : NUEVA; };
+  const copiarCodigo = (ya) => `<div class="code corto">${esc(ya.codigo)}</div><button class="btn pp w alt" data-act="copiarCodigoMudanza">Copiar el código</button>`;
 
   function pantalla() {
     const m = st.mudanza || {}, ya = st.cfg.mudada;
     if (m.recibiendo) return cabeza("Trayendo tus datos…", "Un segundo, ya casi está.");
+    // Primero el link y después el código: copiar uno borra lo que se había copiado antes.
     if (ya && navegadorActual().so === "iphone" && instalada())
       return cabeza("Falta un pasito", "En iPhone, cada app guarda lo suyo.") +
-        crd(lbl("Para llevarte tus datos") + paso(1, "Copiá este código") + `<div class="code corto">${esc(ya.codigo)}</div><button class="btn pp w alt" data-act="copiarCodigoMudanza">Copiar el código</button>` +
-          paso(2, `Abrí Safari y entrá a <b>${CORTA}</b>`) + paso(3, "Instalala y abrila desde el ícono nuevo") + paso(4, "Andá a Ajustes › Usar en otro dispositivo y pegá el código"));
+        crd(lbl("Para llevarte tus datos") + paso(1, `Copiá el link y abrilo en Safari: <b>${CORTA}</b>`) + `<button class="btn pp w alt" data-act="copiarDireccion">Copiar el link</button>` +
+          paso(2, "Instalala y abrila desde el ícono nuevo") + paso(3, "Volvé acá y copiá este código") + copiarCodigo(ya) + paso(4, "En la app nueva, andá a Ajustes › Usar en otro dispositivo y pegalo"));
     if (ya) return cabeza("MiGuita ya está en su casa nueva", `Ahora se abre desde ${CORTA}. Este ícono ya no se usa: podés borrarlo.`) + `<div class="relleno"></div>` +
-      `<a class="btn pp w grande" href="${destino()}">Abrir MiGuita</a>`;
+      `<a class="btn pp w grande" href="${destino()}">Abrir MiGuita</a>` +
+      crd(`<div class="sub"><b>¿No ves tus datos?</b> En la app nueva, andá a Ajustes › Usar en otro dispositivo y poné este código:</div>` + copiarCodigo(ya));
     return cabeza("MiGuita se mudó", `Ahora vive en <b>${CORTA}</b>. Sigue siendo gratis y tus datos se pasan con un toque, cifrados.`) + `<div class="relleno"></div>` +
       (m.error ? `<div class="msg" role="alert">${esc(m.error)}</div>` : "") +
       `<button class="btn pp w grande" data-act="llevarDatos">${m.trabajando ? "Llevando tus datos…" : "Llevar mis datos"}</button>` +
@@ -46,14 +50,15 @@ export function crearMudanza({ st, hoy, V, ponerConfig, sincronizarVinculo, unir
     const codigo = st.cfg.vinculo.codigo;
     if (st.cfg.avisos) await apagarAvisos();
     if (!seguir) { cortarEscucha(); ponerConfig("vinculo", null); }
-    ponerConfig("mudada", { fecha: hoy, codigo, seguir });
+    ponerConfig("mudada", { fecha: hoy, codigo, seguir, pin: !!st.seguridad });
     st.mudanza = null;
     if (navegadorActual().so === "iphone" && instalada()) return dibujar();
     location.href = destino();
   }
 
   // En la dirección nueva: trae lo de la vieja. Si no tenía otros dispositivos conectados, después se desconecta.
-  async function recibir(codigo, seguir) {
+  async function recibir(codigo, seguir, teniaPin) {
+    if (teniaPin) ponerConfig("pinViejo", true);
     st.vinc = { pegado: codigo, error: "", trabajando: false, verCodigo: false };
     st.mudanza = { recibiendo: true };
     irA("mudanza"); dibujar();
@@ -62,7 +67,7 @@ export function crearMudanza({ st, hoy, V, ponerConfig, sincronizarVinculo, unir
     irA("inicio");
     if (st.vinc?.error) { abrir("dispositivos"); return dibujar(); }
     if (!seguir) { cortarEscucha(); ponerConfig("vinculo", null); }
-    mostrarAviso("¡Listo! Tus datos ya están acá. Si tenías PIN o avisos, activalos de nuevo en Ajustes.");
+    mostrarAviso("¡Listo! Tus datos ya están acá. Si tenías avisos, activalos de nuevo en Ajustes.");
     dibujar();
   }
 

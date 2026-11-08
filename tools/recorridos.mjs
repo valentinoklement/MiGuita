@@ -300,6 +300,30 @@ paso("mudanza: en la dirección vieja, con datos, ofrece llevárselos", async ()
   await c.cerrar();
 });
 
+paso("mudanza: ya mudada, si no ve sus datos tiene el código a mano", async () => {
+  const c = await celu();
+  await c.empezar();
+  await c.anotar("nafta 20000");
+  await c.ev(`new Promise((ok, mal) => { const r = indexedDB.open("miguita"); r.onerror = mal; r.onsuccess = () => { const t = r.result.transaction("config", "readwrite"); t.objectStore("config").put({ k: "mudada", v: { fecha: "2026-01-01", codigo: "K7QM-3XPA-9TRB-2HDW", seguir: false } }); t.oncomplete = ok; t.onerror = mal; }; })`);
+  await c.s("Page.addScriptToEvaluateOnNewDocument", { source: `window.__miguitaHost = "valentinoklement.github.io";` });
+  await c.ir();
+  await c.ve(/casa nueva/);
+  await c.ve(/¿No ves tus datos\?/);
+  await c.ve(/K7QM-3XPA-9TRB-2HDW/);
+  // Pasado el día de la mudanza, el botón ya no vuelve a traer los datos solo.
+  assert.equal(await c.ev(`[...document.querySelectorAll("#app a")].find((a) => a.innerText.includes("Abrir MiGuita")).getAttribute("href")`), "https://miguita-app.pages.dev/");
+  await c.cerrar();
+});
+
+paso("mudanza: quien tenía PIN se entera de que acá todavía no lo tiene", async () => {
+  const c = await celu();
+  await c.ir("#m=K7QM-3XPA-9TRB-2HDW&p=1");
+  await c.ve(/No pude conectarme/);
+  await c.clic(".nav [data-v=inicio]");
+  await c.ve(/Volvé a ponerle PIN/);
+  await c.cerrar();
+});
+
 paso("mudanza: en la dirección vieja, sin datos, se va solo a la nueva", async () => {
   const c = await celu();
   await c.s("Page.addScriptToEvaluateOnNewDocument", { source: `window.__miguitaHost = "valentinoklement.github.io";` });

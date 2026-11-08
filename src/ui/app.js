@@ -1861,7 +1861,7 @@ function abrirLink(redibujar = true) {
   if (h.startsWith("#m=")) {
     // Viene de la dirección vieja con sus datos.
     st.desdePrimera = false; ponerConfig("primeraVez", hoy); terminarGuia();
-    mudanza.recibir(codigo, h.includes("&s=1"));
+    mudanza.recibir(codigo, h.includes("&s=1"), h.includes("&p=1"));
   } else if (h.startsWith("#v=")) {
     st.vinc = { pegado: codigo, error: "", trabajando: false, verCodigo: false };
     if (!st.cfg.primeraVez || st.desdePrimera) { st.desdePrimera = false; ponerConfig("primeraVez", hoy); terminarGuia(); irA("inicio"); }
