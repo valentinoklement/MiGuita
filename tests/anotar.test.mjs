@@ -6,7 +6,7 @@ import { migrar, VERSION } from "../src/logic/migraciones.js";
 import { leerMonto } from "../src/logic/dinero.js";
 import { primeraCuota } from "../src/logic/cuotas.js";
 import { aparato, mandarComentario } from "../src/logic/buzon.js";
-import { queNavegador, linkAChrome } from "../src/logic/instalar.js";
+import { queNavegador, linkAChrome, safariNuevo } from "../src/logic/instalar.js";
 import { pasarATexto, formatoDeAudio } from "../src/logic/voz.js";
 
 const monto = (t) => leerTexto(t).monto / 100;
@@ -210,7 +210,10 @@ test("qué navegador es, para mostrar cómo instalar", () => {
   assert.deepEqual(queNavegador(I + "Version/18.0 Mobile/15E148 Safari/604.1"), { so: "iphone", interno: false, chrome: false, safari: true });
   assert.equal(queNavegador(I + "CriOS/130.0 Mobile/15E148 Safari/604.1").safari, false);
   assert.equal(queNavegador("Mozilla/5.0 (Windows NT 10.0) Chrome/130.0").so, "compu");
-  assert.ok(linkAChrome().startsWith("intent://valentinoklement.github.io/MiGuita/#Intent;scheme=https;package=com.android.chrome;"));
+  assert.equal(safariNuevo(I + "Version/18.6 Mobile/15E148 Safari/604.1"), false);
+  assert.equal(safariNuevo(I + "Version/26.0 Mobile/15E148 Safari/604.1"), true);
+  assert.equal(safariNuevo(I + "CriOS/130.0 Mobile/15E148 Safari/604.1"), false);
+  assert.ok(linkAChrome().startsWith("intent://miguita-app.pages.dev/#Intent;scheme=https;package=com.android.chrome;"));
 });
 
 test("el audio se manda una sola vez y los errores se explican", async () => {

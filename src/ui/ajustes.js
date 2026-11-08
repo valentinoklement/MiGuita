@@ -6,6 +6,7 @@ import { esc } from "./pantallas.js";
 import { tecladoPin, puntos } from "./bloqueo.js";
 import { leerCodigoVinculo } from "../logic/vinculo.js";
 import { TIPOS_COMENTARIO, MAX_COMENTARIO } from "../logic/buzon.js";
+import { puedeGrabar } from "./voz.js";
 
 export function crearVistasAjustes(st, hoy, V) {
   const { back, hdr, lbl, crd, chips, interruptor } = V.ayudas;
@@ -32,7 +33,7 @@ export function crearVistasAjustes(st, hoy, V) {
       `<div class="hint">Que solo vibre depende del modo del celu (si está en vibrar).</div>` +
       crd(lbl("Qué avisos") +
         fila("Anotar los gastos del día", "A las horas de arriba", interruptor("notifTipo", n.tipos.dia, "Anotar los gastos del día", "dia"), true) +
-        fila("Racha en riesgo", "A las 21:00 si tenés 3 días o más", interruptor("notifTipo", n.tipos.racha, "Racha en riesgo", "racha")) +
+        fila("Recordatorio de racha", "A las 21:00 si tenés 3 días o más", interruptor("notifTipo", n.tipos.racha, "Recordatorio de racha", "racha")) +
         fila("Tope por pasarse", "Una vez al llegar al 90%", interruptor("notifTipo", n.tipos.presupuesto, "Tope por pasarse", "presupuesto"))) +
       crd(fila("No molestar", n.noMolestar.activo ? "Sin avisos en esa franja" : "Apagado", interruptor("notifNM", n.noMolestar.activo, "No molestar"), true) +
         (n.noMolestar.activo ? fila("Desde", "", hora("notifDesde", n.noMolestar.desde, "No molestar desde")) + fila("Hasta", "", hora("notifHasta", n.noMolestar.hasta, "No molestar hasta")) : "")) +
@@ -181,19 +182,23 @@ export function crearVistasAjustes(st, hoy, V) {
       `<div class="sub">Lo lee quien hace la app. A fin de mes, el aporte más útil se lleva una birra.${n ? " Ya mandaste " + n + "." : ""}</div>` +
       lbl("¿Qué es?") + chips("comTipo", TIPOS_COMENTARIO, c.tipo, "Tipo de comentario") +
       lbl("Contanos") + `<div class="quick"><div class="pp"><textarea class="field" data-act="comTexto" rows="5" maxlength="${MAX_COMENTARIO}" aria-label="Tu comentario" placeholder="${c.tipo === "error" ? "Qué estabas haciendo y qué pasó" : "Qué cambiarías o qué le falta"}">${esc(c.texto)}</textarea></div></div>` +
+      (puedeGrabar() ? btn("comHablar", "O contalo con la voz", true) : "") +
       lbl("Tu nombre (para la birra)") + `<div class="quick"><div class="pp${c.pedirNombre ? " err" : ""}"><input class="field" data-act="comNombre" value="${esc(c.nombre)}" maxlength="40" aria-label="Tu nombre" placeholder="Para saber a quién darle la birra" autocomplete="given-name"></div></div>` +
       (c.pedirNombre ? `<div class="msg" role="alert">Sin tu nombre no sé a quién darle la birra. Si preferís no ponerlo, tocá Mandar de nuevo.</div>` : "") +
       (c.error ? `<div class="msg" role="alert">${esc(c.error)}</div>` : "") +
       (c.listo ? `<div class="msg" role="status">¡Gracias! Ya llegó.</div>` : "") +
       btn("mandarComentario", c.enviando ? "Mandando…" : "Mandar") +
-      `<div class="hint">Se manda lo que escribís, tu nombre y el tipo de celu. No pongas montos ni datos privados. Tus gastos no se mandan.</div>`;
+      `<div class="hint">Se manda lo que escribís, tu nombre y el tipo de celu. No pongas montos ni datos privados. Tus gastos no se mandan. Si usás la voz, el audio se pasa a texto y no se guarda.</div>`;
   }
 
   /* ---------- privacidad ---------- */
   function privacidad() {
     const p = (t, x) => crd(`<b style="font:800 16px 'Bricolage Grotesque',sans-serif">${t}</b><div class="sub">${x}</div>`);
     return back("Ajustes") + hdr("Tus datos", "Privacidad", "ok") +
-      p("Lo normal: nada sale de tu celu", "Tus gastos, categorías y planes se guardan en este dispositivo. No hay cuentas, publicidad ni seguimiento. Tampoco medimos cómo usás la app.") +
+      p("Quién hace MiGuita", "Es un proyecto personal, sin empresa atrás y sin publicidad. No vendemos ni le pasamos datos a nadie. Para cualquier duda, o si querés que borremos algo que nos mandaste, escribinos desde Ajustes › Mandar un comentario.") +
+      p("Lo normal: nada sale de tu celu", "Tus gastos, categorías y planes se guardan en este dispositivo, no en internet. No hay cuentas, publicidad ni seguimiento de lo que hacés. Los podés ver, corregir o borrar cuando quieras desde la app.") +
+      crd(`<b style="font:800 16px 'Bricolage Grotesque',sans-serif">Lo único que contamos</b><div class="sub">Para saber si la app le sirve a la gente, contamos cuántas personas la abren, la instalan y la siguen usando a la semana y al mes. Se manda solo eso, una vez por celu y sin nada que permita saber quién sos.</div>` +
+        fila("Contar de forma anónima", "", interruptor("contarUso", !st.cfg.sinContar, "Contar de forma anónima"), true)) +
       p("Si usás el micrófono", "Tu audio va a nuestro servidor (Cloudflare) solo para pasarlo a texto. No se guarda ni se usa para otra cosa. Separar los gastos y anotarlos se hace en tu celu. Si no tocás el micrófono, no sale nada.") +
       p("Si conectás tus dispositivos o un grupo", "Los datos pasan por nuestro servidor (Cloudflare) cifrados con una clave que sale de tu código. El servidor no los puede leer. Quien tenga el código sí puede verlos y cambiarlos. Lo que no se usa durante más de un año se borra solo.") +
       p("Si activás los avisos", "El servidor guarda a dónde mandar el aviso, tus horarios, tu zona horaria y el último día que anotaste algo. Nunca montos ni movimientos. Al apagarlos se borra todo.") +

@@ -42,7 +42,7 @@ test("avisa solo si todavía no anotó, a la hora justa", () => {
 
 test("la racha se avisa solo si todavía se puede salvar", () => {
   const ahora = ms("2026-11-01T21:00"), e = { zona: Z, plan: [{ h: "21:00", t: "racha" }], visto: ahora };
-  assert.equal(queAvisar({ ...e, anoto: "2026-10-31" }, ahora), "Tu racha se corta si hoy no anotás nada.");
+  assert.equal(queAvisar({ ...e, anoto: "2026-10-31" }, ahora), "Anotá algo hoy y tu racha sigue.");
   assert.equal(queAvisar({ ...e, anoto: "2026-10-20" }, ahora), null);
 });
 

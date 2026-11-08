@@ -2,53 +2,52 @@
 import { Art } from "../art/art.js";
 import { evaluar, formatear, leerMonto, montoEnCampo } from "../logic/dinero.js";
 import { leerTexto, leerSinMonto, leerVarios, adivinarCategoria, quedoSinCategoria, claveDe } from "../logic/anotar.js";
-import { pasarATexto, formatoDeAudio, MAX_SEGUNDOS } from "../logic/voz.js";
-import { DIRECCION } from "../logic/instalar.js";
+import { DIRECCION, textoInvitacion, enDireccionVieja } from "../logic/instalar.js";
 import { RESPALDO, ponerBilletera } from "../logic/categorias.js";
-import { fechaLocal, cambiarMes } from "../logic/mes.js";
+import { fechaLocal, cambiarMes, referencia, resumenMes } from "../logic/mes.js";
 import { infoRacha, salvavidasPara, regaloPara, festejoDeHoy } from "../logic/racha.js";
-import { EN_PRUEBA } from "../logic/buzon.js";
-import { correrFijos, mesDeInicio, infoMeta, restante, movimientoDeFijo } from "../logic/plan.js";
+import { EN_PRUEBA, mandarComentario } from "../logic/buzon.js";
+import { correrFijos, mesDeInicio, infoMeta, restante, movimientoDeFijo, estadoPresupuestos } from "../logic/plan.js";
 import { correrCuotas, movsDeCompra, MAX_CUOTAS, primeraCuota } from "../logic/cuotas.js";
-import { mandarComentario } from "../logic/buzon.js";
 import { abrirBase } from "../data/db.js";
 import { centavos, fusionar, novedades, decodificar, codificar, validarAlias, sincronizarMiParte, pagadores, conHistorial } from "../logic/grupos.js";
-import { nuevoCodigo, buscarCodigo, derivar, sincronizar, bajar, escuchar, pedir } from "../logic/sincro.js";
-import { CONFIG_COMPARTIDA, nuevoCodigoVinculo, leerCodigoVinculo, derivarVinculo, aplanar, huellas, huella, sincronizarDatos } from "../logic/vinculo.js";
+import { nuevoCodigo, buscarCodigo, derivar, sincronizar, bajar, escuchar } from "../logic/sincro.js";
+import { CONFIG_COMPARTIDA, leerCodigoVinculo } from "../logic/vinculo.js";
+import { porContar, contar } from "../logic/contador.js";
+import { parchar } from "./parche.js";
+import { crearConexion } from "./conexion.js";
+import { crearAvisos } from "./avisos.js";
+import { crearGrabador } from "./grabador.js";
+import { crearMudanza } from "./mudanza.js";
 import { datosDeEjemplo, planDeEjemplo, grupoDeEjemplo } from "./ejemplo.js";
 import { crearVistas, esc } from "./pantallas.js";
 import { crearVistasPlan } from "./plan.js";
 import { crearVistasGrupos, pesosDe } from "./grupos.js";
 import { svgQR, escanear } from "./qr.js";
-import { VERSION } from "../logic/migraciones.js";
-import { estadoPresupuestos } from "../logic/plan.js";
+import { VERSION, migrar } from "../logic/migraciones.js";
 import { buscarDolar, necesitaConfirmar, tocaActualizar, valorPara, aPesos } from "../logic/dolar.js";
-import { presupuestosPorAvisar, enNoMolestar, planDeAvisos, CLAVE_AVISOS } from "../logic/avisos.js";
-import { diasAnotados } from "../logic/racha.js";
-import { SERVIDOR, unb64Claves } from "../logic/sincro.js";
+import { presupuestosPorAvisar, enNoMolestar } from "../logic/avisos.js";
 import { validarPin, armarCopia, abrirCopia } from "../logic/cifrado.js";
 import { movimientosCSV } from "../logic/exportar.js";
 import { leerCSV, leerXLSX, armarMovimientos, filasDesdePDF, claveComercio } from "../logic/importar.js";
 import { textoDePDF } from "./pdf.js";
 import { crearVistaImportar } from "./importar.js";
-import { CHISTES, ESPECIALES, chisteDelMes } from "./chistes.js";
+import { CHISTES, CHISTES_MES_DIFICIL, ESPECIALES, chisteDelMes } from "./chistes.js";
 import { armarTarjeta, crearVistaTuMes } from "./tumes.js";
 import { datosDelMes, elegirDelMes } from "../logic/tumes.js";
-import { referencia, resumenMes } from "../logic/mes.js";
-import { migrar } from "../logic/migraciones.js";
 import { pantallaBloqueo } from "./bloqueo.js";
 import { crearVistasAjustes } from "./ajustes.js";
 import { hayHuella, registrarHuella } from "./huella.js";
 import { crearVistasPrimera, instalada, navegadorActual } from "./primera.js";
 import { crearVistasVoz } from "./voz.js";
 import { resumenParaIA } from "../logic/analisis.js";
-import { hayQuePreguntar, enMetas, ahorroSinPreguntar } from "../logic/saldo.js";
+import { hayQuePreguntar, enMetas, ahorroSinPreguntar, anotadoAntes, saldoDesde, podesUsar } from "../logic/saldo.js";
 
 const PESTANAS = [["inicio", "Inicio"], ["plan", "Mis cuentas"], ["grupos", "Grupos"], ["mas", "Ajustes"]];
-const TAB_DE = { movimientos: "inicio", resumen: "inicio", racha: "inicio", tuMes: "inicio", personalizacion: "mas", categorias: "mas", editarCat: "mas", form: "plan",
+const TAB_DE = { mudanza: "inicio", movimientos: "inicio", resumen: "inicio", racha: "inicio", tuMes: "inicio", personalizacion: "mas", categorias: "mas", editarCat: "mas", form: "plan",
   plata: "inicio", grupo: "grupos", juntada: "grupos", historial: "grupos", gform: "grupos", compartir: "grupos", unido: "grupos", quien: "grupos", whatsapp: "grupos",
   notif: "mas", seguridad: "mas", dolar: "mas", copias: "mas", dispositivos: "mas", comentario: "mas", privacidad: "mas", instalar: "mas", yaInstalada: "mas", tutorial: "mas", importar: "inicio", grabar: "inicio", revisar: "inicio" };
-const SIN_BARRA = ["tutorial", "yaInstalada", "grabar", "revisar"];
+const SIN_BARRA = ["tutorial", "yaInstalada", "grabar", "revisar", "mudanza"];
 const RUEDITA = '<svg viewBox="0 0 24 24" aria-hidden="true" style="stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><circle cx="12" cy="12" r="3.2"/><circle cx="12" cy="12" r="6.8"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M18.5 5.5l-1.7 1.7M7.2 16.8l-1.7 1.7"/></svg>';
 const PLAN = ["presupuestos", "metas", "deudas", "fijos", "tarjetas", "compras"];
 const hoy = fechaLocal();
@@ -85,9 +84,8 @@ const st = {
   tutorialPaso: 0,
   tutorialDesde: "", // a dónde se va al terminar el tutorial
   imp: { movs: [], elegidos: new Set(), soloGastos: true, sinTransf: false, medio: "mp", error: "", leyendo: false },
-  puedeInstalar: false,
+  puedeInstalar: false, // Chrome ofreció instalar la app (Android y compus)
   versionNueva: null, // el modo sin internet ya bajó una versión nueva y espera
- // Chrome ofreció instalar la app (Android y compus)
   cfg: base.datos.config,
   persistente: base.persistente,
   pantalla: "inicio",
@@ -130,6 +128,11 @@ const VI = crearVistasPrimera(st, V);
 const VV = crearVistasVoz(st, V);
 const importarVista = crearVistaImportar(st, V);
 const tuMesVista = crearVistaTuMes(st, V);
+const { programarVinculo, sincronizarVinculo, vigilarVinculo, prepararVinculo, crearVinculo, unirVinculo, cortarEscucha } =
+  crearConexion({ st, base, listasPlan: PLAN, ponerConfig, ponerDia, ponerItem, quitarItem, quitarMov, guardarGrupo, sincronizarGrupo, mostrarAviso, dibujar });
+const { programarAvisos, enviarAvisos, activarAvisos, apagarAvisos, pedirAvisos } = crearAvisos({ st, hoy, ponerConfig, mostrarAviso, dibujar });
+const { grabarVoz, cortarGrabacion, pararGrabacion } = crearGrabador({ st, abrir, volver, dibujar });
+const mudanza = crearMudanza({ st, hoy, V, ponerConfig, sincronizarVinculo, unirVinculo, cortarEscucha, apagarAvisos, dibujar, irA, abrir, mostrarAviso });
 // Lo que se guarda (cifrado, si hay PIN) y lo que va en una copia.
 base.leerEstado = () => ({ schemaVersion: VERSION, movs: st.movs, dias: st.dias, presupuestos: st.presupuestos, metas: st.metas, deudas: st.deudas,
   fijos: st.fijos, grupos: st.grupos, cotizaciones: st.cotizaciones, tarjetas: st.tarjetas, compras: st.compras, config: st.cfg });
@@ -182,171 +185,6 @@ function ponerConfig(k, v) {
   if (CONFIG_COMPARTIDA.includes(k)) programarVinculo();
 }
 
-/* ---------- mis dispositivos conectados ---------- */
-// Se juntan con el servidor al abrir, al volver a la app, al volver internet, cuando otro dispositivo guarda
-// (aviso al instante) y un ratito después de cada cambio propio.
-let llaveVinculo = null, vinculoTimer = 0, vinculoCola = Promise.resolve(), aplicandoRemoto = false, escuchaVinculo = null;
-function llaveV() {
-  const c = st.cfg.vinculo?.codigo;
-  if (llaveVinculo?.codigo !== c) llaveVinculo = { codigo: c, p: derivarVinculo(c) };
-  return llaveVinculo.p;
-}
-function programarVinculo() {
-  if (!st.cfg?.vinculo || aplicandoRemoto) return;
-  clearTimeout(vinculoTimer);
-  vinculoTimer = setTimeout(sincronizarVinculo, 2000);
-}
-function sincronizarVinculo() {
-  vinculoCola = vinculoCola.then(vinculoUna).catch(() => {});
-  return vinculoCola;
-}
-async function vinculoUna() {
-  const vin = st.cfg.vinculo;
-  if (!vin || navigator.onLine === false) return;
-  const local = structuredClone(base.leerEstado()), antes = huellas(aplanar(local));
-  let r;
-  try { r = await sincronizarDatos(await llaveV(), local, vin.base); }
-  catch (e) {
-    const error = e.message === "version" ? "version" : /403/.test(e.message) ? "codigo" : "red";
-    if (st.cfg.vinculo?.codigo === vin.codigo && st.cfg.vinculo.error !== error) { ponerConfig("vinculo", { ...st.cfg.vinculo, error }); dibujar(); }
-    return;
-  }
-  if (st.cfg.vinculo?.codigo !== vin.codigo) return;
-  // Se aplica lo que llegó, salvo lo que se cambió acá mientras viajaba (eso se manda en la próxima).
-  const ahora = aplanar(base.leerEstado());
-  let cambio = false, otraVez = false;
-  aplicandoRemoto = true;
-  try {
-    for (const k of new Set([...r.M.keys(), ...ahora.keys()])) {
-      const hAhora = ahora.has(k) ? huella(ahora.get(k)) : undefined;
-      if (antes[k] !== hAhora) { otraVez = true; continue; }
-      const m = r.M.get(k);
-      if ((m === undefined ? undefined : huella(m)) === hAhora) continue;
-      aplicarRemoto(k, m);
-      cambio = true;
-    }
-  } finally { aplicandoRemoto = false; }
-  ponerConfig("vinculo", { codigo: vin.codigo, v: r.v, base: r.base, ultimo: new Date().toISOString() });
-  if (otraVez) programarVinculo();
-  if (cambio || vin.error) dibujar();
-}
-function aplicarRemoto(k, x) {
-  const i = k.indexOf("|"), lista = k.slice(0, i), id = k.slice(i + 1);
-  if (lista === "config") { if (x !== undefined) ponerConfig(id, x); return; }
-  if (lista === "dias") {
-    if (x) ponerDia(x); else { st.dias = st.dias.filter((d) => d.fecha !== id); base.quitar("dias", id); }
-    return;
-  }
-  if (lista === "grupos") {
-    const local = st.grupos.find((g) => g.id === id);
-    if (!x) { if (local) quitarItem("grupos", id); return; }
-    const g = local ? { ...fusionar(local, x), yo: x.yo ?? local.yo, loc: x.loc ?? local.loc } : x; // ya se decidió al juntar: gana lo que llegó
-    if (!g.yo) delete g.yo;
-    if (!g.sync && x.sync) g.sync = { codigo: x.sync.codigo };
-    guardarGrupo(g, false);
-    if (g.sync) sincronizarGrupo(g.id);
-    return;
-  }
-  if (x) ponerItem(lista, x); else quitarItem(lista, id);
-}
-// Mientras la app está a la vista, escucha: si otro dispositivo guarda algo, aparece solo.
-function vigilarVinculo() {
-  const c = !document.hidden && st.cfg.vinculo?.codigo;
-  if ((escuchaVinculo?.codigo || false) === c) return;
-  escuchaVinculo?.cortar?.(); escuchaVinculo = null;
-  if (!c) return;
-  const e = (escuchaVinculo = { codigo: c, cortar: null });
-  llaveV().then((d) => { if (escuchaVinculo === e) e.cortar = escuchar(d, (v) => { if (st.cfg.vinculo && v !== st.cfg.vinculo.v) sincronizarVinculo(); }); });
-}
-async function prepararVinculo() {
-  const c = st.cfg.vinculo?.codigo;
-  if (!c) return;
-  const svg = await svgQR(location.origin + location.pathname + "#v=" + c).catch(() => null);
-  if (st.vinc && st.pantalla === "dispositivos") { st.vinc.svg = svg; dibujar(); }
-}
-async function crearVinculo() {
-  ponerConfig("vinculo", { codigo: nuevoCodigoVinculo(), v: 0, base: {} });
-  st.vinc = { ...st.vinc, error: "", trabajando: true, verCodigo: true }; dibujar();
-  await sincronizarVinculo();
-  st.vinc.trabajando = false;
-  if (st.cfg.vinculo?.error) st.vinc.error = "No pude conectarme. Revisá internet: se va a mandar cuando vuelva.";
-  else mostrarAviso("Listo. Ahora poné el código en tu otro dispositivo.");
-  vigilarVinculo(); prepararVinculo(); dibujar();
-}
-async function unirVinculo() {
-  const codigo = leerCodigoVinculo(st.vinc.pegado);
-  if (!codigo) { st.vinc.error = "El código tiene 16 letras y números, por ejemplo K7QM-3XPA-9TRB-2HDW."; return dibujar(); }
-  st.vinc.trabajando = true; st.vinc.error = ""; dibujar();
-  try {
-    const r = await pedir(await derivarVinculo(codigo), "GET");
-    if (r.estado === 404) throw new Error("no");
-    if (r.estado !== 200) throw new Error("red");
-  } catch (e) {
-    st.vinc.trabajando = false;
-    st.vinc.error = e.message === "no" ? "No encontré ese código. Fijate que esté bien escrito." : "No pude conectarme. Revisá internet y probá de nuevo.";
-    return dibujar();
-  }
-  // Lo de ejemplo no se junta con los datos de verdad.
-  st.movs.filter((x) => x.id.startsWith("ej_")).forEach((x) => quitarMov(x.id));
-  PLAN.forEach((l) => st[l].filter((x) => x.id.startsWith("ej_")).forEach((x) => quitarItem(l, x.id)));
-  st.grupos.filter((x) => x.id.startsWith("ej_")).forEach((x) => quitarItem("grupos", x.id));
-  ponerConfig("vinculo", { codigo, v: 0, base: {} });
-  await sincronizarVinculo();
-  st.vinc = { pegado: "", error: st.cfg.vinculo?.error ? "Se conectó, pero no se pudo traer todo. Se reintenta solo." : "", trabajando: false, verCodigo: false };
-  if (!st.cfg.vinculo?.error) mostrarAviso("¡Listo! Este dispositivo ya ve tus datos.");
-  vigilarVinculo(); prepararVinculo(); dibujar();
-}
-
-/* ---------- avisos con la app cerrada ---------- */
-// El servidor sabe solo a dónde mandar el aviso, a qué horas y el último día que se anotó algo (para no avisar si ya anotaste).
-// Se le cuenta al abrir la app, al volver a ella, al cambiar los horarios y al anotar. cfg.avisos = { id, token, enviado: "AAAA-MM-DD|..." }
-let avisosTimer = 0;
-const hexa = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join("");
-const pedirAvisos = (metodo, ruta, cuerpo) => fetch(SERVIDOR + "/a/" + st.cfg.avisos.id + ruta, { method: metodo, cache: "no-store",
-  headers: { Authorization: "Bearer " + st.cfg.avisos.token, ...(cuerpo && { "Content-Type": "application/json" }) }, body: cuerpo && JSON.stringify(cuerpo) });
-function programarAvisos() {
-  if (!st.cfg?.avisos) return;
-  clearTimeout(avisosTimer);
-  avisosTimer = setTimeout(() => enviarAvisos().catch(() => {}), 1500);
-}
-async function suscripcionAvisos() {
-  const reg = await navigator.serviceWorker.ready;
-  return (await reg.pushManager.getSubscription()) || reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: unb64Claves(CLAVE_AVISOS) });
-}
-async function enviarAvisos() {
-  const av = st.cfg.avisos;
-  if (!av || navigator.onLine === false || globalThis.Notification?.permission !== "granted") return;
-  const sub = (await suscripcionAvisos()).toJSON();
-  const anoto = [...diasAnotados(st.movs, st.dias)].filter((f) => f <= hoy).sort().pop() || "";
-  const cuerpo = { sub, zona: Intl.DateTimeFormat().resolvedOptions().timeZone, plan: planDeAvisos(st.cfg.notif), anoto, silencio: st.cfg.notif.forma === "silencio" };
-  // Una vez por día alcanza si no cambió nada: así el servidor sabe que la app se sigue usando.
-  const huellaAvisos = hoy + "|" + JSON.stringify(cuerpo);
-  if (av.enviado === huellaAvisos) return;
-  const r = await pedirAvisos("PUT", "", cuerpo);
-  if (r.ok && st.cfg.avisos) ponerConfig("avisos", { ...st.cfg.avisos, enviado: huellaAvisos });
-}
-async function activarAvisos() {
-  const p = await Notification.requestPermission();
-  if (p !== "granted") { mostrarAviso("Sin permiso para avisar. Mirá abajo cómo activarlo."); return dibujar(); }
-  st.avisosTrabajando = true; dibujar();
-  const viejo = st.cfg.avisos;
-  try {
-    if (!viejo) ponerConfig("avisos", { id: hexa(), token: hexa() });
-    await enviarAvisos();
-    if (!st.cfg.avisos?.enviado) throw new Error("sin enviar");
-    mostrarAviso("¡Listo! Los avisos te llegan aunque la app esté cerrada.");
-  } catch {
-    if (!viejo) ponerConfig("avisos", null);
-    mostrarAviso("No se pudieron activar. Revisá internet y probá de nuevo.");
-  }
-  st.avisosTrabajando = false; dibujar();
-}
-async function apagarAvisos() {
-  await pedirAvisos("DELETE", "").catch(() => {});
-  ponerConfig("avisos", null);
-  try { await (await (await navigator.serviceWorker.ready).pushManager.getSubscription())?.unsubscribe(); } catch { /* ya no estaba */ }
-}
-
 function mostrarAviso(texto, deshacer) {
   clearTimeout(timerAviso);
   st.aviso = { texto, deshacer };
@@ -357,6 +195,16 @@ function mostrarAviso(texto, deshacer) {
 function preguntarSaldo(movs) {
   const ids = movs.filter((m) => hayQuePreguntar(st.cfg.saldo, m, hoy)).map((m) => m.id);
   if (ids.length && st.guiaPaso === null) st.dudaSaldo = { ids };
+}
+
+// Cuenta sin saber quién sos cuánta gente instala la app y la sigue usando (ver logic/contador.js). Se apaga en Privacidad.
+async function contarUso() {
+  if (st.cfg.sinContar || navigator.onLine === false || /^(localhost|127\.)/.test(location.hostname) || enDireccionVieja(location.hostname)) return;
+  if (!st.cfg.contadoDesde) ponerConfig("contadoDesde", hoy);
+  const pendientes = porContar({ hechos: st.cfg.contado, desde: st.cfg.contadoDesde, hoy, anoto: st.movs.some((m) => !m.id.startsWith("ej_")), instalada: instalada() });
+  for (const ev of pendientes) {
+    try { if (await contar(ev)) ponerConfig("contado", [...(st.cfg.contado || []), ev]); else return; } catch { return; }
+  }
 }
 
 // Guarda un movimiento nuevo o editado, ofrece deshacer y festeja si la racha llegó a un premio.
@@ -372,6 +220,7 @@ function anotar(mov, anterior) {
   mostrarAviso(texto, () => (anterior ? guardarMov(anterior) : quitarMov(mov.id)));
   revisarFestejo(antes);
   avisarPresupuesto();
+  contarUso();
 }
 
 async function avisarPresupuesto() {
@@ -454,6 +303,14 @@ function tarjetaElegida(id, nombreNuevo) {
     return t.id;
   }
   return st.tarjetas.some((t) => t.id === id) ? id : null;
+}
+
+// Guarda cuánta plata tiene la persona y vuelve a donde estaba, para ver cómo quedó el número.
+function fijarPlata(saldo) {
+  ponerConfig("saldo", saldo);
+  st.plataTexto = ""; st.plataError = ""; st.dudaSaldo = null; st.dudaPlata = null;
+  mostrarAviso("Listo. Te queda " + V.plata(podesUsar(saldo, st.movs, st.metas)));
+  return volver();
 }
 
 /* ---------- formularios de Mis cuentas ---------- */
@@ -958,7 +815,7 @@ document.addEventListener("visibilitychange", async () => {
     ocultaDesde = Date.now();
     if (st.cfg.tapar) document.body.classList.add("tapado");
     dejarDeEscuchar();
-    escuchaVinculo?.cortar?.(); escuchaVinculo = null;
+    cortarEscucha();
     if (st.seguridad?.bloqueo === "salir") await base.terminar();
     return;
   }
@@ -1063,17 +920,12 @@ addEventListener("popstate", (e) => {
 history.replaceState({ p: "inicio" }, "");
 
 /* ---------- dibujar ---------- */
-function proximamente(titulo, etapa, dibujo) {
-  return `<div class="top"><div><small>Muy pronto</small><h1>${titulo}</h1></div></div>` +
-    `<div class="soon">${dibujo}<b>Se está horneando</b><span>Esta parte llega en la etapa ${etapa}.</span></div>`;
-}
-
 function dibujar() {
-  document.body.className = st.cfg.tema + (st.cfg.movimiento ? " motion" : "");
+  const letra = window.__miguitaLetra?.();
+  document.body.className = st.cfg.tema + (st.cfg.movimiento ? " motion" : "") + (letra ? " letra-" + letra : "");
   document.querySelector('meta[name="theme-color"]').content = st.cfg.tema === "dark" ? "#33211A" : "#E2C9A0";
   const P = {
     ...V,
-    grupos: () => proximamente("Grupos", 4, Art.factura("fact")),
     plan: VP.plan,
     form: VP.formulario,
     grupos: VG.lista,
@@ -1101,15 +953,17 @@ function dibujar() {
     revisar: VV.revisar,
     tutorial: VI.tutorial,
     importar: importarVista,
+    mudanza: mudanza.pantalla,
   };
   if (st.pantalla !== "compartir" && apagarCamara) cerrarCamara();
-  if (st.pantalla !== "grabar" && grabacion) cortarGrabacion();
+  if (st.pantalla !== "grabar") cortarGrabacion();
   avanzarGuia();
   vigilar();
   const tab = TAB_DE[st.pantalla] || st.pantalla;
   const foco = document.activeElement?.dataset?.act;
   const enCampo = foco && /^(buscar|nombre|catNombre|catClaves|detalle|campo|gcampo|gPersona|gPeso|gPP|nombreNuevo|aliasQuien|miAlias)$/.test(foco) ? { act: foco, k: document.activeElement.dataset.k, i: document.activeElement.dataset.i, pos: document.activeElement.selectionStart } : null;
-  raiz.innerHTML = `<main class="scr" id="pantalla">` +
+  // Se cambia solo lo que cambió: lo que se está escribiendo, el foco y el lugar donde estabas siguen ahí (ver parche.js).
+  parchar(raiz, `<main class="scr" id="pantalla">` +
     (st.versionNueva ? `<div class="snack pp nueva" role="status"><span>Hay una versión nueva de MiGuita</span><button class="btnmini" data-act="actualizarApp">Actualizar</button></div>` : "") +
     `${P[st.pantalla]()}</main>` +
     (SIN_BARRA.includes(st.pantalla) || (st.pantalla === "instalar" && st.desdePrimera) ? "" : `<nav class="nav" aria-label="Secciones">` + PESTANAS.map(([k, t]) =>
@@ -1119,12 +973,12 @@ function dibujar() {
     (guiaVisible() ? V.guia() : "") +
     (st.festejo ? V.festejo(st.festejo) : "") +
     (st.metaOk ? VP.metaLograda(st.metaOk) : "") +
-    (st.aviso && !st.hoja && !st.ayuda && !SIN_BARRA.includes(st.pantalla) ? `<div class="snack pp" role="status"><span>${esc(st.aviso.texto)}</span>${st.aviso.deshacer ? `<button class="btnmini" data-act="deshacer">Deshacer</button>` : ""}</div>` : "");
-  raiz.querySelectorAll(".pp").forEach((e) => e.style.setProperty("--dl", (-Math.random() * 2.5).toFixed(2) + "s"));
+    (st.aviso && !st.hoja && !st.ayuda && !SIN_BARRA.includes(st.pantalla) ? `<div class="snack pp" role="status"><span>${esc(st.aviso.texto)}</span>${st.aviso.deshacer ? `<button class="btnmini" data-act="deshacer">Deshacer</button>` : ""}</div>` : ""));
+  raiz.querySelectorAll(".pp").forEach((e) => { if (!e.style.getPropertyValue("--dl")) e.style.setProperty("--dl", (-Math.random() * 2.5).toFixed(2) + "s"); });
   ponerGuia();
   // La cámara sigue andando aunque se redibuje la pantalla.
-  if (videoCamara) raiz.querySelector("video.cam")?.replaceWith(videoCamara);
-  if (enCampo) {
+  if (videoCamara) { const v = raiz.querySelector("video.cam"); if (v && v !== videoCamara) v.replaceWith(videoCamara); }
+  if (enCampo && document.activeElement?.dataset?.act !== enCampo.act) {
     const el = raiz.querySelector(`[data-act="${enCampo.act}"]${enCampo.k ? `[data-k="${CSS.escape(enCampo.k)}"]` : ""}${enCampo.i ? `[data-i="${enCampo.i}"]` : ""}`);
     if (el) { el.focus(); try { el.setSelectionRange(enCampo.pos, enCampo.pos); } catch { /* fecha */ } }
   }
@@ -1156,8 +1010,9 @@ raiz.addEventListener("submit", async (e) => {
     await terminarPin(raiz.querySelector("#pinClave").value);
     return dibujar();
   }
-  const txt = raiz.querySelector("#rapido").value.trim();
+  const campo = raiz.querySelector("#rapido"), txt = campo.value.trim();
   if (!txt) return abrirHoja();
+  campo.value = ""; campo.blur();
   const aprendidas = st.cfg.aprendidas || {}, p = leerTexto(txt, st.cfg.categorias, aprendidas);
   st.error = ""; st.dudaMonto = null; st.dudaCat = null;
   const varios = leerVarios(txt, st.cfg.categorias, aprendidas);
@@ -1182,17 +1037,25 @@ function ponerGuia() {
   if (!objetivo || !globo) return;
   objetivo.classList.add("luz");
   const acomodar = () => {
-    const r = objetivo.getBoundingClientRect(), alto = globo.offsetHeight, visible = visualViewport?.height || innerHeight;
     const conTeclado = st.guiaPaso === 0 && document.activeElement?.id === "rapido";
     globo.classList.toggle("sin-dibujo", conTeclado);
-    const debajo = r.bottom + 16, arriba = r.top - globo.offsetHeight - 16;
-    globo.style.top = Math.max(8, st.guiaPaso === 2 || conTeclado || debajo + alto > visible ? arriba : debajo) + "px";
+    // Con la letra agrandada, lo que se mide viene en píxeles de pantalla y lo que se escribe, en píxeles de la app.
+    const z = raiz.currentCSSZoom || 1, r = objetivo.getBoundingClientRect(), alto = globo.getBoundingClientRect().height, visible = visualViewport?.height || innerHeight;
+    const debajo = r.bottom + 16, arriba = r.top - alto - 16;
+    globo.style.top = Math.max(8, st.guiaPaso === 2 || conTeclado || debajo + alto > visible ? arriba : debajo) / z + "px";
   };
   acomodar();
-  raiz.querySelector("#rapido")?.addEventListener("focus", () => setTimeout(acomodar, 250));
-  raiz.querySelector("#rapido")?.addEventListener("blur", () => setTimeout(acomodar, 100));
+  guiaAcomodar = acomodar;
+  const campo = raiz.querySelector("#rapido");
+  if (campo && !guiaEscucha.has(campo)) {
+    guiaEscucha.add(campo);
+    campo.addEventListener("focus", () => setTimeout(() => guiaAcomodar(), 250));
+    campo.addEventListener("blur", () => setTimeout(() => guiaAcomodar(), 100));
+  }
   visualViewport?.addEventListener("resize", acomodar, { once: true });
 }
+const guiaEscucha = new WeakSet();
+let guiaAcomodar = () => {};
 
 /* ---------- preguntarle a una IA ---------- */
 function textoIA() {
@@ -1205,53 +1068,6 @@ const hojaIA = () => `<b class="ayuda-t">Preguntale a una IA</b><span class="ayu
 /* ---------- hablar en vez de escribir ---------- */
 // Al pasar de gasto a ingreso (o al revés) la categoría también cambia de lista.
 const leerSinMontoCat = (detalle, tipo) => adivinarCategoria(detalle, paraAdivinar(st.cfg.categorias, tipo));
-let grabacion = null;
-function cortarGrabacion() { grabacion?.cortar(); grabacion = null; }
-async function grabarVoz() {
-  cortarGrabacion();
-  st.voz = { paso: "pidiendo" };
-  if (st.pantalla === "grabar") dibujar(); else { abrir("grabar"); dibujar(); }
-  let flujo;
-  try { flujo = await navigator.mediaDevices.getUserMedia({ audio: true }); }
-  catch (e) {
-    if (st.pantalla !== "grabar") return;
-    st.voz = { paso: "error", error: e?.name === "NotAllowedError" ? "Necesito permiso para usar el micrófono. Podés darlo en los ajustes del navegador." : "No encontré el micrófono de este celu." };
-    return dibujar();
-  }
-  if (st.pantalla !== "grabar") { flujo.getTracks().forEach((t) => t.stop()); return; }
-  const mimeType = formatoDeAudio((f) => MediaRecorder.isTypeSupported(f));
-  let rec;
-  try { rec = new MediaRecorder(flujo, { ...(mimeType ? { mimeType } : {}), audioBitsPerSecond: 32000 }); }
-  catch { flujo.getTracks().forEach((t) => t.stop()); st.voz = { paso: "error", error: "Este navegador no deja grabar audio. Probá escribirlo." }; return dibujar(); }
-  const partes = [];
-  let cortado = false;
-  const reloj = setTimeout(() => rec.state === "recording" && rec.stop(), MAX_SEGUNDOS * 1000);
-  const apagar = () => { clearTimeout(reloj); flujo.getTracks().forEach((t) => t.stop()); };
-  grabacion = {
-    parar: () => { if (rec.state === "recording") rec.stop(); },
-    cortar: () => { cortado = true; apagar(); if (rec.state === "recording") rec.stop(); },
-  };
-  rec.ondataavailable = (e) => { if (e.data.size) partes.push(e.data); };
-  rec.onstop = async () => {
-    apagar();
-    grabacion = null;
-    if (cortado) return;
-    st.voz = { paso: "enviando" }; dibujar();
-    try {
-      const texto = await pasarATexto(new Blob(partes, { type: rec.mimeType || mimeType }));
-      if (st.pantalla !== "grabar") return;
-      const items = leerVarios(texto, st.cfg.categorias, st.cfg.aprendidas || {});
-      if (!items.length) { st.voz = { paso: "nada", texto }; return dibujar(); }
-      st.voz = null;
-      st.varios = { items, texto, voz: true, editando: null, error: "" };
-      history.replaceState({ p: "revisar" }, ""); st.pantalla = "revisar"; scrollTo(0, 0);
-    } catch (e) { st.voz = { paso: "error", error: e.message }; }
-    dibujar();
-  };
-  rec.start();
-  st.voz = { paso: "grabando" };
-  dibujar();
-}
 // Anota todo lo de la lista junto, con un solo deshacer.
 function anotarVarios() {
   const r = st.varios, dolar = cotizar(hoy);
@@ -1309,11 +1125,12 @@ raiz.addEventListener("click", (e) => {
   if (!["borrarMov", "borrarTodo", "borrarPlan", "borrarG", "quitarPin", "aplicarCopia", "desconectarGrupo", "desconectarVinculo", "apagarAvisos"].includes(act)) st.confirmar = "";
   switch (act) {
     case "ir": history.replaceState({ p: v }, ""); st.pantalla = v; st.error = ""; scrollTo(0, 0); break;
-    case "abrir": if (v === "tutorial") { st.tutorialPaso = 0; st.tutorialDesde = ""; } abrir(v); if (v === "dispositivos") prepararVinculo(); break;
+    case "abrir": if (v === "tutorial") { st.tutorialPaso = 0; st.tutorialDesde = ""; } if (v === "plata") st.dudaPlata = null; abrir(v); if (v === "dispositivos") prepararVinculo(); break;
     case "volver": return volver();
     case "mes": st.mes = cambiarMes(st.mes, +v); break;
     case "ocultar": ponerConfig("ocultar", !st.cfg.ocultar); break;
     case "tema": ponerConfig("tema", v); break;
+    case "letra": window.__miguitaLetra?.(v); break;
     case "movimiento": ponerConfig("movimiento", !st.cfg.movimiento); break;
     case "deshacer": st.aviso?.deshacer?.(); st.aviso = null; clearTimeout(timerAviso); break;
     case "nuevo": return abrirHoja();
@@ -1346,7 +1163,7 @@ raiz.addEventListener("click", (e) => {
     case "borrarTodo":
       if (st.confirmar !== "todo") { st.confirmar = "todo"; break; }
       st.confirmar = "";
-      if (st.cfg.vinculo) { escuchaVinculo?.cortar?.(); escuchaVinculo = null; ponerConfig("vinculo", null); }
+      if (st.cfg.vinculo) { cortarEscucha(); ponerConfig("vinculo", null); }
       if (st.cfg.avisos) apagarAvisos();
       [...st.movs].forEach((x) => quitarMov(x.id));
       [...st.dias].forEach((d) => base.quitar("dias", d.fecha));
@@ -1410,7 +1227,9 @@ raiz.addEventListener("click", (e) => {
       clearTimeout(chisteTimer); clearTimeout(toquesTimer);
       toques++;
       let texto = ESPECIALES[toques];
-      if (!texto) { let i; do i = Math.floor(Math.random() * CHISTES.length); while (CHISTES.length > 1 && CHISTES[i] === st.chiste?.texto); texto = CHISTES[i]; }
+      // En un mes difícil, Miguita acompaña en vez de hacer chistes sobre la plata.
+      const lista = V.estadoDelMes(st.mes, resumenMes(st.movs, referencia(st.mes, hoy))) === "bad" ? CHISTES_MES_DIFICIL : CHISTES;
+      if (!texto) { let i; do i = Math.floor(Math.random() * lista.length); while (lista.length > 1 && lista[i] === st.chiste?.texto); texto = lista[i]; }
       st.chiste = { n: toques, texto, giro: !!ESPECIALES[toques] };
       chisteTimer = setTimeout(() => { st.chiste = null; if (st.pantalla === "inicio") dibujar(); }, 4500);
       toquesTimer = setTimeout(() => { toques = 0; }, 20000);
@@ -1422,7 +1241,7 @@ raiz.addEventListener("click", (e) => {
     case "copiarCodigoVinculo": copiar(st.cfg.vinculo.codigo); mostrarAviso("Código copiado. Pegalo solo en tus dispositivos."); break;
     case "cambiarVinculo":
       // Ya estaba conectado con otro código: se pasa al nuevo, con todo lo de este dispositivo.
-      escuchaVinculo?.cortar?.(); escuchaVinculo = null;
+      cortarEscucha();
       ponerConfig("vinculo", null);
       unirVinculo(); return;
     case "sincronizarAhora":
@@ -1432,7 +1251,7 @@ raiz.addEventListener("click", (e) => {
     case "desconectarVinculo": {
       if (st.confirmar !== "vinculo") { st.confirmar = "vinculo"; break; }
       st.confirmar = "";
-      escuchaVinculo?.cortar?.(); escuchaVinculo = null;
+      cortarEscucha();
       ponerConfig("vinculo", null);
       mostrarAviso("Listo: este dispositivo ya no se actualiza con los otros. Tus datos quedan acá.");
       break;
@@ -1625,9 +1444,16 @@ raiz.addEventListener("click", (e) => {
     case "actualizarApp": base.terminar().then(() => st.versionNueva.postMessage({ tipo: "actualizar" })); return;
     case "instalarYa":
       if (!pedidoInstalar) break;
-      pedidoInstalar.prompt();
-      pedidoInstalar.userChoice.then((r) => { if (r.outcome === "accepted") { pedidoInstalar = null; st.puedeInstalar = false; irA("yaInstalada"); } dibujar(); });
+      {
+        // Chrome deja usar este pedido una sola vez: un segundo toque daría error.
+        const pedido = pedidoInstalar;
+        pedidoInstalar = null; window.__miguitaPedido = null; st.puedeInstalar = false;
+        try { pedido.prompt()?.catch?.(() => {}); } catch { /* ya usado */ }
+        pedido.userChoice.then((r) => { if (r.outcome === "accepted") irA("yaInstalada"); else ponerConfig("instalarVisto", hoy); dibujar(); }).catch(() => dibujar());
+      }
       return;
+    case "instalarLuego": ponerConfig("instalarVisto", hoy); break; // se vuelve a ofrecer a la semana
+    case "yaLaAgregue": irA("yaInstalada"); break;
     case "seguirSinInstalar":
       st.ayuda = "";
       if (st.desdePrimera || st.pantalla === "yaInstalada") { st.desdePrimera = false; ponerConfig("primeraVez", hoy); irA("inicio"); break; }
@@ -1646,8 +1472,19 @@ raiz.addEventListener("click", (e) => {
     /* hablar */
     case "hablar": if (!st.cfg.vozAviso) { st.voz = { paso: "aviso" }; abrir("grabar"); break; } grabarVoz(); return;
     case "vozDale": ponerConfig("vozAviso", true); grabarVoz(); return;
-    case "vozListo": grabacion?.parar(); return;
-    case "vozCancelar": cortarGrabacion(); st.voz = null; return volver();
+    case "vozListo": pararGrabacion(); return;
+    case "vozCancelar": cortarGrabacion(); st.voz = null; st.vozPara = ""; return volver();
+    case "comHablar": st.vozPara = "comentario"; if (!st.cfg.vozAviso) { st.voz = { paso: "aviso" }; abrir("grabar"); break; } grabarVoz(); return;
+    case "invitar": {
+      const texto = textoInvitacion();
+      if (navigator.share) navigator.share({ text: texto }).catch(() => {});
+      else window.open("https://wa.me/?text=" + encodeURIComponent(texto), "_blank", "noopener");
+      return;
+    }
+    case "contarUso": ponerConfig("sinContar", !st.cfg.sinContar); break;
+    case "llevarDatos": mudanza.llevarDatos(); return;
+    case "mudarLuego": irA("inicio"); break;
+    case "copiarCodigoMudanza": copiar(st.cfg.mudada.codigo).then(() => mostrarAviso("Código copiado.")); return;
     /* revisar varios gastos */
     case "varioEditar": { const x = st.varios.items[+v]; st.varios.editando = { i: +v, tipo: x.tipo, detalle: x.detalle, monto: formatear(x.monto, { moneda: "" }), categoria: x.categoria, error: "" }; break; }
     case "varioListo": {
@@ -1716,11 +1553,13 @@ raiz.addEventListener("click", (e) => {
     case "plataGuardar": {
       const c = leerMonto(st.plataTexto || "");
       if (c === null || c < 0) { st.plataError = "Escribilo con números, por ejemplo 30.000."; break; }
-      ponerConfig("saldo", { monto: c, ts: Date.now(), fecha: hoy });
-      st.plataTexto = ""; st.plataError = ""; st.dudaSaldo = null;
-      mostrarAviso("Listo. Tu plata: " + V.plata(c));
-      return volver();
+      // La primera vez puede haber cosas ya anotadas: el orden no tiene que importar, así que se pregunta si ese número ya las tiene en cuenta.
+      const antes = st.cfg.saldo ? null : anotadoAntes(st.movs, hoy.slice(0, 7));
+      if (antes?.lista.length) { st.dudaPlata = { monto: c, ...antes }; st.plataError = ""; break; }
+      return fijarPlata({ monto: c, ts: Date.now(), fecha: hoy });
     }
+    case "plataYaEstaba": return fijarPlata({ monto: st.dudaPlata.monto, ts: Date.now(), fecha: hoy });
+    case "plataFaltaba": return fijarPlata(saldoDesde(st.dudaPlata.monto, st.dudaPlata.lista));
     case "plataSueldo": {
       const f = st.fijos.find((x) => x.tipo === "ingreso" && x.categoria === "sueldo") || st.fijos.find((x) => x.tipo === "ingreso");
       abrirForm("fijo", f?.id);
@@ -1884,6 +1723,8 @@ raiz.addEventListener("click", (e) => {
       if (anterior?.id.startsWith("imp_") && anterior.categoria !== mov.categoria && mov.detalle)
         ponerConfig("aprendidas", Object.fromEntries(Object.entries({ ...(st.cfg.aprendidas || {}), [claveComercio(mov.detalle)]: mov.categoria }).slice(-500)));
       anotar(mov, anterior);
+      // Desde «Mi plata», al guardar se vuelve atrás para ver cómo cambió el número.
+      if (st.pantalla === "plata" && history.state?.hoja) { st.hoja = null; history.go(-2); return; }
       cerrarHoja();
       break;
     }
@@ -1908,7 +1749,7 @@ raiz.addEventListener("input", (e) => {
   if (act === "detalle") st.hoja.detalle = val;
   else if (act === "buscar") { st.filtro.texto = val; dibujar(); }
   else if (act === "nombre") st.cfg.nombre = val;
-  else if (act === "plataMonto") { st.plataTexto = val; st.plataError = ""; }
+  else if (act === "plataMonto") { st.plataTexto = val; st.plataError = ""; if (st.dudaPlata) { st.dudaPlata = null; const p = e.target.selectionStart; dibujar(); const c = raiz.querySelector('[data-act="plataMonto"]'); c?.focus(); c?.setSelectionRange?.(p, p); } }
   else if (act === "varioCampo") { st.varios.editando[e.target.dataset.k] = val; st.varios.editando.error = ""; }
   else if (act === "catNombre") itemCat().nombre = val;
   else if (act === "gcampo") { st.gform.vals[e.target.dataset.k] = val; st.gform.error = ""; dibujar(); }
@@ -1989,12 +1830,19 @@ function cargarEjemplo() {
   PLAN.forEach((l) => plan[l].forEach((x) => { if (!st[l].some((i) => i.id === x.id)) ponerItem(l, x); }));
   if (!st.grupos.some((g) => g.id === "ej_g1")) guardarGrupo(grupoDeEjemplo(hoy));
 }
+// En la dirección vieja: quien no tiene nada se va solo a la nueva; quien tiene datos, se los lleva.
+const enLaVieja = enDireccionVieja(globalThis.__miguitaHost || location.hostname);
+if (enLaVieja && !st.cfg.mudada && !st.movs.some((m) => !m.id.startsWith("ej_")) && !st.grupos.some((g) => !g.id.startsWith("ej_"))) {
+  location.replace("https://" + DIRECCION + location.hash);
+  await new Promise(() => {});
+}
 // La primera vez: en un celu, primero qué es la app y cómo instalarla. Instalada o en una compu, directo a Inicio.
-if (!st.cfg.primeraVez) {
+if (enLaVieja) irA("mudanza");
+else if (!st.cfg.primeraVez) {
   if (instalada() || navegadorActual().so === "compu") ponerConfig("primeraVez", hoy);
   else { st.desdePrimera = true; irA("instalar"); }
 }
-if (!st.cfg.guiaHecha && !st.movs.length) { st.guiaPaso = 0; st.guiaBase = 0; }
+if (!st.cfg.guiaHecha && !st.movs.length && !enLaVieja) { st.guiaPaso = 0; st.guiaBase = 0; }
 revisarFijos();
 revisarCuotas();
 revisarSalvavidas();
@@ -2007,10 +1855,14 @@ programarAvisos();
 // Se atienden al abrir la app y también si la app ya estaba abierta (el link solo cambia el final de la dirección).
 function abrirLink(redibujar = true) {
   const h = location.hash;
-  if (!/^#[vgu]=/.test(h)) return;
-  const codigo = decodeURIComponent(h.slice(3));
+  if (enLaVieja || !/^#[vgum]=/.test(h)) return;
+  const codigo = decodeURIComponent(h.slice(3).split("&")[0]);
   history.replaceState({ p: st.pantalla }, "", location.pathname + location.search);
-  if (h.startsWith("#v=")) {
+  if (h.startsWith("#m=")) {
+    // Viene de la dirección vieja con sus datos.
+    st.desdePrimera = false; ponerConfig("primeraVez", hoy); terminarGuia();
+    mudanza.recibir(codigo, h.includes("&s=1"));
+  } else if (h.startsWith("#v=")) {
     st.vinc = { pegado: codigo, error: "", trabajando: false, verCodigo: false };
     if (!st.cfg.primeraVez || st.desdePrimera) { st.desdePrimera = false; ponerConfig("primeraVez", hoy); terminarGuia(); irA("inicio"); }
     abrir("dispositivos"); prepararVinculo();
@@ -2025,10 +1877,12 @@ function abrirLink(redibujar = true) {
 }
 abrirLink(false);
 addEventListener("hashchange", () => abrirLink());
-// Instalar con un toque: Chrome avisa que se puede instalar y la app guarda ese pedido para el botón.
-let pedidoInstalar = null;
-addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); pedidoInstalar = e; st.puedeInstalar = true; if (st.pantalla === "instalar") dibujar(); });
-addEventListener("appinstalled", () => { pedidoInstalar = null; st.puedeInstalar = false; if (st.pantalla === "instalar") irA("yaInstalada"); dibujar(); });
+// Instalar con un toque: Chrome avisa que se puede instalar (arranque.js guarda ese aviso) y la app lo usa para el botón.
+// El aviso puede llegar mientras la persona escribe: dibujar() conserva lo escrito.
+let pedidoInstalar = window.__miguitaPedido || null;
+st.puedeInstalar = !!pedidoInstalar;
+window.__miguitaInstalable = () => { pedidoInstalar = window.__miguitaPedido; st.puedeInstalar = true; if (["instalar", "inicio"].includes(st.pantalla) && !st.hoja) dibujar(); };
+addEventListener("appinstalled", () => { pedidoInstalar = null; st.puedeInstalar = false; if (st.pantalla === "instalar" || st.pantalla === "inicio") irA("yaInstalada"); dibujar(); });
 // Tocar el aviso abre la hoja de anotar.
 const anotarDesdeAviso = () => { if (location.hash === "#anotar") { history.replaceState({ p: "inicio" }, "", location.pathname + location.search); abrirHoja(); } };
 addEventListener("hashchange", anotarDesdeAviso);
@@ -2037,6 +1891,7 @@ document.body.insertAdjacentHTML("beforeend", `<div id="tapa" aria-hidden="true"
 if (tocaActualizar(st.cfg.dolar, st.cotizaciones, hoy, horaAhora())) actualizarDolar(true);
 dibujar();
 window.__miguitaLista = true;
+contarUso();
 anotarDesdeAviso();
 
 // Versión nueva: el modo sin internet la baja en segundo plano y la app ofrece actualizar con un toque.

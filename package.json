@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "test": "node --test tests/*.test.mjs",
+    "recorridos": "node --test --test-timeout=120000 tools/recorridos.mjs",
     "arte": "node tools/extraer-arte.cjs"
   }
 }

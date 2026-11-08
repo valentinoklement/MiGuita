@@ -72,7 +72,7 @@ export function crearVistasGrupos(st, hoy, V) {
   function unGrupo() {
     const g = grupo();
     if (!g) return back("Grupos") + crd(`<div class="empty"><b>Ese grupo ya no está en este celu</b></div>`);
-    let h = `<div class="secrow">${back("Grupos")}<button class="link" data-act="editarGrupo">Editar</button></div>` + encabezado(g, g.nombre) + estadoSync(g);
+    let h = `<div class="secrow">${back("Grupos")}<button class="link" data-act="editarGrupo">Editar</button></div>` + encabezado(g, g.nombre) + estadoSync(g) + V.cartelInstalar();
     // Lo que más importa, arriba: cuánto tengo que pasar o me tienen que pasar.
     if (g.yo) {
       const { debo, meDeben } = miSituacion(g);
@@ -362,6 +362,7 @@ export function crearVistasGrupos(st, hoy, V) {
     const opcion = (id, texto, dib) => `<button class="card pp qs" data-act="elegirYo" data-v="${esc(id)}" aria-pressed="${st.yoElegido === id}"><span class="rd${st.yoElegido === id ? " on" : ""}"></span>${dib}<b>${esc(texto)}</b></button>`;
     // Cada uno se pone su nombre: si ya estaba en la lista lo elige (y lo puede corregir); si no, se suma.
     return hdr(esc(g.nombre), "¿Quién sos en este grupo?") +
+      `<div class="sub">Te invitaron a dividir los gastos de «${esc(g.nombre)}». MiGuita saca la cuenta de quién le pasa a quién. Es gratis y no pide mail.</div>` +
       opcion("_otra", "No estoy en la lista: sumarme", Art.miguita("ok")) +
       (vivos(g).length ? `<div class="sub" style="margin:4px 2px">O si ya te anotaron, elegite:</div>` : "") +
       vivos(g).map((m, i) => opcion(m.id, m.nombre, amigo(i))).join("") +

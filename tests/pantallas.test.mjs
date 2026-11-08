@@ -51,7 +51,13 @@ test("ningún nombre ajeno se dibuja como HTML", () => {
   limpio("cargar plata", V.cargarPlata());
   st.dudaSaldo = { ids: ["m"] };
   limpio("inicio", V.inicio());
-  assert.ok(V.inicio().includes("Podés usar"));
+  assert.ok(V.inicio().includes("Te queda"));
+  st.dudaPlata = { monto: 100000, gastos: 2000000, ingresos: 0, lista: [{ ...st.movs[0], monto: 2000000 }] };
+  limpio("duda de plata", V.cargarPlata());
+  assert.ok(V.cargarPlata().includes("Restalo"));
+  st.dudaPlata = null;
+  limpio("resumen", V.resumen());
+  assert.ok(V.resumen().includes("De dónde sale"));
   limpio("movimientos", V.movimientos());
   st.dudaMonto = { texto: X, p: { opciones: [100, 200] } }; st.dudaCat = { id: "m", detalle: X, tipo: "gasto" };
   limpio("dudas", V.inicio());

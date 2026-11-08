@@ -12,7 +12,7 @@ export const puntos = (n, total = 6) => `<div class="dots" aria-hidden="true">${
 export function pantallaBloqueo(base, raiz) {
   const seg = base.seguridad, clave = seg.modo === "clave";
   let pin = "", error = "", olvide = false, confirmarBorrar = false;
-  document.body.className = base.temaBloqueo + " motion";
+  document.body.className = base.temaBloqueo + " motion" + (globalThis.__miguitaLetra?.() ? " letra-" + globalThis.__miguitaLetra() : "");
 
   return new Promise((listo) => {
     function dibujar() {

@@ -13,15 +13,16 @@ export function crearVistasVoz(st, V) {
   const EJEMPLO = "Por ejemplo: <i>«15 mil de nafta, 10 lucas de birra y Juan me pasó 20 mil»</i>";
 
   function grabar() {
-    const v = st.voz || { paso: "aviso" };
-    if (v.paso === "aviso") return cabeza("Hablá en vez de escribir", "Decí lo que gastaste y lo que te entró, todo junto. Se anota por separado.") +
+    const v = st.voz || { paso: "aviso" }, comentario = st.vozPara === "comentario";
+    if (v.paso === "aviso") return cabeza("Hablá en vez de escribir", comentario ? "Contá qué te pasó o qué cambiarías, como en un audio de WhatsApp." : "Decí lo que gastaste y lo que te entró, todo junto. Se anota por separado.") +
       crd(`<div class="sub voz-aviso">Tu audio se manda a nuestro servidor solo para pasarlo a texto y <b>no se guarda</b>. El celu te va a pedir permiso para usar el micrófono.</div>`) +
       `<div class="relleno"></div>` + grande("vozDale", "Dale") + chico("vozCancelar", "Cancelar");
     if (v.paso === "pidiendo") return cabeza("Un segundo…", "Si el celu te pregunta, dale permiso al micrófono.") + `<div class="relleno"></div>` + chico("vozCancelar", "Cancelar");
-    if (v.paso === "grabando") return cabeza("Te escucho…", "Decí todo junto, como te salga. " + EJEMPLO) +
+    if (v.paso === "grabando") return cabeza("Te escucho…", comentario ? "Contá todo, como te salga. Después lo podés corregir." : "Decí todo junto, como te salga. " + EJEMPLO) +
       `<div class="ondas" aria-hidden="true">${[14, 30, 22, 44, 28, 50, 20, 36, 16].map((a, i) => `<i style="height:${a}px;animation-delay:${(i * 0.13).toFixed(2)}s"></i>`).join("")}</div>` +
       `<div class="relleno"></div>` + grande("vozListo", "Listo, ya está") + chico("vozCancelar", "Cancelar");
     if (v.paso === "enviando") return cabeza("Dejame pensar…", "Estoy pasando tu audio a texto.") + `<div class="relleno"></div>`;
+    if (v.paso === "nada" && comentario) return cabeza("No se escuchó nada", "Probá de nuevo, un poco más cerca del micrófono.") + `<div class="relleno"></div>` + grande("vozDale", "Hablar de nuevo") + chico("vozCancelar", "Mejor lo escribo");
     if (v.paso === "nada") return cabeza("No encontré ningún monto", v.texto ? `Escuché: <i>«${esc(v.texto)}»</i>` : "No se escuchó nada.") +
       `<div class="sub" style="text-align:center">Probá de nuevo. ${EJEMPLO}</div><div class="relleno"></div>` + grande("vozDale", "Hablar de nuevo") + chico("vozCancelar", "Mejor lo escribo");
     return cabeza("No pude escucharte", esc(v.error || "")) + `<div class="relleno"></div>` + grande("vozDale", "Probar de nuevo") + chico("vozCancelar", "Mejor lo escribo");

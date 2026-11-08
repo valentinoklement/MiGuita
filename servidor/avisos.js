@@ -2,7 +2,7 @@
 // Lo que se guarda de cada dispositivo es lo mínimo: a dónde mandar el aviso, a qué hora y cuál fue el último día que anotó.
 // Nunca montos ni movimientos. Como el contenido del aviso va cifrado, el servicio de avisos del celu tampoco lo puede leer.
 
-const TEXTOS = { dia: "¿Anotaste tus gastos de hoy?", racha: "Tu racha se corta si hoy no anotás nada." };
+const TEXTOS = { dia: "¿Anotaste tus gastos de hoy?", racha: "Anotá algo hoy y tu racha sigue." };
 const SERVICIOS = /^https:\/\/([a-z0-9.-]+\.)?(fcm\.googleapis\.com|push\.apple\.com|push\.services\.mozilla\.com|notify\.windows\.com)\//;
 export const DESCANSO = 30 * 864e5; // si hace un mes que no abre la app, se deja de molestar
 

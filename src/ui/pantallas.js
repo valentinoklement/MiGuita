@@ -1,6 +1,7 @@
 // Pantallas de MiGuita. Cada función devuelve HTML; los textos de la persona pasan siempre por esc().
 import { AYUDAS } from "./ayuda.js";
-import { apartado, podesUsar, ahorroSinPreguntar, parteDePlata, tuPlata } from "../logic/saldo.js";
+import { apartado, podesUsar, ahorroSinPreguntar, parteDePlata, tuPlata, enElMes, desglose, saldoEfectivo } from "../logic/saldo.js";
+import { navegadorActual } from "./primera.js";
 import { puedeGrabar } from "./voz.js";
 import { Art } from "../art/art.js";
 import { formatear, evaluar } from "../logic/dinero.js";
@@ -70,6 +71,19 @@ export function crearVistas(st, hoy) {
 
   const MIC = '<path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>';
 
+  // Instalar va primero: sin el ícono en el celu, la gente se olvida de la app. «Ahora no» lo guarda una semana.
+  function cartelInstalar() {
+    const celu = navegadorActual().so, real = (x) => !x.id.startsWith("ej_");
+    if (celu === "compu" || matchMedia("(display-mode: standalone)").matches || navigator.standalone) return "";
+    if (typeof st.cfg.instalarVisto === "string" && sumarDias(st.cfg.instalarVisto, 7) > hoy) return "";
+    const luego = `<button class="pp" data-act="instalarLuego">Ahora no</button>`;
+    const verComo = `<div class="chips"><button class="pp" data-act="abrir" data-v="instalar" aria-pressed="true">Ver cómo</button>${luego}</div>`;
+    if (st.puedeInstalar) return crd(`<b class="pregunta">Instalá MiGuita en tu celu</b><div class="sub">Un toque y la tenés con su ícono, como cualquier app.</div><div class="chips"><button class="pp" data-act="instalarYa" aria-pressed="true">Instalar</button>${luego}</div>`, "aviso");
+    if (!st.movs.some(real) && !st.grupos.some(real)) return "";
+    if (celu === "iphone") return crd(`<b class="pregunta">Instalala para no perder lo anotado</b><div class="sub">En el iPhone, Safari puede borrar lo que anotaste si pasás unos días sin entrar. Con el ícono, no.</div>${verComo}`, "aviso");
+    return crd(`<b class="pregunta">Tenela a mano en tu celu</b><div class="sub">Instalala y se abre desde un ícono, como cualquier app.</div>${verComo}`, "aviso");
+  }
+
   /* ---------- Inicio ---------- */
   function inicio() {
     const actual = st.mes === hoy.slice(0, 7);
@@ -81,15 +95,15 @@ export function crearVistas(st, hoy) {
     const sinIngreso = r.ingresos === 0;
     let h = `<div class="top"><div><small>${mesNav()}` +
       `<button class="eyeb" data-act="ocultar" aria-pressed="${st.cfg.ocultar}" aria-label="${st.cfg.ocultar ? "Mostrar montos" : "Ocultar montos"}">${Art.icono(st.cfg.ocultar ? Art.OJO_TAPADO : Art.OJO)}</button></small>` +
-      `<h1>Hola${nombre ? ", " + esc(nombre) : ""}${guiando ? "" : preg("inicio")}</h1>` +
-      `<button class="racha" data-act="abrir" data-v="racha" aria-label="Ver tu racha">${Art.minion()}<span>${ra.actual ? ra.actual + (ra.actual === 1 ? " día" : " días") + (ra.hoyHecho ? "" : " · salvala hoy") : "Empezá tu racha"}</span></button>` +
+      `<h1>Hola${nombre ? ", " + esc(nombre) : ""}${guiando ? "" : `<button class="preg txt" data-act="ayuda" data-v="inicio">¿Cómo se usa?</button>`}</h1>` +
+      `<button class="racha" data-act="abrir" data-v="racha" aria-label="Ver tu racha">${Art.minion()}<span>${ra.actual ? ra.actual + (ra.actual === 1 ? " día" : " días") + (ra.hoyHecho ? "" : " · anotá hoy y sigue") : "Empezá tu racha"}</span></button>` +
       `</div><button class="miguita-toque${st.chiste ? " salta" + (st.chiste.n % 2) + (st.chiste.giro ? " gira" : "") : ""}" data-act="tocarMiguita" aria-label="Tocar a Miguita">` +
       `${Art.miguita(estadoDelMes(st.mes, r))}${st.chiste ? `<span class="globo" role="status">${esc(st.chiste.texto)}</span>` : ""}</button></div>`;
 
     const peor = actual && estadoPresupuestos(st.presupuestos, st.movs, st.mes).find((p) => p.nivel !== "ok");
     if (peor) h += `<button class="card pp tecard" data-act="verPlan" data-v="presupuesto">` +
-      `<span class="msg">${peor.nivel === "pasado" ? "Te pasaste del tope de " : "Estás llegando al tope de "}${esc(nombreCat(peor.categoria))}.</span>` +
-      `<span class="sub">Gastaste ${plata(peor.gastado)} de ${plata(peor.tope)}.</span></button>`;
+      `<span class="msg">${peor.nivel === "pasado" ? "Superaste el tope de " : "Estás llegando al tope de "}${esc(nombreCat(peor.categoria))}.</span>` +
+      `<span class="sub">Gastaste ${plata(peor.gastado)} de ${plata(peor.tope)}.${peor.nivel === "pasado" ? " Pasa: el mes que viene arranca de cero." : ""}</span></button>`;
 
     if (st.regaloRacha) h += crd(`<div class="crow">${Art.salvavidas}<div class="cr"><b class="pregunta">¡Te salvamos la racha!</b><div class="sub">Por ser de los primeros en probar MiGuita, te regalamos un salvavidas: tus ${ra.actual} días siguen en pie. Es uno solo, así que cuidala.</div></div></div>` +
       `<div class="chips"><button class="pp" data-act="regaloListo" aria-pressed="true">¡Gracias!</button></div>`, "aviso");
@@ -107,25 +121,28 @@ export function crearVistas(st, hoy) {
         lista.map((c) => `<button class="pp" data-act="dudaCatSel" data-v="${esc(c.id)}">${esc(c.nombre)}</button>`).join("") + `<button class="pp" data-act="dudaCatSel" data-v="">Dejar en Otros</button></div>`, "aviso");
     }
     if (st.dudaSaldo) {
-      const n = st.dudaSaldo.ids.length;
-      h += crd(`<b class="pregunta">¿${n > 1 ? "Estos ya estaban descontados" : "Esto ya estaba descontado"} de los ${plata(st.cfg.saldo.monto)} que cargaste?</b><div class="sub">Si lo pagaste antes de cargar tu plata, no te lo resto de nuevo.</div>` +
-        `<div class="chips"><button class="pp" data-act="saldoYa" aria-pressed="true">Sí, ya estaba</button><button class="pp" data-act="saldoNo">No, restalo</button></div>`, "aviso");
+      const entro = st.dudaSaldo.ids.every((id) => st.movs.find((x) => x.id === id)?.tipo === "ingreso");
+      h += crd(`<b class="pregunta">${entro ? `¿Esta plata ya estaba dentro de los ${plata(st.cfg.saldo.monto)} que me dijiste?` : `¿Ya habías pagado esto cuando me dijiste que tenías ${plata(st.cfg.saldo.monto)}?`}</b><div class="sub">${entro ? "Si ya estaba, no te la sumo de nuevo." : "Si ya lo habías pagado, no te lo resto de nuevo."}</div>` +
+        `<div class="chips"><button class="pp" data-act="saldoYa" aria-pressed="true">${entro ? "Sí, ya estaba" : "Sí, ya estaba pago"}</button><button class="pp" data-act="saldoNo">${entro ? "No, sumala" : "No, restalo"}</button></div>`, "aviso");
     }
     const sinPreguntar = guiando ? 0 : ahorroSinPreguntar(st.cfg.saldo, st.metas);
     if (sinPreguntar) h += crd(`<b class="pregunta">¿Lo que guardaste para tus metas está dentro de tu plata?</b><div class="sub">Son ${plata(sinPreguntar)}. Si está adentro, te muestro solo lo que podés usar.</div>` +
       `<div class="chips"><button class="pp" data-act="ahorroAdentro" aria-pressed="true">Sí, está adentro</button><button class="pp" data-act="ahorroAparte">No, lo tengo aparte</button></div>`, "aviso");
     // Un solo cartel de bienvenida por vez, para no llenar la pantalla. Lo que cobrás y tu nombre se piden acá, sin obligar.
     const reales = st.movs.filter((m) => !m.id.startsWith("ej_")).length;
+    const conPlataEfectiva = saldoEfectivo(st.cfg.saldo, st.movs);
+    const instalar = guiando ? "" : cartelInstalar();
+    const antesDelCartel = h.length;
     if (guiando) { /* mientras dura la guía, nada más */ }
-    else if (actual && sinIngreso && reales && !st.cfg.ingresoVisto && !st.cfg.saldo)
-      h += crd(`<b class="pregunta">¿Querés saber cuánto te queda este mes?</b><div class="sub">Cargá lo que cobrás y te lo digo. Es opcional.</div><div class="chips"><button class="pp" data-act="abrir" data-v="plata" aria-pressed="true">Cargar</button><button class="pp" data-act="cerrarCartel" data-v="ingresoVisto">Ahora no</button></div>`, "aviso");
+    else if (instalar) h += instalar;
+    else if (actual && sinIngreso && reales && !st.cfg.ingresoVisto && !conPlataEfectiva)
+      h += crd(`<b class="pregunta">¿Querés saber cuánto te queda?</b><div class="sub">Decime cuánta plata tenés hoy y te lo digo. Es opcional.</div><div class="chips"><button class="pp" data-act="abrir" data-v="plata" aria-pressed="true">Poner cuánto tengo</button><button class="pp" data-act="cerrarCartel" data-v="ingresoVisto">Ahora no</button></div>`, "aviso");
     else if (EN_PRUEBA && !st.cfg.pruebaVisto)
       h += crd(`<b class="pregunta">Estás probando MiGuita antes que nadie</b><div class="sub">La estamos probando en un grupo chico de amigos. Si algo anda mal o se te ocurre una idea, mandala: a fin de mes, el aporte más útil se lleva una birra.</div>` +
         `<div class="chips"><button class="pp" data-act="abrirComentario" aria-pressed="true">Mandar un comentario</button><button class="pp" data-act="cerrarCartel" data-v="pruebaVisto">Después</button></div>`, "aviso");
-    else if (!(matchMedia("(display-mode: standalone)").matches || navigator.standalone) && !st.cfg.instalarVisto && st.movs.length)
-      h += crd(`<b class="pregunta">Tenela a mano en tu celu</b><div class="sub">Instalala y se abre desde un ícono, como cualquier app.</div><div class="chips"><button class="pp" data-act="abrir" data-v="instalar" aria-pressed="true">Ver cómo</button><button class="pp" data-act="cerrarCartel" data-v="instalarVisto">Ahora no</button></div>`, "aviso");
 
-    if (!guiando && reales >= 3 && !nombre && !st.cfg.nombreVisto && !(actual && sinIngreso && !st.cfg.ingresoVisto && !st.cfg.saldo))
+    const huboCartel = h.length > antesDelCartel;
+    if (!guiando && reales >= 3 && !nombre && !st.cfg.nombreVisto && !(actual && sinIngreso && !st.cfg.ingresoVisto && !conPlataEfectiva))
       h += crd(`<b class="pregunta">¿Cómo te llamás?</b><div class="sub">Es para saludarte. Es opcional.</div><div class="quick"><div class="pp"><input class="field" data-act="nombre" value="" placeholder="Tu nombre" aria-label="Tu nombre" maxlength="30" autocomplete="given-name"></div></div><div class="chips"><button class="pp" data-act="cerrarCartel" data-v="nombreVisto" aria-pressed="true">Listo</button></div>`, "aviso");
 
     const cerrado = actual && mesParaMostrar(st.movs, hoy, st.cfg.mesVisto || "");
@@ -136,8 +153,9 @@ export function crearVistas(st, hoy) {
       h += crd(`<span>Estás viendo datos de ejemplo</span><button class="btnmini" data-act="quitarEjemplo">Quitar</button>`, "banner");
 
     if (actual && !ra.hoyHecho && ra.actual > 0 && new Date().getHours() >= 18 && Date.now() > st.avisoLuego)
-      h += crd(`<b>¿Ya anotaste tus gastos de hoy?</b><div class="sub">Tu racha de ${ra.actual} ${ra.actual === 1 ? "día" : "días"} se corta si hoy no anotás nada.</div>` +
+      h += crd(`<b>¿Ya anotaste tus gastos de hoy?</b><div class="sub">Anotá algo hoy y tu racha de ${ra.actual} ${ra.actual === 1 ? "día" : "días"} sigue.</div>` +
         `<div class="chips"><button class="pp" data-act="nuevo" aria-pressed="true">Anotar</button><button class="pp" data-act="noGaste">No gasté hoy</button><button class="pp" data-act="luego">Más tarde</button></div>`, "aviso");
+
 
     // Fijos que preguntan antes de anotarse.
     if (actual) for (const f of fijosPorConfirmar(st.fijos, hoy)) {
@@ -145,39 +163,44 @@ export function crearVistas(st, hoy) {
       h += crd(`<div class="sec">${ing ? "Ingreso fijo" : "Gasto fijo"} · día ${f.dia}</div><b class="pregunta">${ing ? "¿Ya cobraste " : "¿Ya pagaste "}${esc(f.nombre)}?</b><div class="sub">${plata(f.monto, f.moneda === "USD" ? { moneda: "US$ " } : {})}</div>` +
         `<div class="chips"><button class="pp" data-act="confirmarFijo" data-v="${esc(f.id)}" aria-pressed="true">Sí, anotar</button><button class="pp" data-act="cambiarFijo" data-v="${esc(f.id)}">Otro monto</button><button class="pp" data-act="saltearFijo" data-v="${esc(f.id)}">Este mes no</button></div>`, "aviso");
     }
-    const c = st.cfg.copias;
-    if (actual && c.auto && (!c.ultima || Date.now() - Date.parse(c.ultima) >= (c.cada === "mes" ? 30 : 7) * 864e5))
+    const c = st.cfg.copias, diasDesde = (f) => (Date.now() - Date.parse(f)) / 864e5;
+    if (actual && c.auto && (!c.ultima || diasDesde(c.ultima) >= (c.cada === "mes" ? 30 : 7)))
       h += crd(`<span>Toca hacer tu copia de seguridad</span><button class="btnmini" data-act="abrir" data-v="copias">Hacerla</button>`, "banner");
-    // Aunque no haya activado el recordatorio: si ya anotó bastante y nunca hizo una copia, se lo decimos (cada 30 días como mucho).
-    else if (actual && !c.ultima && st.movs.filter((m) => !m.id.startsWith("ej_")).length >= 10 && (!c.pospuesta || Date.now() - Date.parse(c.pospuesta) >= 30 * 864e5))
-      h += crd(`<div class="sub"><b>Tus datos están solo en este celu.</b> Si lo perdés o se borra la app, se pierden. Una copia los salva.</div>` +
-        `<div class="chips"><button class="pp" data-act="abrir" data-v="copias" aria-pressed="true">Hacer una copia</button><button class="pp" data-act="posponerCopia">Ahora no</button></div>`, "aviso");
+    // Aunque no haya activado el recordatorio: desde el día siguiente al primer uso, si no hay copia reciente ni otro dispositivo conectado.
+    else if (actual && !huboCartel && !st.cfg.vinculo && reales >= 3 && (st.cfg.primeraVez || hoy) < hoy && (!c.ultima || diasDesde(c.ultima) >= 60) && (!c.pospuesta || diasDesde(c.pospuesta) >= 14))
+      h += crd(`<b class="pregunta">Tus datos están solo en este celu</b><div class="sub">${c.ultima ? "Tu última copia es del " + new Date(c.ultima).toLocaleDateString("es-AR") + "." : "No están en internet: si lo perdés o lo cambiás, se pierden."} Guardá una copia o conectá otro dispositivo.</div>` +
+        `<div class="chips"><button class="pp" data-act="abrir" data-v="copias" aria-pressed="true">Hacer una copia</button><button class="pp" data-act="abrir" data-v="dispositivos">Conectar otro</button><button class="pp" data-act="posponerCopia">Ahora no</button></div>`, "aviso");
 
-    // Con su plata cargada se ve un solo número: lo que puede usar. Sin eso, "te queda" sale de lo cobrado; sin ingresos, se muestra lo gastado.
-    const miPlata = tuPlata(st.cfg.saldo, st.movs);
+    // Un solo número y, debajo, la cuenta en una frase: así se entiende de dónde sale sin tocar nada. El detalle está en Resumen.
+    const miPlata = tuPlata(conPlataEfectiva, st.movs);
     const conPlata = actual && miPlata !== null && !guiando;
     if (conPlata) {
-      const usar = podesUsar(st.cfg.saldo, st.movs, st.metas);
-      h += `<button class="card pp hr tecard solo" data-act="abrir" data-v="resumen" aria-label="Ver el resumen del mes">${Art.pan(parteDePlata(st.cfg.saldo, st.movs, st.mes, st.metas))}<span class="ht"><span class="sub">${usar < 0 ? "Te pasaste por" : "Podés usar"}</span>` +
-        `<span class="big std">${plata(Math.abs(usar))}</span></span></button>`;
-    } else h += `<button class="card pp hr tecard" data-act="abrir" data-v="resumen" aria-label="Ver el resumen del mes">${Art.pan(r.queda)}<span class="ht"><span class="sub">${sinIngreso ? "Gastaste" : "Te queda"}</span>` +
-      `<span class="big std">${plata(sinIngreso ? r.gastos : r.teQueda)}</span>` +
-      `<span class="sub">${sinIngreso ? "Tocá para ver en qué se fue" : actual ? "Podés gastar " + plata(r.porDia) + " por día" : "Gastaste " + plata(r.gastos)}</span></span></button>`;
+      const { usar, gastado, hubo } = enElMes(conPlataEfectiva, st.movs, st.mes, st.metas);
+      const frase = !gastado ? "Todavía no gastaste nada este mes" : (hubo > 0 ? `Gastaste ${plata(gastado)} de ${plata(hubo)}` : `Este mes gastaste ${plata(gastado)}`) + (usar < 0 ? ". Pasa, ya se acomoda" : "");
+      h += `<button class="card pp hr tecard solo" data-act="abrir" data-v="resumen" aria-label="Ver de dónde sale lo que te queda">${Art.pan(parteDePlata(conPlataEfectiva, st.movs, st.mes, st.metas))}<span class="ht"><span class="sub">${usar < 0 ? "Estás abajo" : "Te queda"}</span>` +
+        `<span class="big std">${plata(Math.abs(usar))}</span><span class="sub">${frase}</span></span></button>`;
+    } else {
+      const titulo = actual ? "Gastaste este mes" : "En " + mesTexto(st.mes).toLowerCase() + " gastaste";
+      const abajo = !actual && r.ingresos ? "Entraron " + plata(r.ingresos) : "Tocá para ver en qué se fue";
+      h += `<button class="card pp hr tecard" data-act="abrir" data-v="resumen" aria-label="Ver el resumen del mes">${Art.pan(r.queda)}<span class="ht"><span class="sub">${titulo}</span>` +
+        `<span class="big std">${plata(r.gastos)}</span><span class="sub">${abajo}</span></span></button>`;
+    }
 
     const conMic = !guiando && puedeGrabar();
     h += (guiando ? "" : conPlata ?
-      `<div class="plata-fila"><button class="ver-res" data-act="abrir" data-v="resumen"><i aria-hidden="true">↑</i>Tocá para ver tu resumen</button><button class="btnmini" data-act="abrir" data-v="plata">Cargar plata</button></div>` : miPlata !== null ?
-      `<div class="plata-fila"><span><small>Tu plata ahora</small><b${miPlata < 0 ? ' class="neg-v"' : ""}>${plata(miPlata)}</b></span><button class="btnmini" data-act="abrir" data-v="plata">Cargar plata</button></div>` :
-      `<div class="plata-fila sola"><button class="btnmini" data-act="abrir" data-v="plata">+ Cargar plata</button></div>`) + `<form class="quick" data-form="rapido"><div class="pp${st.error ? " err" : ""}"><input id="rapido" placeholder="15mil nafta" aria-label="Anotar un gasto" autocomplete="off" enterkeyhint="done" maxlength="300"></div>` +
+      `<div class="plata-fila"><button class="ver-res" data-act="abrir" data-v="resumen"><i aria-hidden="true">↑</i>Tocá para ver el detalle</button><button class="btnmini" data-act="abrir" data-v="plata">Me entró plata</button></div>` : miPlata !== null ?
+      `<div class="plata-fila"><span><small>Tu plata ahora</small><b${miPlata < 0 ? ' class="neg-v"' : ""}>${plata(miPlata)}</b></span><button class="btnmini" data-act="abrir" data-v="plata">Me entró plata</button></div>` :
+      `<div class="plata-fila sola"><button class="btnmini" data-act="abrir" data-v="plata">¿Cuánta plata tenés?</button></div>`) +
+      `<label class="quick-t" for="rapido">Escribí qué gastaste y cuánto</label><form class="quick" data-form="rapido"><div class="pp${st.error ? " err" : ""}"><input id="rapido" placeholder="Ej: 15mil nafta" autocomplete="off" enterkeyhint="done" maxlength="300"></div>` +
       (conMic ? `<button class="btn pp mic" type="button" data-act="hablar" aria-label="Hablar: decí tus gastos con la voz">${Art.icono(MIC)}</button>` : "") +
       `<button class="btn pp anotar" type="submit">Anotar</button></form>` +
-      (conMic && !st.cfg.vozAviso ? `<div class="nuevo-mic">Nuevo: tocá el micrófono y decí lo que gastaste o te entró</div>` : "") +
-      (st.error ? `<div class="msg" role="alert">${esc(st.error)}</div>` : "") +
-      (guiando ? "" : `<button class="traer" data-act="abrir" data-v="importar"><span aria-hidden="true">${Art.icono(ICONO_BILLETERA)}</span><span>¿Usás Mercado Pago? <b>Traé tus gastos solos</b></span><span class="chev" aria-hidden="true">›</span></button>`);
+      (conMic && !st.cfg.vozAviso && reales < 3 ? `<div class="nuevo-mic">Nuevo: tocá el micrófono y decí lo que gastaste o te entró</div>` : "") +
+      (st.error ? `<div class="msg" role="alert">${esc(st.error)}</div>` : "");
 
     h += crd(`<div class="sec secrow" data-guia="mov"><span>Últimos movimientos</span>${movs.length ? `<button class="link" data-act="abrir" data-v="movimientos">Ver todos ›</button>` : ""}</div>` +
       (movs.length ? movs.slice(0, 5).map((x, i) => fila(x, i === 0, subInicio)).join("") :
         `<div class="empty"><b>Todavía no anotaste nada</b><span>Escribí «15mil nafta» arriba y listo.</span></div>`));
+    if (!guiando) h += `<button class="traer" data-act="abrir" data-v="importar"><span aria-hidden="true">${Art.icono(ICONO_BILLETERA)}</span><span>¿Usás Mercado Pago? <b>Traé tus gastos solos</b></span><span class="chev" aria-hidden="true">›</span></button>`;
     if (!st.movs.length && !guiando) h += `<button class="link chico" data-act="yaUsoMiguita">¿Ya usás MiGuita en otro celu? Conectalo</button><button class="link chico" data-act="tengoCopia">Tengo una copia de seguridad</button>`;
     return h;
   }
@@ -198,7 +221,7 @@ export function crearVistas(st, hoy) {
     return `<div class="guia-fondo"></div>` + saltar + (
       p === 0 ? globo("Empecemos", "Escribí lo último que gastaste. Por ejemplo: <b>10 lucas birra</b>. Después tocá <b>Anotar</b>.") :
       p === 1 ? globo("¡Anotado!", texto, "Seguir") :
-      globo("Abajo está lo demás", `<div class="g3"><b>Grupos</b> Dividí gastos con amigos.</div><div class="g3"><b>Mis cuentas</b> Cuotas, metas, deudas y gastos fijos.</div><div class="g3"><b>Ajustes</b> Avisos, personalización y PIN.</div>`, "¡A usarla!"));
+      globo("Abajo está lo demás", `<div class="g3"><b>Grupos</b> Dividí gastos con amigos.</div><div class="g3"><b>Mis cuentas</b> Cuotas, metas, deudas y gastos fijos.</div><div class="g3"><b>Ajustes</b> Letra más grande, avisos y PIN.</div>`, "¡A usarla!"));
   }
 
   /* ---------- la ventanita del signo de pregunta ---------- */
@@ -241,10 +264,19 @@ export function crearVistas(st, hoy) {
     const pc = gastosPor(st.movs, st.mes, "categoria"), pm = gastosPor(st.movs, st.mes, "medio");
     const dias = gastosPorDia(st.movs, st.mes);
     const max = Math.max(...dias), diaMax = dias.indexOf(max);
-    let h = back("Inicio") + hdr(mesNav(), "Resumen", estadoDelMes(st.mes, r), "resumen") +
-      crd(`<div class="stats"><div><div class="sub">Ingresos</div><b class="pos">${plata(r.ingresos)}</b></div><div><div class="sub">Gastos</div><b class="neg">${plata(r.gastos)}</b></div><div><div class="sub">Queda</div><b>${plata(r.teQueda)}</b></div></div>` +
-        (() => { const usar = actual ? podesUsar(st.cfg.saldo, st.movs, st.metas) : null; return usar > 0 ? `<div class="sub">Podés gastar ${plata(Math.floor(usar / r.faltan / 100) * 100)} por día hasta fin de mes.</div>` : ""; })() +
-        (() => { const d = dolarDe(referencia(st.mes, hoy)); return d && r.gastos ? `<div class="sub">≈ ${formatear(Math.round(r.gastos * 100 / d.valor), { moneda: "US$ ", oculto: st.cfg.ocultar }).replace(/,\d\d$/, "")} gastados · dólar ${nombreTipo(st.cfg.dolar.tipo).toLowerCase()} ${formatear(d.valor)}</div>` : ""; })());
+    // Con la plata cargada, arriba va la cuenta del número de Inicio, con lo de este mes. Así nunca aparecen dos números distintos para lo mismo.
+    const d = actual ? desglose(saldoEfectivo(st.cfg.saldo, st.movs), st.movs, st.metas, st.mes) : null;
+    const fila2 = (t, v, primera) => `<div class="row${primera ? " f" : ""}"><span>${t}</span><span>${v}</span></div>`;
+    const porDia = (() => { const usar = !actual ? 0 : d ? d.queda : r.teQueda; return usar > 0 ? `<div class="sub">Podés gastar ${plata(Math.floor(usar / r.faltan / 100) * 100)} por día hasta fin de mes.</div>` : ""; })();
+    const enDolares = (() => { const v = dolarDe(referencia(st.mes, hoy)); return v && r.gastos ? `<div class="sub">≈ ${formatear(Math.round(r.gastos * 100 / v.valor), { moneda: "US$ ", oculto: st.cfg.ocultar }).replace(/,\d\d$/, "")} gastados · dólar ${nombreTipo(st.cfg.dolar.tipo).toLowerCase()} ${formatear(v.valor)}</div>` : ""; })();
+    let h = back("Inicio") + hdr(mesNav(), "Resumen", estadoDelMes(st.mes, r), "resumen") + (d ?
+      crd(lbl("De dónde sale lo que te queda") + (d.tenias > 0 ? fila2("Empezaste con", plata(d.tenias), true) : "") +
+        (d.entro ? fila2("Te entró", plata(d.entro, { signo: true }), d.tenias <= 0) : "") + (d.gasto ? fila2("Gastaste", plata(-d.gasto), d.tenias <= 0 && !d.entro) : "") + (d.metas ? fila2("Guardado para tus metas", plata(-d.metas)) : "") +
+        `<div class="row total"><span>${d.queda < 0 ? "Estás abajo" : "Te queda"}</span><span>${plata(Math.abs(d.queda))}</span></div>` +
+        (d.tenias < 0 ? `<div class="sub">No todo está anotado: hubo plata que se movió sin pasar por acá.</div>` : "") +
+        `<div class="sub">¿No coincide con lo que tenés de verdad?</div><div class="chips"><button class="pp" data-act="abrir" data-v="plata">Corregir mi plata</button></div>`) + (porDia || enDolares ? crd(porDia + enDolares) : "") :
+      crd(`<div class="stats"><div><div class="sub">Entró</div><b class="pos">${plata(r.ingresos)}</b></div><div><div class="sub">Gastaste</div><b class="neg">${plata(r.gastos)}</b></div>${r.ingresos ? `<div><div class="sub">Quedó</div><b>${plata(r.teQueda)}</b></div>` : ""}</div>` +
+        (actual ? `<div class="sub">Esto es solo de este mes. Si me decís cuánta plata tenés, te cuento toda.</div><div class="chips"><button class="pp" data-act="abrir" data-v="plata">¿Cuánta plata tenés?</button></div>` : "") + porDia + enDolares));
     if (!r.gastos) return h + crd(`<div class="empty"><b>Sin gastos este mes</b><span>Cuando anotes, acá vas a ver en qué se te va la plata.</span></div>`);
     h += `<div class="btnrow"><button class="btn pp alt" data-act="abrirTuMes" data-v="${st.mes}">Tu mes${actual ? " (hasta hoy)" : ""}</button><button class="btn pp alt" data-act="verPlan" data-v="analisis">Ver análisis</button></div>`;
     h += crd(lbl("Por categoría") + pc.map((c) => `<div class="crow">${Art.catIcon(c.id)}<div class="cr"><div class="row f" style="padding:0 0 3px;min-height:0"><span>${esc(nombreCat(c.id))} · ${Math.round(c.parte * 100)}%</span><span>${plata(c.monto)}</span></div>${Art.barra(c.monto / pc[0].monto)}</div></div>`).join(""));
@@ -326,31 +358,43 @@ export function crearVistas(st, hoy) {
       crd(lbl("Ayuda") +
         ir("tutorial", "Cómo usar MiGuita", "Todo lo que podés hacer, en un minuto", '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 0 1 5 .5c0 1.5-2.5 2-2.5 3.5M12 17h0"/>', true) +
         accion("repetirGuia", "Repetir la guía", "La de la primera vez, en Inicio", '<path d="M4 12a8 8 0 1 0 2.5-5.8M4 4v4h4"/>') +
+        accion("invitar", "Invitar a alguien", "Un mensaje listo para mandar por WhatsApp, con los pasos", '<circle cx="9" cy="8" r="3.5"/><path d="M3 20c0-4 3-6 6-6s6 2 6 6M18 8v6M15 11h6"/>') +
         (matchMedia("(display-mode: standalone)").matches || navigator.standalone ? "" : ir("instalar", "Instalar MiGuita", "Para tenerla en la pantalla de inicio", '<rect x="6" y="2" width="12" height="20" rx="3"/><path d="M12 8v7m0 0l-3-3m3 3l3-3"/>')) +
         (EN_PRUEBA ? accion("abrirComentario", "Mandar un comentario", "Una idea o algo que anda mal", '<path d="M4 5h16v11H9l-5 4z"/>') : ""));
   }
 
-  /* ---------- Cargar plata ---------- */
+  /* ---------- Mi plata ---------- */
+  // La pregunta de cuando ya había cosas anotadas: cada botón dice cómo queda el número, para no tener que imaginárselo.
+  function dudaPlata() {
+    const d = st.dudaPlata, soloGastos = !d.ingresos, uno = d.lista.length === 1 ? d.lista[0] : null;
+    const que = uno ? `${esc(uno.detalle || nombreCat(uno.categoria))} por ${plata(uno.monto)}` : soloGastos ? `${d.lista.length} gastos por ${plata(d.gastos)}` : `gastos por ${plata(d.gastos)} e ingresos por ${plata(d.ingresos)}`;
+    return crd(`<b class="pregunta">Antes anotaste ${que}</b><div class="sub">¿Los ${plata(d.monto)} son lo que tenés ahora, o todavía falta ${soloGastos ? "restarle eso" : "tenerlo en cuenta"}?</div>` +
+      `<div class="chips"><button class="pp" data-act="plataYaEstaba">Ya está ${soloGastos ? "restado" : "incluido"}: tengo ${plata(d.monto)}</button>` +
+      `<button class="pp" data-act="plataFaltaba" aria-pressed="true">${soloGastos ? "Restalo" : "Tenelo en cuenta"}: me queda ${plata(d.monto + d.ingresos - d.gastos)}</button></div>`, "aviso");
+  }
+
   function cargarPlata() {
     const s = st.cfg.saldo, ahora = tuPlata(s, st.movs);
     const sueldo = st.fijos.find((f) => f.tipo === "ingreso" && f.categoria === "sueldo") || st.fijos.find((f) => f.tipo === "ingreso");
     const opcion = (act, t, sub) => `<button class="srow rowb" data-act="${act}" style="width:100%;text-align:left"><span class="rt"><b>${t}</b><small>${sub}</small></span><span class="chev" aria-hidden="true">›</span></button>`;
-    return back("Inicio") + hdr("Tu plata", "Cargar plata", "", "plata") +
-      crd(lbl("Lo que tengo ahora") + (s ? `<div class="row f"><span>Tu plata ahora</span><span>${plata(ahora)}</span></div>` : "") +
-        (s && apartado(s, st.metas) ? `<div class="row"><span>Para tus metas</span><span>${plata(apartado(s, st.metas))}</span></div><div class="row"><span>Podés usar</span><span>${plata(podesUsar(s, st.movs, st.metas))}</span></div>` : "") +
-        `<div class="sub">${s ? "¿No coincide? Poné lo que tenés de verdad y arranca de nuevo desde ahí." : "Sumá lo que tenés en Mercado Pago, en el banco y en efectivo. No cuenta como ingreso."}</div>` +
-        `<div class="quick"><div class="pp${st.plataError ? " err" : ""}"><input class="field" data-act="plataMonto" value="${esc(st.plataTexto || "")}" placeholder="por ejemplo 30.000" inputmode="decimal" aria-label="Lo que tengo ahora" maxlength="16"></div><button class="btn pp anotar" data-act="plataGuardar">${s ? "Actualizar" : "Guardar"}</button></div>` +
-        (st.plataError ? `<div class="msg" role="alert">${esc(st.plataError)}</div>` : "")) +
-      crd(lbl("Lo que cobrás") +
-        opcion("plataSueldo", sueldo ? "Mi sueldo: " + esc(sueldo.nombre) : "Mi sueldo", sueldo ? plata(sueldo.monto, sueldo.moneda === "USD" ? { moneda: "US$ " } : {}) + " · día " + sueldo.dia + (sueldo.activo ? "" : " · pausado") : "Cuánto cobrás y qué día. Se anota solo todos los meses.").replace("srow rowb", "srow f rowb") +
-        opcion("cargarIngreso", "Cobré algo, una sola vez", "Una changa, un regalo, lo que te transfirieron."));
+    const cuanto = crd(lbl(s ? "Tu plata" : "¿Cuánta plata tenés hoy?") + (s ? `<div class="row f"><span>Tenés ahora</span><span>${plata(ahora)}</span></div>` : "") +
+        (s && apartado(s, st.metas) ? `<div class="row"><span>Guardado para tus metas</span><span>${plata(apartado(s, st.metas))}</span></div><div class="row"><span>Te queda</span><span>${plata(podesUsar(s, st.movs, st.metas))}</span></div>` : "") +
+        `<div class="sub">${s ? "¿No coincide con lo que tenés de verdad? Poné el número real y sigo desde ahí." : "Sumá los pesos que tenés en Mercado Pago, en el banco y en efectivo. Desde ahí te resto cada gasto y te sumo cada ingreso."}</div>` +
+        `<div class="quick"><div class="pp${st.plataError ? " err" : ""}"><input class="field" data-act="plataMonto" value="${esc(st.plataTexto || "")}" placeholder="por ejemplo 30.000" inputmode="decimal" aria-label="Cuánta plata tenés hoy" maxlength="16"></div><button class="btn pp anotar" data-act="plataGuardar">${s ? "Corregir" : "Guardar"}</button></div>` +
+        (st.plataError ? `<div class="msg" role="alert">${esc(st.plataError)}</div>` : ""));
+    const entro = crd(lbl("¿Te entró plata?") +
+        opcion("cargarIngreso", "Cobré algo", "Una changa, un regalo, lo que te transfirieron. Se suma a lo que tenés.").replace("srow rowb", "srow f rowb") +
+        opcion("plataSueldo", sueldo ? "Mi sueldo: " + esc(sueldo.nombre) : "Mi sueldo", sueldo ? plata(sueldo.monto, sueldo.moneda === "USD" ? { moneda: "US$ " } : {}) + " · día " + sueldo.dia + (sueldo.activo ? "" : " · pausado") : "Cuánto cobrás y qué día. Se anota solo todos los meses."));
+    // Con la plata ya cargada, lo más común es que haya entrado algo; la primera vez, lo primero es decir cuánto hay.
+    return back("Inicio") + hdr("Tu plata", "Mi plata", "", "plata") + (st.dudaPlata ? dudaPlata() : "") + (s ? entro + cuanto : cuanto + entro);
   }
 
   /* ---------- Personalización ---------- */
   function personalizacion() {
     return back("Ajustes") + hdr("Ajustes", "Personalización") +
       crd(lbl("Apariencia") +
-        `<div class="srow f"><span class="rt"><b>Tema</b></span>${chips("tema", [["dark", "Oscuro"], ["light", "Claro"]], st.cfg.tema, "Tema")}</div>` +
+        `<div class="srow f letra-fila"><span class="rt"><b>Tamaño de letra</b><small>Agranda toda la app</small></span>${chips("letra", [["", "Normal"], ["grande", "Grande"], ["enorme", "Muy grande"]], globalThis.__miguitaLetra?.() || "", "Tamaño de letra")}</div>` +
+        `<div class="srow"><span class="rt"><b>Tema</b></span>${chips("tema", [["dark", "Oscuro"], ["light", "Claro"]], st.cfg.tema, "Tema")}</div>` +
         `<div class="srow"><span class="rt"><b>Reducir movimiento</b><small>Frena el temblor de los dibujos</small></span>${interruptor("movimiento", !st.cfg.movimiento, "Reducir movimiento")}</div>` +
         `<div class="srow"><span class="rt"><b>Ocultar montos</b><small>Tapa los números en la pantalla</small></span>${interruptor("ocultar", st.cfg.ocultar, "Ocultar montos")}</div>`) +
       billetera() +
@@ -431,7 +475,7 @@ export function crearVistas(st, hoy) {
       `</div></div></div>`;
   }
 
-  return { inicio, movimientos, resumen, racha, festejo, mas, cargarPlata, personalizacion, hayEjemplo, categorias, editarCat, hoja, nombreCat, nombreMedio, nombreDia, mesTexto, plata, motivosApretado, estadoDelMes,
+  return { inicio, cartelInstalar, movimientos, resumen, racha, festejo, mas, cargarPlata, personalizacion, hayEjemplo, categorias, editarCat, hoja, nombreCat, nombreMedio, nombreDia, mesTexto, plata, motivosApretado, estadoDelMes,
     guia, ayuda, ayudaHoja,
     ayudas: { back, hdr, lbl, crd, chips, interruptor, preg } };
 }

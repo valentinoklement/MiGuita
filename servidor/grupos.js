@@ -14,7 +14,8 @@
 import { DurableObject } from "cloudflare:workers";
 import { validar, proximoAviso, queAvisar, mandar, DESCANSO } from "./avisos.js";
 
-const ORIGENES = ["https://valentinoklement.github.io", "http://localhost:8123", "http://127.0.0.1:8123"];
+const ORIGENES = ["https://miguita-app.pages.dev", "https://valentinoklement.github.io", "http://localhost:8123", "http://127.0.0.1:8123"];
+const EVENTOS = ["abrio", "anoto", "instalada", "semana", "mes"]; // lo único que se cuenta (ver web/src/logic/contador.js)
 const MAX_DATOS = 1_500_000; // ~1,5 MB por grupo
 const VENCE = 400 * 864e5;   // un grupo sin uso por más de ~13 meses se borra solo
 const MAX_AUDIO = 3_000_000; // ~3 MB: sobra para el minuto y medio que deja grabar la app
@@ -71,6 +72,20 @@ export default {
       if (t.length < 3) return json({ error: "mal formado" }, 400, origen);
       const ok = await buzon.guardar({ tipo: ["idea", "error", "otro"].includes(c.tipo) ? c.tipo : "otro", texto: t.slice(0, 1500), nombre: String(c.nombre ?? "").trim().slice(0, 40), version: String(c.version ?? "").slice(0, 30), aparato: String(c.aparato ?? "").slice(0, 120) });
       return json(ok ? {} : { error: "lleno" }, ok ? 200 : 507, origen);
+    }
+    if (ruta === "/cuenta") {
+      const contador = env.CONTADOR.get(env.CONTADOR.idFromName("principal"));
+      if (pedido.method === "GET") {
+        const t = /^Bearer (.+)$/.exec(pedido.headers.get("Authorization") || "")?.[1];
+        if (!env.BUZON_CLAVE || !iguales(t || "", env.BUZON_CLAVE)) return json({ error: "falta el permiso" }, 401, origen);
+        return json({ cuentas: await contador.todas() }, 200, origen);
+      }
+      if (pedido.method !== "POST") return json({ error: "método" }, 405, origen);
+      const texto = await pedido.text();
+      let c = null; try { c = texto.length <= 100 ? JSON.parse(texto) : null; } catch { /* queda null */ }
+      if (!EVENTOS.includes(c?.ev)) return json({ error: "mal formado" }, 400, origen);
+      await contador.sumar(c.ev);
+      return json({}, 200, origen);
     }
     if (ruta === "/voz") {
       if (pedido.method !== "POST") return json({ error: "método" }, 405, origen);
@@ -194,6 +209,15 @@ export class Aviso extends DurableObject {
     try { if (texto && await this.enviar(e, texto) === 410) return; } catch { /* sigue: ya llegará el próximo */ }
     if (await this.ctx.storage.get("e")) await this.programar(e);
   }
+}
+
+// Cuánta gente abre la app, la instala y la sigue usando, sumado por mes. Sin direcciones de internet ni identificadores: solo los totales.
+export class Contador extends DurableObject {
+  async sumar(ev) {
+    const k = new Date().toISOString().slice(0, 7) + "|" + ev, s = this.ctx.storage;
+    await s.put(k, ((await s.get(k)) || 0) + 1);
+  }
+  async todas() { return Object.fromEntries(await this.ctx.storage.list()); }
 }
 
 // Los comentarios de la prueba. Sin direcciones de internet ni datos de la cuenta: solo lo que la persona mandó.

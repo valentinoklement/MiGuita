@@ -20,6 +20,16 @@ export const CHISTES = [
   "Yo no juzgo. Bueno, un poquito.",
 ];
 
+// En un mes difícil, Miguita acompaña: quien la está pasando mal no necesita un reto.
+export const CHISTES_MES_DIFICIL = [
+  "Mes duro, ¿no? Acá estoy igual.",
+  "Anotar cuando va mal es lo más difícil. Bien ahí.",
+  "Respirá. El mes que viene también se puede.",
+  "Yo tampoco estoy en mi mejor momento. Se me fue la lechuga.",
+  "No te reto. Te hago compañía.",
+  "Mirarlo ya es la mitad del trabajo.",
+];
+
 export const ESPECIALES = {
   10: "Te cuento un secreto: la miga va sin corteza porque la corteza era muy gastadora.",
   20: "Bueno, basta. Voy a llamar a mi abogado, el doctor Pan Dulce.",

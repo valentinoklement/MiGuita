@@ -3,6 +3,22 @@
 (function () {
   var SERVIDOR = "https://miguita-grupos.valentinoklement.workers.dev/buzon";
   var ultimo = "", tiempo = 0;
+  // Chrome avisa una sola vez que se puede instalar: se guarda acá, antes de que cargue el resto de la app, para no perderse ese aviso.
+  addEventListener("beforeinstallprompt", function (e) {
+    e.preventDefault();
+    window.__miguitaPedido = e;
+    if (window.__miguitaInstalable) window.__miguitaInstalable();
+  });
+  // El tamaño de letra se aplica también a la pantalla del PIN, que aparece antes que todo.
+  var letraMem = "";
+  window.__miguitaLetra = function (nueva) {
+    if (nueva !== undefined) {
+      letraMem = nueva;
+      try { if (nueva) localStorage.setItem("miguita-letra", nueva); else localStorage.removeItem("miguita-letra"); } catch (e) { /* sin guardar: dura mientras esté abierta */ }
+      return nueva;
+    }
+    try { return localStorage.getItem("miguita-letra") || letraMem; } catch (e) { return letraMem; }
+  };
   var estilo = "position:fixed;z-index:99;left:0;right:0;font:600 15px/1.45 system-ui,sans-serif;color:#2A1608;background:#E2C9A0;";
   var boton = "display:block;width:100%;min-height:46px;margin-top:10px;border:0;border-radius:12px;font:800 15px system-ui,sans-serif;";
 
