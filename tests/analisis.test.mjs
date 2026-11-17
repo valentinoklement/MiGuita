@@ -71,6 +71,8 @@ test("meta: cuándo llega guardando como viene", () => {
   assert.deepEqual(llegadaMeta(metas, movs, HOY), { nombre: "Viaje", mes: "2027-02" });
   assert.equal(llegadaMeta(metas, [g("2026-10-02", "super", 300000)], HOY), null); // si no guarda, no promete nada
   assert.equal(llegadaMeta([{ ...metas[0], moneda: "USD" }], movs, HOY), null);
+  // Una meta sin objetivo («Ahorros») no tiene a dónde llegar: se saltea.
+  assert.deepEqual(llegadaMeta([{ ...metas[0], id: "a", nombre: "Ahorros", objetivo: 0 }, ...metas], movs, HOY), { nombre: "Viaje", mes: "2027-02" });
 });
 
 test("en dólares: con el dólar de cada mes, solo meses cerrados", () => {

@@ -104,7 +104,7 @@ export function llegadaMeta(metas, movs, hoy) {
   const cerrados = mesAMes(movs, hoy).filter((m) => !m.parcial && conDatos(m)).slice(-3);
   const ritmo = promedio(cerrados.map((m) => m.ingresos - m.gastos));
   if (ritmo <= 0 || !cerrados.length) return null;
-  const meta = metas.find((m) => m.moneda !== "USD" && !infoMeta(m, hoy).cumplida);
+  const meta = metas.find((m) => m.moneda !== "USD" && !infoMeta(m, hoy).cumplida && !infoMeta(m, hoy).sinObjetivo);
   if (!meta) return null;
   const falta = infoMeta(meta, hoy).falta;
   return { nombre: meta.nombre, mes: cambiarMes(hoy.slice(0, 7), Math.ceil(falta / ritmo)) };

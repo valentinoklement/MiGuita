@@ -28,8 +28,8 @@ button:focus-visible,input:focus-visible,[tabindex]:focus-visible{outline:2px so
 /* Movimiento selectivo: solo tiemblan personajes, dibujos, el número grande y los botones principales. */
 .motion .btn.pp::before,.motion .key.ok::before{animation:lineJ 1.9s steps(1) infinite;animation-delay:var(--dl)}
 .motion .btn.pp::after,.motion .key.ok::after{animation:fillJ 2.6s steps(1) infinite;animation-delay:var(--dl)}
-.motion svg.sl .fl,.motion svg.lf .fl,.motion .racha .fl{animation:sfJ 2.6s steps(1) infinite}
-.motion svg.sl .ln,.motion svg.lf .ln,.motion .racha .ln{animation:slJ 1.9s steps(1) infinite}
+.motion svg.sl .fl,.motion svg.lf .fl,.motion svg.dg .fl,.motion .tuto-lienzo svg.fr .fl,.motion .racha .fl{animation:sfJ 2.6s steps(1) infinite}
+.motion svg.sl .ln,.motion svg.lf .ln,.motion svg.dg .ln,.motion .tuto-lienzo svg.fr .ln,.motion .racha .ln{animation:slJ 1.9s steps(1) infinite}
 .motion .big:not(.std){animation:numJ 2.4s steps(1) infinite}
 @keyframes lineJ{0%{transform:translate(0,0)}33%{transform:translate(.7px,-.5px)}66%{transform:translate(-.5px,.6px)}}
 @keyframes fillJ{0%{transform:translate(2px,2px)}25%{transform:translate(3px,1.2px)}50%{transform:translate(1.2px,2.8px)}75%{transform:translate(2.8px,2.4px)}}
@@ -72,7 +72,7 @@ textarea.field{resize:vertical;width:100%;font:inherit}
 .eyeb{display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px}
 .eyeb svg,.mbtn svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .mbtn{font:800 18px "Bricolage Grotesque",sans-serif;min-width:44px;min-height:44px;opacity:.85}
-.racha{display:flex;align-items:center;gap:6px;margin-top:2px;min-height:44px;font:800 14px "Bricolage Grotesque",sans-serif}
+.racha{display:flex;align-items:center;gap:6px;min-height:44px;font:800 14px "Bricolage Grotesque",sans-serif}
 .racha svg{width:34px;height:auto}
 .hr{flex-direction:row;align-items:center;gap:14px}
 .hr .big.std{font-size:32px;white-space:nowrap}
@@ -246,15 +246,40 @@ body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 input,textarea,.code,.wa,.code-in{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
 .code{-webkit-user-select:all;user-select:all}
 img,svg{-webkit-user-drag:none}
-.tuto{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;position:relative;padding-top:30px}
-.tuto .saltar{position:absolute;top:0;right:0;min-height:44px;padding:0 4px}
-.tuto-dibujo{min-height:170px;display:flex;align-items:flex-end;justify-content:center}
-.tuto-dibujo svg.sl{width:180px;height:auto}
-.tuto-dibujo svg.lf{width:200px}
-.tuto-dibujo svg.dg{width:200px}
-.tuto-dibujo>svg:not(.sl):not(.lf):not(.dg){width:120px;height:auto}
-.tuto b{font:800 28px/1.15 "Bricolage Grotesque",sans-serif}
-.tuto span{font-weight:600;opacity:.9;max-width:30ch;font-size:16px}
+/* Tutorial: pantalla entera, de arriba a abajo. Cada paso tiene su color (--t-fondo el cuadro del dibujo, --t-em lo que se resalta). */
+.dark{--dash-scr:rgba(248,233,210,.3)}
+.light{--dash-scr:rgba(42,22,8,.25)}
+.tuto-c0{--t-fondo:#F4AE3D}.tuto-c1{--t-fondo:#8FD694}.tuto-c2{--t-fondo:#F2A07E}.tuto-c3{--t-fondo:#8CC8EC}.tuto-c4{--t-fondo:#C9B0F0}.tuto-c5{--t-fondo:#F4E6C8}
+.dark .tuto-c0,.dark .tuto-c5{--t-em:#F4AE3D}.dark .tuto-c1{--t-em:#8FD694}.dark .tuto-c2{--t-em:#FF9E7A}.dark .tuto-c3{--t-em:#8CC8EC}.dark .tuto-c4{--t-em:#CDB6F5}
+.light .tuto-c0,.light .tuto-c5{--t-em:#7A4100}.light .tuto-c1{--t-em:#1F5E2A}.light .tuto-c2{--t-em:#9A2B12}.light .tuto-c3{--t-em:#0B5580}.light .tuto-c4{--t-em:#553498}
+.tuto{flex:1;display:flex;flex-direction:column;gap:12px;min-width:0}
+.tuto-cab{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:44px}
+.tuto-paso{font:700 17px "Manrope",sans-serif}
+.tuto-paso b{font:800 24px/1 "Bricolage Grotesque",sans-serif;color:var(--t-em)}
+.tuto-salir{min-height:44px;min-width:44px;padding:0 4px;font:700 15px "Manrope",sans-serif;text-decoration:underline;opacity:.85}
+.tuto-barra{display:flex;gap:5px}
+.tuto-barra i{flex:1;height:7px;border-radius:9px;background:var(--dash-scr)}
+.tuto-barra i.on{background:var(--t-em)}
+.tuto-lienzo{flex:1 1 230px;min-height:210px;max-height:52vh;display:flex;align-items:center;justify-content:center;padding:18px 14px 46px;--r:26px;--f:var(--t-fondo);--bd:#2A1608;margin-right:3px}
+.tuto-lienzo svg.sl{width:auto;height:min(100%,240px);max-width:72%;flex:none}
+.tuto-lienzo svg.lf,.tuto-lienzo svg.dg{width:min(82%,330px);height:auto;flex:none}
+.tuto-lienzo .crew{align-items:center}
+.tuto-lienzo .crew svg.fr{width:clamp(80px,31%,130px);height:auto;margin:0 -4px}
+.tuto-lienzo .crew svg.lu{width:clamp(110px,40%,160px)}
+.tuto-muestra{position:absolute;left:14px;bottom:12px;z-index:2;background:#F8E9D2;color:#2A1608;border:2.4px solid #2A1608;border-radius:12px 9px 13px 10px;padding:5px 12px;font:700 16px/1.25 "Manrope",sans-serif;transform:rotate(-2.5deg);max-width:calc(100% - 28px)}
+.tuto-muestra b{font:800 20px/1 "Bricolage Grotesque",sans-serif}
+.tuto-titulo{margin:6px 0 0;font:800 clamp(36px,11.2vw,46px)/1.02 "Bricolage Grotesque",sans-serif;letter-spacing:-.02em;overflow-wrap:break-word}
+.tuto-titulo em{font-style:normal;color:var(--t-em)}
+.tuto-texto{margin:0;font:600 19px/1.38 "Manrope",sans-serif}
+.tuto-texto mark{background:none;color:inherit;font-weight:800;text-decoration:underline;text-decoration-color:var(--t-em);text-decoration-thickness:3px;text-underline-offset:4px}
+.tuto-pie .btn{min-height:58px;font-size:19px}
+.letra-grande .tuto-titulo,.letra-enorme .tuto-titulo{font-size:36px}
+.letra-enorme .tuto-texto{font-size:17px}
+.letra-grande .tuto-lienzo,.letra-enorme .tuto-lienzo{flex-basis:170px;min-height:170px}
+/* El botoncito de Inicio que lleva al tutorial, al lado de la racha. */
+.racha-fila{display:flex;align-items:center;flex-wrap:wrap;gap:0 10px;margin-top:2px}
+.tuto-chip{position:relative;font:800 13px/1 "Bricolage Grotesque",sans-serif;padding:6px 10px;border:2px solid var(--lscr);border-radius:99px;white-space:nowrap}
+.tuto-chip::after{content:"";position:absolute;inset:-9px -4px}
 .snack.nueva{position:relative;left:auto;bottom:auto;transform:none;width:auto;max-width:none;margin-bottom:12px}
 /* Hoja de anotar: el monto arriba y el teclado con Guardar abajo quedan siempre a la vista. */
 .sheet .top{position:sticky;top:-10px;z-index:3;background:var(--screen);padding:8px 0 6px;margin-top:-8px}
@@ -332,6 +357,8 @@ em.nuevo{font-style:normal;font-size:10px;font-weight:800;text-transform:upperca
 .light .gancho{color:#8A4B00}
 .btn.grande{font-size:19px;min-height:62px;display:flex;align-items:center;justify-content:center;text-align:center;text-decoration:none}
 .link.chico{display:block;margin:0 auto;text-transform:none;letter-spacing:0;font-size:14px;text-decoration:underline}
+/* «Este mes no» en la pregunta de un fijo: está, pero no compite con los tres botones. */
+.link.chico.izq{margin:-4px 0 -10px;font-size:13px;font-weight:700;opacity:.7;text-align:left}
 .centro{text-align:center}
 .sub.centro{font-size:14px}
 .paso-i{padding:10px 0}
@@ -367,9 +394,11 @@ em.nuevo{font-style:normal;font-size:10px;font-weight:800;text-transform:upperca
 .g3{padding:4px 0}
 .g3 b{display:block;font:800 16px "Bricolage Grotesque",sans-serif}
 .guia-globo .btn{font-size:17px;min-height:50px;--bd:#2A1608}
-.guia-globo .dots{display:flex;gap:7px;justify-content:center}
-.guia-globo .dots i{width:9px;height:9px;border-radius:50%;background:#2A1608;opacity:.25}
-.guia-globo .dots i.on{opacity:1}
+.guia-cuenta{display:flex;align-items:center;justify-content:space-between;gap:12px;font:700 15px "Manrope",sans-serif}
+.guia-cuenta b{font:800 19px/1 "Bricolage Grotesque",sans-serif}
+.guia-barra{display:flex;gap:4px;flex:0 1 110px}
+.guia-barra i{flex:1;height:6px;border-radius:9px;background:rgba(42,22,8,.22)}
+.guia-barra i.on{background:#2A1608}
 .sin-dibujo .gcab svg{display:none}
 
 /* ---------- hablar y revisar ---------- */
@@ -452,7 +481,7 @@ em.nuevo{font-style:normal;font-size:10px;font-weight:800;text-transform:upperca
 .letra-grande .snack,.letra-enorme .snack{left:8px;right:8px;width:auto;max-width:none;transform:none;flex-wrap:wrap}
 .snack span{min-width:0;overflow-wrap:anywhere}
 /* Celu chico con la letra muy grande: el número importa más que el dibujo del pan. */
-@media (max-width:359px){.letra-enorme .tecard.solo>svg{display:none}.letra-enorme .tecard.solo .ht{margin-left:0}.letra-enorme .hr .big.std{font-size:28px}}
+@media (max-width:359px){.letra-enorme .plata-cuerpo>svg{display:none}.letra-enorme .plata-cuerpo .ht{margin-left:0}.letra-enorme .hr .big.std{font-size:28px}}
 .letra-fila{flex-wrap:wrap}
 .quick-t{font:800 15px "Bricolage Grotesque",sans-serif;margin-bottom:-6px}
 .preg.txt{width:auto;height:auto;min-height:30px;padding:2px 10px;border-radius:99px;font:800 13px/1.2 "Bricolage Grotesque",sans-serif;white-space:nowrap}
@@ -467,15 +496,52 @@ em.nuevo{font-style:normal;font-size:10px;font-weight:800;text-transform:upperca
 .sf-i svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .sf-i.on{background:var(--gold);box-shadow:0 0 0 3px #2A1608}
 .flecha.der{text-align:right;padding-right:6px}
+/* Mi plata: anotar lo que entró es lo principal; corregir el número queda abajo, sin fondo. */
+.entro{padding:16px;gap:10px}
+.entro-t{font:800 24px/1.1 "Bricolage Grotesque",sans-serif}
+.entro .btn{--bd:#2A1608}
+.entro .btn.alt{color:var(--tscr)}
+.plata-sec{--f:transparent;--bd:var(--dash-scr);--line:var(--lscr);--dash:var(--dash-scr);color:var(--tscr)}
+.plata-corregir{min-height:44px;text-align:left;font:700 14px "Manrope",sans-serif;text-decoration:underline;text-underline-offset:3px;opacity:.9}
 .plata-fila{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .plata-fila.sola{justify-content:flex-end}
-.tecard.solo{gap:12px;min-height:124px}
-.tecard.solo>svg{flex:1 1 0;min-width:64px;max-width:176px;width:auto;height:auto}
-.tecard.solo .ht{flex:0 1 auto;margin-left:auto;text-align:right}
-.ver-res{display:flex;align-items:center;gap:8px;min-height:44px;text-align:left;font:700 14px/1.2 "Bricolage Grotesque",sans-serif}
-.ver-res i{font:800 26px/1 "Bricolage Grotesque",sans-serif;font-style:normal;color:var(--gold)}
-.motion .ver-res i{animation:subeF 1.1s ease-in-out infinite}
-@keyframes subeF{50%{transform:translateY(-5px)}}
+.tecard.solo{gap:10px;min-height:124px}
+.plata-toca{display:block;width:100%;text-align:left}
+.plata-cuerpo{display:flex;width:100%;min-width:0}
+.plata-cuerpo>svg{flex:1 1 0;min-width:64px;max-width:176px;width:auto;height:auto}
+.plata-cuerpo .ht{flex:0 1 auto;margin-left:auto;text-align:right;min-width:0}
+.hr .big.std.largo{font-size:26px}
+.hr .big.std.muy-largo{font-size:22px}
+@media (max-width:429px){.letra-grande .plata-cuerpo.largo>svg,.letra-enorme .plata-cuerpo.largo>svg,.plata-cuerpo.muy-largo>svg{display:none}.letra-grande .plata-cuerpo.largo .ht,.letra-enorme .plata-cuerpo.largo .ht,.plata-cuerpo.muy-largo .ht{margin-left:0;flex:1 1 auto}}
+/* El detalle es parte de la tarjeta: una tira pegada abajo, con su flechita. */
+.ver-res{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:44px;margin:0 -14px -14px;padding:6px 12px 6px 14px;border-top:1.5px dashed var(--dash);background:var(--track);border-radius:0 0 calc(var(--r)*1.15) calc(var(--r)*.9);text-align:left;color:var(--tbox);font:800 15px/1.2 "Bricolage Grotesque",sans-serif}
+.ver-res i{display:flex;align-items:center;justify-content:center;flex:none;width:30px;height:30px;border-radius:50%;background:var(--gold);color:#2A1608;border:2px solid #2A1608;font:800 18px/1 "Bricolage Grotesque",sans-serif;font-style:normal}
+.motion .ver-res i{animation:irF 1.1s ease-in-out infinite}
+@keyframes irF{50%{transform:translateX(5px)}}
+/* Los puntitos de cada plata, arriba del número. */
+.pd{display:inline-block;width:11px;height:11px;border-radius:50%;border:2px solid var(--lbox);flex:none}
+.pd.on{width:16px;height:16px}
+.pd-total{background:#F4AE3D}.pd-pesos{background:#5BB5E6}.pd-0{background:#3FA66B}.pd-1{background:#20A8A0}.pd-2{background:#3A7BD5}.pd-3{background:#8E6BD8}.pd-4{background:#E5603A}.pd-5{background:#D63F8C}
+.plata-puntos{display:flex;justify-content:flex-end;align-items:center;gap:6px;min-height:18px}
+.plata-pista{font:700 13px/1.2 "Manrope",sans-serif;opacity:.8}
+.motion .plata-salta{animation:plataSalta .24s ease-out}
+@keyframes plataSalta{from{transform:scale(.88);opacity:.35}}
+.a-platas{display:flex;align-items:center;gap:6px;min-height:44px;font:700 14px "Manrope",sans-serif;text-decoration:underline;text-underline-offset:3px}
+.a-platas span{font:800 18px/1 "Bricolage Grotesque",sans-serif;text-decoration:none}
+/* Mis platas */
+.plata-row{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:8px 0;border-top:1.5px dashed var(--dash)}
+.plata-row.f{border-top:0}
+.plata-nombre{flex:1 1 110px;min-width:0;display:flex;flex-direction:column;text-align:left;min-height:44px;justify-content:center}
+.plata-nombre b{font:800 15px "Bricolage Grotesque",sans-serif;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.plata-nombre small{font-size:14px;font-weight:600;opacity:.85;overflow-wrap:anywhere}
+.plata-ctrl{display:flex;align-items:center;gap:6px;margin-left:auto}
+.plata-ctrl .ord{min-width:40px;min-height:44px;--r:10px;--f:var(--screen);color:var(--tscr);font:800 17px "Bricolage Grotesque",sans-serif}
 .plata-fila small{display:block;font-size:13px;font-weight:600;opacity:.85}
 .plata-fila b{font:800 20px "Bricolage Grotesque",sans-serif;font-variant-numeric:tabular-nums}
 .neg-v{color:var(--negscr)}
+/* «Lo de siempre»: debajo del campo de Inicio, lo que se anota igual una y otra vez, a un toque. */
+.repes{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;margin-top:-4px}
+.repes-t{font:800 13px "Bricolage Grotesque",sans-serif;opacity:.75;flex:0 0 auto}
+.repes .repe{--r:99px;padding:5px 12px;font:700 14px "Manrope",sans-serif;min-height:44px;display:inline-flex;align-items:center;gap:5px;max-width:100%;min-width:0}
+.repes .repe span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.repes .repe b{font:800 14px "Bricolage Grotesque",sans-serif;white-space:nowrap;flex:none}

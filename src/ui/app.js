@@ -1,16 +1,18 @@
 // MiGuita: estado, guardado y eventos. Las pantallas están en pantallas.js.
 import { Art } from "../art/art.js";
 import { evaluar, formatear, leerMonto, montoEnCampo } from "../logic/dinero.js";
-import { leerTexto, leerSinMonto, leerVarios, adivinarCategoria, quedoSinCategoria, claveDe } from "../logic/anotar.js";
+import { leerTexto, leerSinMonto, leerVarios, adivinarCategoria, categoriaPara, quedoSinCategoria, claveDe } from "../logic/anotar.js";
 import { DIRECCION, textoInvitacion, enDireccionVieja } from "../logic/instalar.js";
-import { RESPALDO, ponerBilletera } from "../logic/categorias.js";
+import { RESPALDO, ponerBilletera, paraAdivinar } from "../logic/categorias.js";
 import { fechaLocal, cambiarMes, referencia, resumenMes } from "../logic/mes.js";
+import { idsDeTarjeta, esPagoDeTarjeta, porPagar, sinCubrir, comprasPosibles, pagoParaSaldar, restoSiEligen } from "../logic/tarjeta.js";
 import { infoRacha, salvavidasPara, regaloPara, festejoDeHoy } from "../logic/racha.js";
 import { EN_PRUEBA, mandarComentario } from "../logic/buzon.js";
-import { correrFijos, mesDeInicio, infoMeta, restante, movimientoDeFijo, estadoPresupuestos } from "../logic/plan.js";
+import { correrFijos, mesDeInicio, infoMeta, moverMeta, restante, movimientoDeFijo, movimientoDePago, mesPendiente, fechaAlConfirmar, posponer, conMesCerrado, DIAS_PARA_VOLVER_A_PREGUNTAR, estadoPresupuestos } from "../logic/plan.js";
+import { limpiar as limpiarPlatas, TIPOS_PLATA, siguienteVista, moverVista, alternarVista, colorLibre } from "../logic/platas.js";
 import { correrCuotas, movsDeCompra, MAX_CUOTAS, primeraCuota } from "../logic/cuotas.js";
 import { abrirBase } from "../data/db.js";
-import { centavos, fusionar, novedades, decodificar, codificar, validarAlias, sincronizarMiParte, pagadores, conHistorial } from "../logic/grupos.js";
+import { centavos, fusionar, novedades, decodificar, codificar, validarAlias, nombreDeCuenta, movimientosDeGrupo, pagadores, conHistorial } from "../logic/grupos.js";
 import { nuevoCodigo, buscarCodigo, derivar, sincronizar, bajar, escuchar } from "../logic/sincro.js";
 import { CONFIG_COMPARTIDA, leerCodigoVinculo } from "../logic/vinculo.js";
 import { porContar, contar } from "../logic/contador.js";
@@ -22,6 +24,7 @@ import { crearMudanza } from "./mudanza.js";
 import { datosDeEjemplo, planDeEjemplo, grupoDeEjemplo } from "./ejemplo.js";
 import { crearVistas, esc } from "./pantallas.js";
 import { crearVistasPlan } from "./plan.js";
+import { crearVistasPlatas } from "./platas.js";
 import { crearVistasGrupos, pesosDe } from "./grupos.js";
 import { svgQR, escanear } from "./qr.js";
 import { VERSION, migrar } from "../logic/migraciones.js";
@@ -41,12 +44,12 @@ import { hayHuella, registrarHuella } from "./huella.js";
 import { crearVistasPrimera, instalada, navegadorActual } from "./primera.js";
 import { crearVistasVoz } from "./voz.js";
 import { resumenParaIA } from "../logic/analisis.js";
-import { hayQuePreguntar, enMetas, ahorroSinPreguntar, anotadoAntes, saldoDesde, podesUsar } from "../logic/saldo.js";
+import { hayQuePreguntar, anotadoAntes, saldoDesde, podesUsar, saldoEfectivo, porQueNoCuenta, plataNueva, sumarAMeta, ahorrosAlDia, responderAhorro, sacarDeMeta, gastoDeMetaAparte } from "../logic/saldo.js";
 
 const PESTANAS = [["inicio", "Inicio"], ["plan", "Mis cuentas"], ["grupos", "Grupos"], ["mas", "Ajustes"]];
-const TAB_DE = { mudanza: "inicio", movimientos: "inicio", resumen: "inicio", racha: "inicio", tuMes: "inicio", personalizacion: "mas", categorias: "mas", editarCat: "mas", form: "plan",
+const TAB_DE = { mudanza: "inicio", movimientos: "inicio", resumen: "inicio", racha: "inicio", tuMes: "inicio", platas: "inicio", plataEd: "inicio", personalizacion: "mas", categorias: "mas", editarCat: "mas", aprendidas: "mas", form: "plan",
   plata: "inicio", grupo: "grupos", juntada: "grupos", historial: "grupos", gform: "grupos", compartir: "grupos", unido: "grupos", quien: "grupos", whatsapp: "grupos",
-  notif: "mas", seguridad: "mas", dolar: "mas", copias: "mas", dispositivos: "mas", comentario: "mas", privacidad: "mas", instalar: "mas", yaInstalada: "mas", tutorial: "mas", importar: "inicio", grabar: "inicio", revisar: "inicio" };
+  comprasTarjeta: "inicio", notif: "mas", seguridad: "mas", dolar: "mas", copias: "mas", dispositivos: "mas", comentario: "mas", privacidad: "mas", instalar: "mas", yaInstalada: "mas", tutorial: "mas", importar: "inicio", grabar: "inicio", revisar: "inicio" };
 const SIN_BARRA = ["tutorial", "yaInstalada", "grabar", "revisar", "mudanza"];
 const RUEDITA = '<svg viewBox="0 0 24 24" aria-hidden="true" style="stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><circle cx="12" cy="12" r="3.2"/><circle cx="12" cy="12" r="6.8"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M18.5 5.5l-1.7 1.7M7.2 16.8l-1.7 1.7"/></svg>';
 const PLAN = ["presupuestos", "metas", "deudas", "fijos", "tarjetas", "compras"];
@@ -120,6 +123,7 @@ const st = {
 };
 const V = crearVistas(st, hoy);
 const VP = crearVistasPlan(st, hoy, V);
+const VPL = crearVistasPlatas(st, hoy, V);
 const VG = crearVistasGrupos(st, hoy, V);
 let apagarCamara = null, videoCamara = null;
 let timerAviso = 0;
@@ -129,7 +133,7 @@ const VV = crearVistasVoz(st, V);
 const importarVista = crearVistaImportar(st, V);
 const tuMesVista = crearVistaTuMes(st, V);
 const { programarVinculo, sincronizarVinculo, vigilarVinculo, prepararVinculo, crearVinculo, unirVinculo, cortarEscucha } =
-  crearConexion({ st, base, listasPlan: PLAN, ponerConfig, ponerDia, ponerItem, quitarItem, quitarMov, guardarGrupo, sincronizarGrupo, mostrarAviso, dibujar });
+  crearConexion({ st, base, listasPlan: PLAN, ponerConfig, quitarConfig, ponerDia, ponerItem, quitarItem, quitarMov, guardarGrupo, sincronizarGrupo, mostrarAviso, dibujar });
 const { programarAvisos, enviarAvisos, activarAvisos, apagarAvisos, pedirAvisos } = crearAvisos({ st, hoy, ponerConfig, mostrarAviso, dibujar });
 const { grabarVoz, cortarGrabacion, pararGrabacion } = crearGrabador({ st, abrir, volver, dibujar });
 const mudanza = crearMudanza({ st, hoy, V, ponerConfig, sincronizarVinculo, unirVinculo, cortarEscucha, apagarAvisos, dibujar, irA, abrir, mostrarAviso });
@@ -143,6 +147,7 @@ const nuevoId = () => Array.from(crypto.getRandomValues(new Uint8Array(12)), (b)
 
 /* ---------- guardado ---------- */
 function guardarMov(mov) {
+  marcarTarjeta(mov);
   const i = st.movs.findIndex((x) => x.id === mov.id);
   if (i >= 0) st.movs[i] = mov; else st.movs.push(mov);
   base.poner("movs", mov);
@@ -160,8 +165,10 @@ function ponerDia(d) {
   programarVinculo();
   programarAvisos();
 }
-// Presupuestos, metas, deudas y fijos.
-function ponerItem(lista, obj) {
+// Presupuestos, metas, deudas, fijos, tarjetas y compras. Cada cambio lleva su hora (mod): entre dos dispositivos gana lo más nuevo.
+// sello = false: llega de otro dispositivo y se guarda tal cual.
+function ponerItem(lista, obj, sello = true) {
+  if (sello && PLAN.includes(lista)) obj = { ...obj, mod: Date.now() };
   const i = st[lista].findIndex((x) => x.id === obj.id);
   if (i >= 0) st[lista][i] = obj; else st[lista].push(obj);
   base.poner(lista, obj);
@@ -176,14 +183,48 @@ function quitarItem(lista, id) {
 }
 // Si bajó lo guardado en metas, esa plata vuelve a estar para usar.
 function ajustarAhorros() {
-  const s = st.cfg.saldo, total = enMetas(st.metas);
-  if (s && ((s.vistas || 0) > total || (s.aparte || 0) > total)) ponerConfig("saldo", { ...s, vistas: Math.min(s.vistas || 0, total), aparte: Math.min(s.aparte || 0, total) });
+  const s = ahorrosAlDia(st.cfg.saldo, st.metas);
+  if (s !== st.cfg.saldo) ponerSaldo(s);
 }
 function ponerConfig(k, v) {
   st.cfg[k] = v;
   base.guardarConfig(k);
   if (CONFIG_COMPARTIDA.includes(k)) programarVinculo();
 }
+function quitarConfig(k) {
+  delete st.cfg[k];
+  base.quitar("config", k);
+  if (CONFIG_COMPARTIDA.includes(k)) programarVinculo();
+}
+// Con la hora del cambio: si dos dispositivos las cambian a la vez, queda lo más nuevo.
+const ponerPlatas = (p) => ponerConfig("platas", { ...p, mod: Date.now() });
+const ponerSaldo = (s) => ponerConfig("saldo", { ...s, mod: Date.now() });
+
+/* ---------- la tarjeta de crédito ---------- */
+// Lo comprado con crédito desde esta versión lleva la marca enTarjeta: no resta de «Te queda» hasta que se paga la tarjeta
+// (ver logic/tarjeta.js). Se decide por la hora en que se anotó (ts; en lo que se anota solo, el comienzo de su día): lo anotado antes
+// de actualizar sigue restando como siempre, así el número no cambia solo. Al editar se conserva la marca que tenía (ver anotar).
+// Pagar la tarjeta con la tarjeta no existe: un pago de la tarjeta nunca queda con medio crédito.
+function marcarTarjeta(mov) {
+  if (mov.medio === "credito" && mov.tipo !== "ingreso" && idsDeTarjeta(st.cfg.categorias).has(mov.categoria)) mov.medio = "";
+  if (mov.medio !== "credito") { delete mov.enTarjeta; return; }
+  if (mov.enTarjeta === undefined) mov.enTarjeta = mov.ts >= (st.cfg.creditoDesde ?? Infinity);
+}
+
+
+/* ---------- qué pasó con «Te queda» ---------- */
+// Lo que te queda ahora, o null si todavía no hay un número (ni plata cargada ni ingresos).
+const teQueda = () => podesUsar(saldoEfectivo(st.cfg.saldo, st.movs), st.movs, st.metas);
+// Después de algo que mueve plata, lo que hay que decirle a la persona: cuánto le queda ahora, o por qué no cambió.
+// Así nunca queda la duda de si se restó o no. antes: teQueda() de antes de hacerlo. movs: lo que se anotó, por si algo no cuenta.
+function efecto(antes, movs = []) {
+  const ahora = teQueda();
+  if (ahora === null) return "";
+  if (ahora !== antes) return (ahora < 0 ? "Estás abajo " : "Te queda ") + V.plata(Math.abs(ahora));
+  const saldo = saldoEfectivo(st.cfg.saldo, st.movs), porque = movs.map((m) => porQueNoCuenta(saldo, m)).find(Boolean);
+  return porque ? "No cambia lo que te queda: " + porque : "";
+}
+const unir = (texto, extra) => (!extra ? texto : texto + (/[.!?]$/.test(texto) ? " " : ". ") + extra);
 
 function mostrarAviso(texto, deshacer) {
   clearTimeout(timerAviso);
@@ -196,6 +237,7 @@ function preguntarSaldo(movs) {
   const ids = movs.filter((m) => hayQuePreguntar(st.cfg.saldo, m, hoy)).map((m) => m.id);
   if (ids.length && st.guiaPaso === null) st.dudaSaldo = { ids };
 }
+
 
 // Cuenta sin saber quién sos cuánta gente instala la app y la sigue usando (ver logic/contador.js). Se apaga en Privacidad.
 async function contarUso() {
@@ -210,13 +252,19 @@ async function contarUso() {
 // Guarda un movimiento nuevo o editado, ofrece deshacer y festeja si la racha llegó a un premio.
 function anotar(mov, anterior) {
   if (anterior?.previo) mov.previo = true;
+  // Al editar algo comprado con crédito, sigue como estaba: si esperaba al pago de la tarjeta, sigue esperando; si restaba, sigue restando.
+  if (anterior?.medio === "credito" && mov.medio === "credito") mov.enTarjeta = anterior.enTarjeta === true;
+  // Un pago de la tarjeta editado conserva «quedó paga» y «es un gasto nuevo» (la hoja arma el movimiento de nuevo).
+  if (anterior && esPagoDeTarjeta(mov, idsDeTarjeta(st.cfg.categorias))) { if (anterior.salda) mov.salda = true; if (anterior.sinElegir !== undefined) mov.sinElegir = anterior.sinElegir; }
   if (!anterior) preguntarSaldo([mov]);
-  const antes = infoRacha(st.movs, st.dias, hoy);
+  const antes = infoRacha(st.movs, st.dias, hoy), queda0 = teQueda(), enInicio = st.pantalla === "inicio";
   // Un fijo que la persona anota o corrige sí cuenta para la racha (el que se anota solo, no).
   if (mov.fijo && !st.dias.some((d) => d.fecha === mov.fecha)) ponerDia({ fecha: mov.fecha, anoto: true });
   guardarMov(mov);
   st.mes = mov.fecha.slice(0, 7);
-  const texto = (anterior ? "Cambiado: " : "Anotado: ") + (mov.detalle || V.nombreCat(mov.categoria)) + " " + V.plata(mov.monto);
+  // En Inicio el número está a la vista: solo se aclara cuando no cambió. En cualquier otra pantalla se dice cómo quedó.
+  const ef = efecto(queda0, [mov]);
+  const texto = unir((anterior ? "Cambiado: " : "Anotado: ") + (mov.detalle || V.nombreCat(mov.categoria)) + " " + V.plata(mov.monto), enInicio && teQueda() !== queda0 ? "" : ef);
   mostrarAviso(texto, () => (anterior ? guardarMov(anterior) : quitarMov(mov.id)));
   revisarFestejo(antes);
   avisarPresupuesto();
@@ -225,7 +273,7 @@ function anotar(mov, anterior) {
 
 async function avisarPresupuesto() {
   const mes = hoy.slice(0, 7), n = st.cfg.notif;
-  const cats = presupuestosPorAvisar(estadoPresupuestos(st.presupuestos, st.movs, mes), mes, st.cfg.avisados || []);
+  const cats = presupuestosPorAvisar(estadoPresupuestos(st.presupuestos, V.movsGasto(), mes), mes, st.cfg.avisados || []);
   if (!cats.length) return;
   ponerConfig("avisados", [...(st.cfg.avisados || []), ...cats.map((c) => mes + "|" + c)].slice(-60));
   const ahora = new Date().toTimeString().slice(0, 5);
@@ -282,10 +330,17 @@ function revisarCuotas(callado) {
 }
 // Guarda una compra en cuotas (nueva o editada): sus cuotas se vuelven a armar con los datos nuevos. Devuelve cómo deshacerlo.
 function guardarCompra(c, antes) {
-  const movsAntes = antes ? movsDeCompra(st.movs, antes.id) : [];
+  const movsAntes = antes ? movsDeCompra(st.movs, antes.id) : [], horas = new Map(movsAntes.map((x) => [x.id, x]));
   movsAntes.forEach((x) => quitarMov(x.id));
   ponerItem("compras", c);
-  revisarCuotas(true);
+  // Las cuotas que ya estaban anotadas siguen contando (o no) igual que antes: conservan su hora, si ya estaban en la plata cargada
+  // y si esperaban al pago de la tarjeta (también las que la persona eligió como compras de la tarjeta).
+  for (const m of revisarCuotas(true)) {
+    const v = horas.get(m.id);
+    if (!v || (v.ts === m.ts && !v.previo && v.enTarjeta === m.enTarjeta)) continue;
+    const { enTarjeta, ...cuota } = m;
+    guardarMov({ ...cuota, ts: v.ts, ...(v.previo && { previo: true }), ...(v.enTarjeta !== undefined && { enTarjeta: v.enTarjeta }) });
+  }
   return () => {
     movsDeCompra(st.movs, c.id).forEach((x) => quitarMov(x.id));
     if (antes) ponerItem("compras", antes); else quitarItem("compras", c.id);
@@ -306,15 +361,18 @@ function tarjetaElegida(id, nombreNuevo) {
 }
 
 // Guarda cuánta plata tiene la persona y vuelve a donde estaba, para ver cómo quedó el número.
-function fijarPlata(saldo) {
-  ponerConfig("saldo", saldo);
+// previos: lo ya anotado que con ese número queda adentro (ver plataNueva en saldo.js).
+function fijarPlata(saldo, previos = []) {
+  previos.forEach((m) => guardarMov({ ...m, previo: true, mod: Date.now() }));
+  ponerSaldo(saldo);
   st.plataTexto = ""; st.plataError = ""; st.dudaSaldo = null; st.dudaPlata = null;
-  mostrarAviso("Listo. Te queda " + V.plata(podesUsar(saldo, st.movs, st.metas)));
+  const q = podesUsar(saldo, st.movs, st.metas);
+  mostrarAviso("Listo. " + (q < 0 ? "Estás abajo " : "Te queda ") + V.plata(Math.abs(q)));
   return volver();
 }
 
 /* ---------- formularios de Mis cuentas ---------- */
-const LISTA_DE = { presupuesto: "presupuestos", meta: "metas", deuda: "deudas", fijo: "fijos", ahorro: "metas", pago: "deudas", compra: "compras", tarjeta: "tarjetas" };
+const LISTA_DE = { presupuesto: "presupuestos", meta: "metas", deuda: "deudas", fijo: "fijos", ahorro: "metas", retiro: "metas", pago: "deudas", compra: "compras", tarjeta: "tarjetas" };
 const FORM_DE_TAB = { presupuesto: "presupuesto", metas: "meta", deudas: "deuda", fijos: "fijo", cuotas: "compra" };
 
 function abrirForm(tipo, id) {
@@ -324,13 +382,14 @@ function abrirForm(tipo, id) {
   const usadas = new Set(st.presupuestos.map((p) => p.categoria));
   const vals = {
     presupuesto: () => x ? { categoria: x.categoria, tope: m(x.tope) } : { categoria: (st.cfg.categorias.gasto.find((c) => !c.oculta && !usadas.has(c.id)) || {}).id || "otros", tope: "" },
-    meta: () => x ? { nombre: x.nombre, icono: x.icono, moneda: x.moneda, objetivo: m(x.objetivo), ahorrado: m(x.ahorrado), fecha: x.fecha || "" } : { nombre: "", icono: "meta", moneda: "ARS", objetivo: "", ahorrado: "", fecha: "" },
+    meta: () => x ? { nombre: x.nombre, icono: x.icono, moneda: x.moneda, objetivo: x.objetivo > 0 ? m(x.objetivo) : "", ahorrado: m(x.ahorrado), fecha: x.fecha || "" } : { nombre: "", icono: "meta", moneda: "ARS", objetivo: "", ahorrado: "", fecha: "" },
     deuda: () => x ? { tipo: x.tipo, quien: x.quien, concepto: x.concepto, moneda: x.moneda || "ARS", total: m(x.total), pagado: m(x.pagado), vence: x.vence || "" } : { tipo: "debo", quien: "", concepto: "", moneda: "ARS", total: "", pagado: "", vence: "" },
     fijo: () => x ? { tipo: x.tipo || "gasto", modo: x.modo || "auto", nombre: x.nombre, moneda: x.moneda || "ARS", monto: m(x.monto), categoria: x.categoria, dia: String(x.dia), medio: x.medio, activo: x.activo } : { tipo: "gasto", modo: "auto", nombre: "", moneda: "ARS", monto: "", categoria: "servicios", dia: "", medio: "", activo: true },
     compra: () => x ? { detalle: x.detalle, moneda: x.moneda || "ARS", total: m(x.total), cuotas: String(x.cuotas), yaPagas: x.previas ? String(x.previas) : "", tarjeta: x.tarjeta, tarjetaNueva: "", categoria: x.categoria, proxima: "este" } :
       { detalle: "", moneda: "ARS", total: "", cuotas: "", yaPagas: "", tarjeta: st.tarjetas.length === 1 ? st.tarjetas[0].id : "", tarjetaNueva: "", categoria: "otros", proxima: "este" },
     tarjeta: () => ({ nombre: x?.nombre || "", cierre: x?.cierre ? String(x.cierre) : "", vence: x?.vence ? String(x.vence) : "" }),
     ahorro: () => ({ monto: "" }),
+    retiro: () => ({ monto: "", gasto: false }),
     pago: () => ({ monto: m(restante(x)), anotar: true }),
   }[tipo]();
   st.form = { tipo, id: id || null, vals, error: "" };
@@ -355,13 +414,16 @@ function guardarForm() {
     } else if (tipo === "meta") {
       if (!v.nombre.trim()) throw "Poné para qué ahorrás.";
       const antes = st.metas.find((x) => x.id === id);
-      const m = { id: id || nuevoId(), nombre: v.nombre.trim(), icono: v.icono, moneda: v.moneda, objetivo: monto("objetivo", "el objetivo"), ahorrado: monto("ahorrado", "lo ahorrado", { cero: true }), fecha: v.fecha || "", ts: antes?.ts || Date.now() };
+      const queda0 = teQueda();
+      // El objetivo es opcional: vacío (o 0) es una meta para ir guardando, como «Ahorros»; sin objetivo la fecha no tiene sentido.
+      const objetivo = monto("objetivo", "el objetivo", { cero: true });
+      const m = { ...antes, id: id || nuevoId(), nombre: v.nombre.trim(), icono: v.icono, moneda: v.moneda, objetivo, ahorrado: monto("ahorrado", "lo ahorrado", { cero: true }), fecha: objetivo ? v.fecha || "" : "", ts: antes?.ts || Date.now() };
       ponerItem("metas", m);
-      mostrarAviso((antes ? "Guardada: " : "Nueva meta: ") + m.nombre, deshacerItem("metas", antes, m));
+      mostrarAviso(unir((antes ? "Guardada: " : "Nueva meta: ") + m.nombre, efecto(queda0)), deshacerItem("metas", antes, m));
     } else if (tipo === "deuda") {
       if (!v.quien.trim() && !v.concepto.trim()) throw "Poné quién o por qué.";
       const antes = st.deudas.find((x) => x.id === id);
-      const d = { id: id || nuevoId(), tipo: v.tipo, quien: v.quien.trim(), concepto: v.concepto.trim(), moneda: v.moneda, total: monto("total", "el monto total"), pagado: monto("pagado", "lo pagado", { cero: true }), vence: v.vence || "", ts: antes?.ts || Date.now() };
+      const d = { ...antes, id: id || nuevoId(), tipo: v.tipo, quien: v.quien.trim(), concepto: v.concepto.trim(), moneda: v.moneda, total: monto("total", "el monto total"), pagado: monto("pagado", "lo pagado", { cero: true }), vence: v.vence || "", ts: antes?.ts || Date.now() };
       if (d.pagado > d.total) throw "Lo pagado no puede ser más que el total.";
       ponerItem("deudas", d);
       mostrarAviso("Deuda guardada", deshacerItem("deudas", antes, d));
@@ -371,8 +433,8 @@ function guardarForm() {
       if (!Number.isInteger(dia) || dia < 1 || dia > 31) throw "El día tiene que ser un número del 1 al 31.";
       const antes = st.fijos.find((x) => x.id === id);
       const reactivado = v.activo && (!antes || !antes.activo);
-      const f = { id: id || nuevoId(), tipo: v.tipo, modo: v.modo, nombre: v.nombre.trim(), moneda: v.moneda, monto: monto("monto", "el monto"), categoria: v.categoria, medio: v.medio, dia, activo: !!v.activo,
-        desde: reactivado || !antes ? mesDeInicio(dia, hoy) : antes.desde, hechos: antes?.hechos || [] };
+      const f = { ...antes, id: id || nuevoId(), tipo: v.tipo, modo: v.modo, nombre: v.nombre.trim(), moneda: v.moneda, monto: monto("monto", "el monto"), categoria: v.categoria, medio: v.medio, dia, activo: !!v.activo,
+        desde: reactivado || !antes ? mesDeInicio(dia, hoy) : antes.desde, hechos: antes?.hechos || [], ...(!antes && { ts: Date.now() }) };
       ponerItem("fijos", f);
       mostrarAviso("Fijo guardado. " + (f.activo ? (f.desde === hoy.slice(0, 7) ? "Empieza este mes." : "Empieza el mes que viene.") : "Está pausado."), deshacerItem("fijos", antes, f));
       revisarFijos();
@@ -404,30 +466,47 @@ function guardarForm() {
       ponerItem("tarjetas", t);
       mostrarAviso("Tarjeta guardada", deshacerItem("tarjetas", antes, t));
     } else if (tipo === "ahorro") {
-      const antes = st.metas.find((x) => x.id === id);
-      const m = { ...antes, ahorrado: antes.ahorrado + monto("monto", "el monto") };
+      const antes = st.metas.find((x) => x.id === id), saldoAntes = st.cfg.saldo, queda0 = teQueda();
+      // Sumar a una meta mueve plata que ya tenés: no hace falta preguntar nada (la cuenta está en sumarAMeta, saldo.js).
+      const r = sumarAMeta(st.cfg.saldo, antes, monto("monto", "el monto")), m = r.meta;
       ponerItem("metas", m);
-      // Sumar a una meta mueve plata que ya tenés: no hace falta preguntar nada.
-      if (st.cfg.saldo && m.moneda === "ARS") ponerConfig("saldo", { ...st.cfg.saldo, vistas: (st.cfg.saldo.vistas || 0) + m.ahorrado - antes.ahorrado });
-      mostrarAviso("Sumaste " + V.plata(m.ahorrado - antes.ahorrado, { moneda: m.moneda === "USD" ? "US$ " : "$" }) + " a " + m.nombre, () => ponerItem("metas", antes));
+      if (r.saldo !== saldoAntes) ponerSaldo(r.saldo);
+      mostrarAviso(unir("Sumaste " + V.plata(m.ahorrado - antes.ahorrado, { moneda: m.moneda === "USD" ? "US$ " : "$" }) + " a " + m.nombre, efecto(queda0)), () => { ponerItem("metas", antes); if (saldoAntes) ponerSaldo(saldoAntes); });
       if (infoMeta(m, hoy).cumplida && !infoMeta(antes, hoy).cumplida) st.metaOk = m;
-    } else if (tipo === "pago") {
-      const antes = st.deudas.find((x) => x.id === id);
+    } else if (tipo === "retiro") {
+      const antes = st.metas.find((x) => x.id === id), saldoAntes = st.cfg.saldo, queda0 = teQueda();
       const c = monto("monto", "el monto");
       const $ = (n) => V.plata(n, { moneda: antes.moneda === "USD" ? "US$ " : "$" });
-      if (c > restante(antes)) throw "Es más de lo que falta (" + $(restante(antes)) + ").";
-      const cot = antes.moneda === "USD" && v.anotar ? cotizar(hoy) : null;
-      if (antes.moneda === "USD" && v.anotar && !cot) throw "Para anotarlo en pesos falta el valor del dólar. Cargalo en Ajustes › Dólar o apagá «Anotarlo también».";
-      const d = { ...antes, pagado: antes.pagado + c };
-      ponerItem("deudas", d);
-      const me = d.tipo === "meDeben";
+      if (c > antes.ahorrado) throw "Es más de lo que tenés guardado (" + $(antes.ahorrado) + ").";
+      const cot = antes.moneda === "USD" && v.gasto ? cotizar(hoy) : null;
+      if (antes.moneda === "USD" && v.gasto && !cot) throw "Para anotarlo en pesos falta el valor del dólar. Cargalo en Ajustes › Dólar o apagá «Ya la gasté».";
+      // La plata sale de la meta y queda para usar; si ya se gastó, además se anota el gasto. La cuenta está en sacarDeMeta (saldo.js).
+      const r = sacarDeMeta(st.cfg.saldo, st.metas, antes, c);
+      ponerItem("metas", r.meta);
+      if (r.saldo && r.saldo !== saldoAntes) ponerSaldo(r.saldo);
       let mov = null;
-      if (v.anotar) {
-        mov = { id: nuevoId(), tipo: me ? "ingreso" : "gasto", monto: c, detalle: (me ? "Cobro: " : "Pago: ") + (d.concepto || d.quien), categoria: me ? "otros_in" : "deudas", medio: "", fecha: hoy, ts: Date.now(), mod: Date.now() };
+      if (v.gasto) {
+        // Lo de una meta de ejemplo es de ejemplo, y lo que salió de una meta en dólares nunca estuvo en lo que te queda.
+        mov = { id: (antes.id.startsWith("ej_") ? "ej_" : "") + nuevoId(), tipo: "gasto", monto: c, detalle: "De la meta: " + antes.nombre, categoria: "otros", medio: "", fecha: hoy, ts: Date.now(), mod: Date.now(), ...(gastoDeMetaAparte(antes) && { previo: true }) };
         if (cot) { mov.monto = aPesos(c, cot.valor); mov.usd = { monto: c, valor: cot.valor, fecha: cot.fecha, tipo: cot.tipo, fuente: cot.fuente, estimado: cot.estimado }; }
         guardarMov(mov);
       }
-      mostrarAviso((me ? "Cobraste " : "Pagaste ") + $(c) + (restante(d) ? "" : ". ¡Saldada!"), () => { ponerItem("deudas", antes); if (mov) quitarMov(mov.id); });
+      const ahora = teQueda();
+      mostrarAviso(unir("Sacaste " + $(c) + " de " + antes.nombre, ahora === null ? "" : ahora !== queda0 ? efecto(queda0) : "Lo que te queda no cambia"),
+        () => { ponerItem("metas", antes); if (saldoAntes) ponerSaldo(saldoAntes); if (mov) quitarMov(mov.id); });
+    } else if (tipo === "pago") {
+      const antes = st.deudas.find((x) => x.id === id), queda0 = teQueda();
+      const c = monto("monto", "el monto");
+      const $ = (n) => V.plata(n, { moneda: antes.moneda === "USD" ? "US$ " : "$" });
+      if (c > restante(antes)) throw "Es más de lo que falta (" + $(restante(antes)) + ").";
+      const me = antes.tipo === "meDeben";
+      const mov = v.anotar ? movimientoDePago(antes, c, { id: nuevoId(), hoy, ahora: Date.now(), cot: antes.moneda === "USD" ? cotizar(hoy) : null, cats: st.cfg.categorias }) : null;
+      if (v.anotar && !mov) throw "Para pasarlo a pesos falta el valor del dólar. Cargalo en Ajustes › Dólar o apagá «" + (me ? "Sumarlo a mi plata" : "Restarlo de mi plata") + "».";
+      const d = { ...antes, pagado: antes.pagado + c };
+      ponerItem("deudas", d);
+      if (mov) { guardarMov(mov); preguntarSaldo([mov]); }
+      mostrarAviso(unir((me ? "Cobraste " : "Pagaste ") + $(c) + (restante(d) ? "" : ". ¡Saldada!"), mov ? efecto(queda0, [mov]) : teQueda() === null ? "" : "No cambia lo que te queda: elegiste no " + (me ? "sumarlo" : "restarlo")),
+        () => { ponerItem("deudas", antes); if (mov) quitarMov(mov.id); st.dudaSaldo = null; });
     }
   } catch (e) {
     if (typeof e === "string") return e;
@@ -448,7 +527,7 @@ function borrarForm() {
 /* ---------- grupos ---------- */
 const grupoActual = () => st.grupos.find((g) => g.id === st.grupoId);
 
-// Guarda el grupo y pone al día "mi parte" en mis gastos.
+// Guarda el grupo y pone al día mis movimientos: lo que pagué y lo que me pagaron en él (ver movimientosDeGrupo). Devuelve los que cambiaron.
 // Si el grupo está conectado, el cambio se manda al servidor un ratito después (subir = false: vino del servidor).
 // historial = false: lo que cambió no lo hizo esta persona (se juntó con lo de otro).
 function guardarGrupo(g, subir = true, historial = subir) {
@@ -456,10 +535,18 @@ function guardarGrupo(g, subir = true, historial = subir) {
   if (anterior) g = conHistorial(anterior, g);
   if (subir && g.sync) g = { ...g, sync: { ...g.sync, pendiente: true } };
   ponerItem("grupos", g);
-  const { poner, quitar } = sincronizarMiParte(g, st.movs, "otros", hoy);
+  const { poner, quitar } = movimientosDeGrupo(g, st.movs, hoy);
   poner.forEach(guardarMov);
   quitar.forEach(quitarMov);
   if (subir && g.sync) programarSubida(g.id);
+  return poner;
+}
+// Lo que hay que decir después de tocar algo de plata en un grupo. mio: la plata salió o entró de mi bolsillo.
+function efectoGrupo(g, queda0, puestos, mio = true) {
+  if (!mio || !g.yo || teQueda() === null) return "";
+  if (g.moneda !== "ARS") return "No cambia lo que te queda: el grupo es en dólares";
+  if (!g.loc) return "No cambia lo que te queda: este grupo no toca tu plata";
+  return efecto(queda0, puestos);
 }
 // Deshacer en un grupo: lo que vuelve atrás lleva la hora de ahora, para que le gane al cambio que ya viajó a los demás.
 function restaurarGrupo(antes) {
@@ -543,9 +630,11 @@ async function sincroUna(id, avisar) {
   const n = novedades(ahora, f);
   const hayNuevo = ["gastos", "pagos", "miembros"].some((k) => n[k].nuevos || n[k].cambiados);
   if (!hayNuevo && JSON.stringify(f.sync) === JSON.stringify(ahora.sync)) return;
-  guardarGrupo(f, false);
+  const queda0 = teQueda(), puestos = guardarGrupo(f, false);
   if (cambioLocal) programarSubida(id);
-  if (hayNuevo && avisar && !st.aviso) mostrarAviso("Llegó algo nuevo en «" + f.nombre + "».");
+  // Si lo que anotó otro movió mi plata (alguien marcó que le pagué, o que me pagó), se dice siempre: el número no cambia callado.
+  const movio = teQueda() !== queda0;
+  if ((hayNuevo && avisar || movio) && !st.aviso) mostrarAviso(unir("Llegó algo nuevo en «" + f.nombre + "»", movio ? efecto(queda0, puestos) : ""));
   dibujar();
 }
 
@@ -639,7 +728,7 @@ function formGasto(x) {
 // Devuelve un texto de error, o null si se guardó.
 function guardarGForm() {
   const { tipo, id, vals: v } = st.gform;
-  const g = grupoActual(), antes = g && copiaGrupo(g), ahora = Date.now();
+  const g = grupoActual(), antes = g && copiaGrupo(g), ahora = Date.now(), queda0 = teQueda();
   const deshacer = () => restaurarGrupo(antes);
   if (tipo === "grupoNuevo") {
     const nombre = v.nombre.trim();
@@ -652,7 +741,7 @@ function guardarGForm() {
       if (!al.ok) return m.nombre + ": " + al.error;
       miembros.push({ id: nuevoId(), nombre: m.nombre.slice(0, 40), alias: al.alias, ts: ahora, x: false });
     }
-    const nuevo = { id: nuevoId(), nombre: nombre.slice(0, 60), moneda: v.moneda, ts: ahora, yo: miembros[0].id, loc: false, miembros, gastos: [], pagos: [] };
+    const nuevo = { id: nuevoId(), nombre: nombre.slice(0, 60), moneda: v.moneda, ts: ahora, yo: miembros[0].id, loc: true, miembros, gastos: [], pagos: [] };
     guardarGrupo(nuevo);
     st.grupoId = nuevo.id; st.grupoTab = "gastos";
     irA("grupo");
@@ -681,8 +770,8 @@ function guardarGForm() {
       pp = Object.fromEntries(Object.entries(c).map(([k, n]) => [k, n / 100]));
     }
     const x = { id: id || nuevoId(), t: (v.t.trim() || "Compra").slice(0, 80), m: total / 100, p: v.pagan[0], a: v.a, sp: "eq", w: {}, f: v.f || hoy, ts: ahora, x: false, por: g.yo || "", j: v.j, ...(pp && { pp }) };
-    guardarGrupo({ ...g, gastos: [...g.gastos.filter((y) => y.id !== x.id), x] });
-    mostrarAviso((id ? "Cambiado: " : "Sumado: ") + x.t, deshacer);
+    const puestos = guardarGrupo({ ...g, gastos: [...g.gastos.filter((y) => y.id !== x.id), x] });
+    mostrarAviso(unir((id ? "Cambiado: " : "Sumado: ") + x.t, efectoGrupo(g, queda0, puestos, v.pagan.includes(g.yo) || puestos.length > 0)), deshacer);
   } else if (tipo === "juntada") {
     const nombre = v.nombre.trim();
     if (!nombre) return "Ponele un nombre, por ejemplo «asado del sábado».";
@@ -706,16 +795,16 @@ function guardarGForm() {
       if (suma !== total) return "Los montos suman " + V.plata(suma) + " y el gasto es " + V.plata(total) + ".";
     }
     const x = { id: id || nuevoId(), t: (v.t.trim() || "Gasto").slice(0, 80), m: total / 100, p: v.p, a: v.a, sp: v.sp, w: v.sp === "eq" ? {} : w, f: v.f || hoy, ts: ahora, x: false, por: g.yo || "" };
-    guardarGrupo({ ...g, gastos: [...g.gastos.filter((y) => y.id !== x.id), x] });
-    mostrarAviso((id ? "Cambiado: " : "Sumado: ") + x.t, deshacer);
+    const puestos = guardarGrupo({ ...g, gastos: [...g.gastos.filter((y) => y.id !== x.id), x] });
+    mostrarAviso(unir((id ? "Cambiado: " : "Sumado: ") + x.t, efectoGrupo(g, queda0, puestos, v.p === g.yo || puestos.length > 0)), deshacer);
   } else if (tipo === "pago") {
     const c = leerMonto(v.m);
     if (!c) return "Revisá el monto: escribilo con números.";
     if (!v.de || !v.a || v.de === v.a) return "Elegí quién paga y a quién (tienen que ser personas distintas).";
     const viejo = id && g.pagos.find((y) => y.id === id);
     const p = { id: id || nuevoId(), de: v.de, a: v.a, m: c / 100, f: v.f || hoy, ts: ahora, x: false, ...(viejo?.j && { j: viejo.j }) };
-    guardarGrupo({ ...g, pagos: [...g.pagos.filter((y) => y.id !== p.id), p] });
-    mostrarAviso("Pago registrado", deshacer);
+    const puestos = guardarGrupo({ ...g, pagos: [...g.pagos.filter((y) => y.id !== p.id), p] });
+    mostrarAviso(unir("Pago registrado", efectoGrupo(g, queda0, puestos, p.de === g.yo || p.a === g.yo || puestos.length > 0)), deshacer);
   } else if (tipo === "persona") {
     const nombre = v.nombre.trim();
     if (!nombre) return "Poné un nombre.";
@@ -847,10 +936,10 @@ async function prepararTuMes() {
   const t = st.tuMes;
   if (t.descarga) URL.revokeObjectURL(t.descarga);
   Object.assign(t, { url: "", descarga: "", archivo: null });
-  const d = datosDelMes(st.movs, st.dias, t.mes);
+  const d = datosDelMes(st.movs, st.dias, t.mes, V.movsGasto());
   const r = await armarTarjeta(d, {
     titulo: V.mesTexto(t.mes) + " " + t.mes.slice(0, 4), hastaHoy: t.mes === hoy.slice(0, 7), montos: t.montos, nombreCat: V.nombreCat,
-    estado: V.estadoDelMes(t.mes, resumenMes(st.movs, referencia(t.mes, hoy))), chiste: chisteDelMes(t.mes, d.top[0]?.id, elegirDelMes),
+    estado: V.estadoDelMes(t.mes, resumenMes(V.movsGasto(), referencia(t.mes, hoy))), chiste: chisteDelMes(t.mes, d.top[0]?.id, elegirDelMes),
   });
   if (st.tuMes !== t) return;
   const nombre = "MiGuita-" + V.mesTexto(t.mes).toLowerCase() + "-" + t.mes.slice(0, 4) + ".png";
@@ -947,6 +1036,8 @@ function dibujar() {
     privacidad: VA.privacidad,
     personalizacion: V.personalizacion,
     plata: V.cargarPlata,
+    platas: VPL.platas,
+    plataEd: VPL.plataEd,
     instalar: VI.instalar,
     yaInstalada: VI.yaInstalada,
     grabar: VV.grabar,
@@ -1060,7 +1151,7 @@ let guiaAcomodar = () => {};
 /* ---------- preguntarle a una IA ---------- */
 function textoIA() {
   const d = st.cfg.dolar;
-  return resumenParaIA({ movs: st.movs, fijos: st.fijos, compras: st.compras, hoy, dolar: valorPara(hoy, d.tipo, st.cotizaciones, d.manual)?.valor || 0, nombreCat: V.nombreCat, nombreMes: V.mesTexto, formatear });
+  return resumenParaIA({ movs: V.movsGasto(), fijos: st.fijos, compras: st.compras, hoy, dolar: valorPara(hoy, d.tipo, st.cotizaciones, d.manual)?.valor || 0, nombreCat: V.nombreCat, nombreMes: V.mesTexto, formatear });
 }
 const hojaIA = () => `<b class="ayuda-t">Preguntale a una IA</b><span class="ayuda-x">Se copia un resumen de tus gastos por categoría, sin el detalle de cada uno. Vos elegís dónde pegarlo. Desde acá no se manda nada.</span>` +
   `<div class="vista-ia">${esc(textoIA())}</div><button class="btn pp w grande" data-act="copiarIA">Copiar</button><button class="link chico" data-act="cerrarAyuda">Ahora no</button>`;
@@ -1074,8 +1165,9 @@ function anotarVarios() {
   if (r.editando) { r.error = "Tocá «Listo» en el que estás cambiando."; return false; }
   if (r.items.some((x) => x.moneda === "USD") && !dolar) { r.error = "Falta el valor del dólar. Cargalo en Ajustes › Dólar."; return false; }
   const antes = infoRacha(st.movs, st.dias, hoy), ahora = Date.now();
-  const movs = r.items.map(({ moneda, revisar, ...p }, i) => {
-    const mov = { id: nuevoId(), ...p, medio: "", fecha: hoy, ts: ahora + i, mod: ahora };
+  const olvidar = r.items.filter((x) => x.ensenar).map((x) => aprender(x.detalle, x.categoria));
+  const movs = r.items.map(({ moneda, revisar, ensenar, ...p }, i) => {
+    const mov = { id: nuevoId(), ...p, medio: p.medio || "", fecha: hoy, ts: ahora + i, mod: ahora };
     if (moneda === "USD") { mov.usd = { monto: p.monto, valor: dolar.valor, fecha: dolar.fecha, tipo: dolar.tipo, fuente: dolar.fuente, estimado: dolar.estimado }; mov.monto = aPesos(p.monto, dolar.valor); }
     return mov;
   });
@@ -1084,7 +1176,7 @@ function anotarVarios() {
   st.mes = hoy.slice(0, 7);
   st.varios = null;
   const soloGastos = movs.every((m) => m.tipo === "gasto");
-  mostrarAviso(movs.length === 1 ? "Anotado" : "Anoté " + movs.length + (soloGastos ? " gastos" : " movimientos"), () => movs.forEach((m) => quitarMov(m.id)));
+  mostrarAviso(movs.length === 1 ? "Anotado" : "Anoté " + movs.length + (soloGastos ? " gastos" : " movimientos"), () => { movs.forEach((m) => quitarMov(m.id)); olvidar.forEach((f) => f()); });
   revisarFestejo(antes);
   avisarPresupuesto();
   return true;
@@ -1092,7 +1184,7 @@ function anotarVarios() {
 
 // Guarda lo escrito en Inicio. Si no se supo la categoría, pregunta y la próxima vez ya la sabe.
 function anotarRapido({ opciones, moneda, ...p }) {
-  const mov = { id: nuevoId(), ...p, medio: "", fecha: hoy, ts: Date.now(), mod: Date.now() };
+  const mov = { id: nuevoId(), ...p, medio: p.medio || "", fecha: hoy, ts: Date.now(), mod: Date.now() };
   if (moneda === "USD") {
     const c = cotizar(hoy);
     if (!c) return abrirHoja({ ...p, expr: String(p.monto / 100), moneda: "USD", error: "Falta el valor del dólar. Cargalo en Ajustes › Dólar." });
@@ -1102,9 +1194,30 @@ function anotarRapido({ opciones, moneda, ...p }) {
   anotar(mov);
   if (quedoSinCategoria(p)) st.dudaCat = { id: mov.id, detalle: p.detalle, tipo: p.tipo };
 }
+// Lo que la persona enseña al corregir. Devuelve cómo desaprenderlo, para que «Deshacer» deshaga todo.
+// Lo olvidado queda como "" (no se borra): así otro dispositivo no lo vuelve a traer.
+function ponerAprendida(k, categoria) {
+  const todas = Object.entries({ ...(st.cfg.aprendidas || {}), [k]: categoria });
+  ponerConfig("aprendidas", Object.fromEntries(todas.length > 500 ? [...todas.filter(([, c]) => c), ...todas.filter(([, c]) => !c)].slice(0, 500) : todas));
+}
 function aprender(detalle, categoria) {
   const k = claveDe(detalle);
-  if (k) ponerConfig("aprendidas", Object.fromEntries(Object.entries({ ...(st.cfg.aprendidas || {}), [k]: categoria }).slice(-500)));
+  if (!k) return () => {};
+  const antes = (st.cfg.aprendidas || {})[k];
+  ponerAprendida(k, categoria);
+  return () => ponerAprendida(k, antes || "");
+}
+// En la hoja de anotar, al escribir el detalle se elige sola la categoría (con lo que la persona enseñó), salvo que ya la haya tocado.
+function sugerirCategoria() {
+  const h = st.hoja;
+  if (!h || h.modo !== "nuevo" || h.catTocada || h.desdeFijo || h.desdeTarjeta) return false;
+  h.catBase ??= h.categoria;
+  const d = h.detalle.trim();
+  const cat = d ? categoriaPara(d, st.cfg.categorias, h.tipo, st.cfg.aprendidas || {}) : RESPALDO[h.tipo];
+  const nueva = cat === RESPALDO[h.tipo] ? h.catBase : cat;
+  if (nueva === h.categoria) return false;
+  h.categoria = nueva;
+  return true;
 }
 
 function itemCat() {
@@ -1122,10 +1235,10 @@ raiz.addEventListener("click", (e) => {
   if (!b || b.tagName === "INPUT" || b.tagName === "SELECT") return;
   const act = b.dataset.act, v = b.dataset.v;
   const s = st.hoja;
-  if (!["borrarMov", "borrarTodo", "borrarPlan", "borrarG", "quitarPin", "aplicarCopia", "desconectarGrupo", "desconectarVinculo", "apagarAvisos"].includes(act)) st.confirmar = "";
+  if (!["borrarMov", "borrarTodo", "borrarPlan", "borrarG", "plataBorrar", "quitarPin", "aplicarCopia", "desconectarGrupo", "desconectarVinculo", "apagarAvisos", "olvidarTodo"].includes(act)) st.confirmar = "";
   switch (act) {
     case "ir": history.replaceState({ p: v }, ""); st.pantalla = v; st.error = ""; scrollTo(0, 0); break;
-    case "abrir": if (v === "tutorial") { st.tutorialPaso = 0; st.tutorialDesde = ""; } if (v === "plata") st.dudaPlata = null; abrir(v); if (v === "dispositivos") prepararVinculo(); break;
+    case "abrir": if (v === "tutorial") { st.tutorialPaso = 0; st.tutorialDesde = ""; } if (v === "plata") { st.dudaPlata = null; st.plataCorregir = false; } abrir(v); if (v === "dispositivos") prepararVinculo(); break;
     case "volver": return volver();
     case "mes": st.mes = cambiarMes(st.mes, +v); break;
     case "ocultar": ponerConfig("ocultar", !st.cfg.ocultar); break;
@@ -1156,7 +1269,7 @@ raiz.addEventListener("click", (e) => {
     case "quitarEjemplo":
       st.movs.filter((x) => x.id.startsWith("ej_")).forEach((x) => quitarMov(x.id));
       PLAN.forEach((l) => st[l].filter((x) => x.id.startsWith("ej_")).forEach((x) => quitarItem(l, x.id)));
-      st.movs.filter((x) => x.id.startsWith("gx_ej_")).forEach((x) => quitarMov(x.id));
+      st.movs.filter((x) => /^(gx|gp|fx)_ej_/.test(x.id)).forEach((x) => quitarMov(x.id)); // así se llamaba antes lo que salía del ejemplo
       st.grupos.filter((x) => x.id.startsWith("ej_")).forEach((x) => quitarItem("grupos", x.id));
       mostrarAviso("Listo, quedó vacío para que empieces con lo tuyo."); break;
     case "ponerEjemplo": cargarEjemplo(); st.mes = hoy.slice(0, 7); break;
@@ -1170,6 +1283,10 @@ raiz.addEventListener("click", (e) => {
       st.dias = [];
       PLAN.forEach((l) => [...st[l]].forEach((x) => quitarItem(l, x.id)));
       [...st.grupos].forEach((x) => quitarItem("grupos", x.id));
+      // También la plata cargada, las otras platas y lo aprendido. Se quitan (no se guardan vacías con la hora de ahora):
+      // así, si este dispositivo se vuelve a conectar, no les gana a los demás y no les vacía nada.
+      ["saldo", "platas", "aprendidas", "metasOrden", "vistaPlata", "plataTocada", "mesVisto", "avisados", "vistos", "ultimoFestejo"].forEach(quitarConfig);
+      st.dudaSaldo = st.dudaPlata = st.dudaCat = st.dudaMonto = null; st.plataTexto = "";
       mostrarAviso("Se borró todo lo anotado en este celu."); break;
     /* Grupos */
     case "abrirGrupo": st.grupoId = v; st.grupoTab = "gastos"; abrir("grupo"); break;
@@ -1218,9 +1335,9 @@ raiz.addEventListener("click", (e) => {
       const g = grupoActual(), antes = copiaGrupo(g), [de, a, m] = v.split("|");
       const nombre = (i) => (i === g.yo ? "Vos" : g.miembros.find((y) => y.id === i)?.nombre || "?");
       const p = { id: nuevoId(), de, a, m: +m / 100, f: hoy, ts: Date.now(), x: false, ...(st.juntadaId && { j: st.juntadaId }) };
-      guardarGrupo({ ...g, pagos: [...g.pagos, p] });
+      const queda0 = teQueda(), puestos = guardarGrupo({ ...g, pagos: [...g.pagos, p] });
       marcarVisto();
-      mostrarAviso("Anotado: " + nombre(de) + " le pasó " + V.plata(+m) + " a " + nombre(a) + ".", () => restaurarGrupo(antes)); break;
+      mostrarAviso(unir("Anotado: " + nombre(de) + (de === g.yo ? " le pasaste " : " le pasó ") + V.plata(+m) + " a " + (a === g.yo ? "vos" : nombre(a)), efectoGrupo(g, queda0, puestos, de === g.yo || a === g.yo)), () => restaurarGrupo(antes)); break;
     }
     case "tocarMiguita": {
       // Easter egg: cada toque, un chiste; tocándola muchas veces seguidas salen los especiales.
@@ -1228,7 +1345,7 @@ raiz.addEventListener("click", (e) => {
       toques++;
       let texto = ESPECIALES[toques];
       // En un mes difícil, Miguita acompaña en vez de hacer chistes sobre la plata.
-      const lista = V.estadoDelMes(st.mes, resumenMes(st.movs, referencia(st.mes, hoy))) === "bad" ? CHISTES_MES_DIFICIL : CHISTES;
+      const lista = V.estadoDelMes(st.mes, resumenMes(V.movsGasto(), referencia(st.mes, hoy))) === "bad" ? CHISTES_MES_DIFICIL : CHISTES;
       if (!texto) { let i; do i = Math.floor(Math.random() * lista.length); while (lista.length > 1 && lista[i] === st.chiste?.texto); texto = lista[i]; }
       st.chiste = { n: toques, texto, giro: !!ESPECIALES[toques] };
       chisteTimer = setTimeout(() => { st.chiste = null; if (st.pantalla === "inicio") dibujar(); }, 4500);
@@ -1256,7 +1373,7 @@ raiz.addEventListener("click", (e) => {
       mostrarAviso("Listo: este dispositivo ya no se actualiza con los otros. Tus datos quedan acá.");
       break;
     }
-    case "copiarAlias": copiar(v); mostrarAviso("Alias copiado. Pegalo en tu billetera o banco."); break;
+    case "copiarAlias": copiar(v); mostrarAviso(nombreDeCuenta(v) === "alias" ? "Alias copiado. Pegalo en tu billetera o banco." : nombreDeCuenta(v) + " copiado. Pegalo en tu billetera o banco."); break;
     case "abrirTuMes": abrirTuMes(v); break;
     case "tuMesMontos": if (st.tuMes.montos !== (v === "si")) { st.tuMes.montos = v === "si"; prepararTuMes(); } break;
     case "compartirTuMes": navigator.share({ files: [st.tuMes.archivo], title: "Mi mes en MiGuita", text: "Mi mes en MiGuita: " + location.origin + location.pathname }).catch(() => {}); return;
@@ -1283,9 +1400,11 @@ raiz.addEventListener("click", (e) => {
     case "gPjDetalle": { const pj = st.gform.vals.pj; if (Number.isInteger(pj)) st.gform.vals.pj = pj < 0 ? -1 - +v : (pj % 16) + 16 * +v; break; }
     case "gSoyYo": st.gform.vals.soyYo = !st.gform.vals.soyYo; break;
     case "grupoLoc": {
-      const g = grupoActual();
-      guardarGrupo({ ...g, loc: !g.loc });
-      mostrarAviso(g.loc ? "Tu parte ya no se suma a tus gastos." : "Tu parte de cada gasto se suma a tus gastos.");
+      const g = grupoActual(), queda0 = teQueda(), antes = st.movs.length;
+      const puestos = guardarGrupo({ ...g, loc: !g.loc });
+      const cuantos = Math.abs(st.movs.length - antes);
+      mostrarAviso(unir(g.loc ? "Listo: este grupo ya no toca tu plata" + (cuantos ? " y salieron de tus movimientos los " + cuantos + " que había" : "") :
+        "Listo: lo que pagás y te devuelven en este grupo mueve tu plata" + (cuantos ? ". Pasaron a tus movimientos " + cuantos + " de antes" : ""), efecto(queda0, puestos)));
       break;
     }
     case "guardarG": {
@@ -1408,8 +1527,9 @@ raiz.addEventListener("click", (e) => {
     case "impOtro": st.imp = { ...st.imp, movs: [], elegidos: new Set(), error: "" }; break;
     case "impAnotar": {
       const lista = st.imp.movs.filter((m) => st.imp.elegidos.has(m.id) && (!st.imp.soloGastos || m.tipo === "gasto") && (!st.imp.sinTransf || !m.transferencia));
+      const queda0 = teQueda();
       lista.forEach((m) => guardarMov({ ...m, medio: st.imp.medio }));
-      mostrarAviso("Anotaste " + lista.length + (lista.length === 1 ? " movimiento" : " movimientos") + " del resumen.", () => lista.forEach((m) => quitarMov(m.id)));
+      mostrarAviso(unir("Anotaste " + lista.length + (lista.length === 1 ? " movimiento" : " movimientos") + " del resumen", efecto(queda0, lista)), () => lista.forEach((m) => quitarMov(m.id)));
       st.imp = { ...st.imp, movs: [], elegidos: new Set(), error: "" };
       if (lista.length) st.mes = lista[0].fecha.slice(0, 7);
       return volver();
@@ -1463,7 +1583,6 @@ raiz.addEventListener("click", (e) => {
     case "copiarDireccion": copiar("https://" + DIRECCION).then(() => mostrarAviso("Link copiado. Pegalo en Safari.")); break;
     /* la guía */
     case "guiaSig": st.guiaPaso++; if (st.guiaPaso > 2) terminarGuia(); scrollTo(0, 0); break;
-    case "guiaFin": terminarGuia(); break;
     case "repetirGuia": st.guiaPaso = 0; st.guiaBase = st.movs.length; ponerConfig("guiaHecha", false); irA("inicio"); break;
     /* el signo de pregunta */
     case "ayuda": history.pushState({ p: st.pantalla, hoja: 1 }, ""); st.ayuda = v; break;
@@ -1490,8 +1609,8 @@ raiz.addEventListener("click", (e) => {
     case "varioListo": {
       const e = st.varios.editando, c = leerMonto(e.monto), x = st.varios.items[e.i];
       if (!c) { e.error = "Revisá el monto: escribilo con números, por ejemplo 15.000."; break; }
-      if (e.categoria !== x.categoria && e.detalle.trim()) aprender(e.detalle, e.categoria);
-      st.varios.items[e.i] = { ...x, tipo: e.tipo, detalle: e.detalle.trim(), monto: c, categoria: e.categoria, revisar: false };
+      // Lo que corrige acá se aprende recién al anotar (si cancela, no quedó nada enseñado).
+      st.varios.items[e.i] = { ...x, tipo: e.tipo, detalle: e.detalle.trim(), monto: c, categoria: e.categoria, revisar: false, ensenar: x.ensenar || (e.categoria !== x.categoria && !!e.detalle.trim()) };
       st.varios.editando = null; break;
     }
     case "varioTipo": { const e = st.varios.editando; if (e.tipo !== v) { e.tipo = v; e.categoria = leerSinMontoCat(e.detalle, v); } break; }
@@ -1522,12 +1641,12 @@ raiz.addEventListener("click", (e) => {
         if (nombre && nombre !== g.miembros.find((m) => m.id === g.yo)?.nombre)
           g = { ...g, miembros: g.miembros.map((m) => (m.id === g.yo ? { ...m, nombre, ts: Date.now() } : m)) };
       }
-      g.loc = false;
+      g.loc = true; // lo que pague o le paguen en el grupo mueve su plata; se apaga en el grupo
       g = conHistorial(st.pendiente, g);
       if (!st.cfg.nombre && st.nombreNuevo.trim()) ponerConfig("nombre", st.nombreNuevo.trim().slice(0, 30));
-      guardarGrupo(g);
+      const queda0 = teQueda(), puestos = guardarGrupo(g);
       st.pendiente = null; st.grupoId = g.id; st.grupoTab = "gastos";
-      mostrarAviso("Te sumaste a " + g.nombre + ".");
+      mostrarAviso(unir("Te sumaste a " + g.nombre, puestos.length ? efecto(queda0, puestos) : ""));
       irA("grupo"); break;
     }
     /* Plan */
@@ -1540,6 +1659,8 @@ raiz.addEventListener("click", (e) => {
     case "nuevoPlan": abrirForm(v); break;
     case "editarPlan": abrirForm(FORM_DE_TAB[st.planTab], v); break;
     case "sumarAhorro": abrirForm("ahorro", v); break;
+    case "sacarAhorro": abrirForm("retiro", v); break;
+    case "metaOrden": { const [id, delta] = v.split("|"), ids = moverMeta(st.metas, st.cfg.metasOrden?.ids, id, +delta); if (ids) ponerConfig("metasOrden", { ids, mod: Date.now() }); break; }
     case "pagarDeuda": abrirForm("pago", v); break;
     case "verSaldadas": st.verSaldadas = !st.verSaldadas; break;
     case "dudaMontoSel": { const { p } = st.dudaMonto; st.dudaMonto = null; anotarRapido({ ...p, monto: +v }); break; }
@@ -1547,7 +1668,7 @@ raiz.addEventListener("click", (e) => {
     case "dudaMontoNo": st.dudaMonto = null; break;
     case "dudaCatSel": {
       const m = st.movs.find((x) => x.id === st.dudaCat.id);
-      if (m && v) { guardarMov({ ...m, categoria: v, mod: Date.now() }); aprender(st.dudaCat.detalle, v); mostrarAviso("Listo. La próxima vez ya lo sé."); }
+      if (m && v) { guardarMov({ ...m, categoria: v, mod: Date.now() }); const olvidar = aprender(st.dudaCat.detalle, v); mostrarAviso("Listo. La próxima vez ya lo sé.", () => { if (st.movs.some((x) => x.id === m.id)) guardarMov(m); olvidar(); }); }
       st.dudaCat = null; break;
     }
     case "plataGuardar": {
@@ -1556,27 +1677,143 @@ raiz.addEventListener("click", (e) => {
       // La primera vez puede haber cosas ya anotadas: el orden no tiene que importar, así que se pregunta si ese número ya las tiene en cuenta.
       const antes = st.cfg.saldo ? null : anotadoAntes(st.movs, hoy.slice(0, 7));
       if (antes?.lista.length) { st.dudaPlata = { monto: c, ...antes }; st.plataError = ""; break; }
-      return fijarPlata({ monto: c, ts: Date.now(), fecha: hoy });
+      const r = plataNueva(st.cfg.saldo, c, st.movs, hoy);
+      return fijarPlata(r.saldo, r.previos);
     }
-    case "plataYaEstaba": return fijarPlata({ monto: st.dudaPlata.monto, ts: Date.now(), fecha: hoy });
+    case "plataYaEstaba": { const r = plataNueva(st.cfg.saldo, st.dudaPlata.monto, st.movs, hoy); return fijarPlata(r.saldo, r.previos); }
     case "plataFaltaba": return fijarPlata(saldoDesde(st.dudaPlata.monto, st.dudaPlata.lista));
-    case "plataSueldo": {
-      const f = st.fijos.find((x) => x.tipo === "ingreso" && x.categoria === "sueldo") || st.fijos.find((x) => x.tipo === "ingreso");
-      abrirForm("fijo", f?.id);
-      if (!f) Object.assign(st.form.vals, { tipo: "ingreso", nombre: "Sueldo", categoria: "sueldo", medio: "" });
+    case "plataFijo":
+      abrirForm("fijo", v);
+      // Lo que se cobra todos los meses no siempre es igual: por defecto, que pregunte cuánto fue.
+      if (!v) Object.assign(st.form.vals, { tipo: "ingreso", modo: "recordar", categoria: "sueldo", medio: "" });
       st.form.desdePlata = true;
       break;
-    }
+    case "corregirPlata":
+      st.plataCorregir = true; st.dudaPlata = null;
+      if (st.pantalla !== "plata") abrir("plata");
+      dibujar();
+      raiz.querySelector('[data-act="plataMonto"]')?.focus();
+      return;
     case "saldoYa":
       for (const id of st.dudaSaldo.ids) { const m = st.movs.find((x) => x.id === id); if (m) guardarMov({ ...m, previo: true, mod: Date.now() }); }
       st.dudaSaldo = null; mostrarAviso("Listo, no te lo resto."); break;
-    case "saldoNo": ponerConfig("saldo", { ...st.cfg.saldo, listo: true }); st.dudaSaldo = null; break;
-    case "ahorroAdentro": case "ahorroAparte": {
-      const s = st.cfg.saldo, falta = ahorroSinPreguntar(s, st.metas);
-      ponerConfig("saldo", { ...s, vistas: enMetas(st.metas), aparte: (s.aparte || 0) + (act === "ahorroAparte" ? falta : 0) });
+    case "saldoNo": if (st.cfg.saldo?.fecha === hoy) ponerSaldo({ ...st.cfg.saldo, listo: true }); st.dudaSaldo = null; break;
+    case "tarjetaElegir": {
+      // «Sí, ya las anoté»: la persona elige cuáles de sus gastos eran compras con esa tarjeta. Las que ya decían «crédito»
+      // (de antes de esta versión) vienen marcadas. No se adivina nada: lo que elija pasa a ser compra con crédito y el pago la cubre.
+      const pago = st.movs.find((x) => x.id === v);
+      if (!pago) break;
+      const lista = comprasPosibles(st.movs, idsDeTarjeta(st.cfg.categorias), pago);
+      st.elegirTarjeta = { pago: pago.id, marcadas: new Set(lista.filter((m) => m.medio === "credito").map((m) => m.id)) };
+      abrir("comprasTarjeta");
       break;
     }
-    case "cargarIngreso": return abrirHoja({ tipo: "ingreso", categoria: "sueldo", medio: "transferencia", detalle: "" });
+    case "tarjetaMarcar": {
+      const s = st.elegirTarjeta?.marcadas;
+      if (s) { if (s.has(v)) s.delete(v); else s.add(v); }
+      break;
+    }
+    case "tarjetaListo": {
+      const e = st.elegirTarjeta, ids = idsDeTarjeta(st.cfg.categorias), pago = e && st.movs.find((x) => x.id === e.pago);
+      st.elegirTarjeta = null;
+      // Se vuelve a mirar: si mientras tanto el pago se borró, dejó de ser un pago de la tarjeta o ya quedó cubierto, no se toca nada.
+      const sigue = pago && esPagoDeTarjeta(pago, ids) && sinCubrir(st.movs, ids, pago) > 0;
+      const elegidas = sigue ? comprasPosibles(st.movs, ids, pago).filter((m) => e.marcadas.has(m.id)) : [];
+      // Sin nada elegido, lo que dice la pantalla: el pago es un gasto nuevo (igual que «No, es un gasto nuevo»).
+      if (!elegidas.length) {
+        if (sigue) { guardarMov({ ...pago, sinElegir: sinCubrir(st.movs, ids, pago), mod: Date.now() }); mostrarAviso("Dale, lo cuento como un gasto nuevo.", () => guardarMov(pago)); }
+        else mostrarAviso("Listo, no cambié nada.");
+        volver();
+        return;
+      }
+      // Lo que el pago no cubra con estas compras (intereses, impuestos) es un gasto nuevo: el pago queda «sin elegir» y no se pregunta más.
+      const resto = restoSiEligen(st.movs, ids, pago, new Set(elegidas.map((m) => m.id)));
+      const queda0 = teQueda(), ahora = Date.now(), nuevas = elegidas.map((m) => ({ ...m, medio: "credito", enTarjeta: true, mod: ahora }));
+      const antes = resto > 0 ? [...elegidas, pago] : elegidas;
+      [...nuevas, ...(resto > 0 ? [{ ...pago, sinElegir: resto, mod: ahora }] : [])].forEach(guardarMov);
+      // Deshacer deja todo como estaba, y la pregunta de Inicio vuelve sola (sale de los datos).
+      mostrarAviso(unir(unir("Listo: " + (nuevas.length === 1 ? "esa compra quedó" : "esas " + nuevas.length + " compras quedaron") + " con la tarjeta",
+        resto > 0 ? "Los " + V.plata(resto) + " que no cubren las cuento como un gasto nuevo" : ""), efecto(queda0)),
+        () => antes.forEach(guardarMov));
+      volver();
+      return;
+    }
+    case "tarjetaNueva": {
+      // «No, es un gasto nuevo» o «Intereses o impuestos»: lo que el pago no cubre queda como gasto nuevo y no se pregunta más. Se puede deshacer.
+      const pago = st.movs.find((x) => x.id === v);
+      if (!pago) break;
+      guardarMov({ ...pago, sinElegir: Math.max(0, sinCubrir(st.movs, idsDeTarjeta(st.cfg.categorias), pago)), mod: Date.now() });
+      mostrarAviso("Dale, lo cuento como un gasto nuevo.", () => guardarMov(pago));
+      break;
+    }
+    case "pagarTarjeta": {
+      // Se abre la hoja con lo que falta pagar: si paga otro monto (el mínimo, una parte), lo cambia ahí.
+      const ids = idsDeTarjeta(st.cfg.categorias), debe = porPagar(st.movs, ids);
+      const categoria = [...ids].find((id) => st.cfg.categorias.gasto.some((c) => c.id === id && !c.oculta)) || "tarjeta";
+      return abrirHoja({ tipo: "gasto", expr: debe % 100 ? "" : String(debe / 100), tocada: false, centavos: debe, categoria, detalle: "Pago de tarjeta", desdeTarjeta: true });
+    }
+    case "tarjetaSaldada": {
+      // «Ya la pagué toda»: con el último pago la tarjeta quedó en cero aunque los montos no coincidan (el dólar, una bonificación, un redondeo).
+      // Solo si después de ese pago no se compró nada con crédito (pagoParaSaldar): si no, lo que se debe es de esas compras.
+      const ids = idsDeTarjeta(st.cfg.categorias), ultimo = pagoParaSaldar(st.movs, ids);
+      if (!ultimo) break;
+      guardarMov({ ...ultimo, salda: true, mod: Date.now() });
+      const queda = porPagar(st.movs, ids);
+      mostrarAviso(queda ? "Listo. Todavía hay " + V.plata(queda) + " por pagar de la tarjeta." : "Listo: la tarjeta quedó en cero.", () => guardarMov(ultimo));
+      break;
+    }
+    case "repetir": {
+      // «Lo de siempre»: se anota igual que la última vez, con fecha de hoy. Pasa por anotar(): deshacer, racha y cartelito como siempre.
+      const x = st.repetidos?.[Number(v)];
+      if (!x) break;
+      const ahora = Date.now();
+      anotar({ id: nuevoId(), tipo: "gasto", monto: x.monto, detalle: x.detalle, categoria: x.categoria, medio: x.medio, fecha: hoy, ts: ahora, mod: ahora });
+      break;
+    }
+    case "ahorroAdentro": case "ahorroAparte": {
+      ponerSaldo(responderAhorro(st.cfg.saldo, st.metas, act === "ahorroAparte"));
+      break;
+    }
+    /* mis platas */
+    case "plataSig":
+      ponerConfig("vistaPlata", siguienteVista(st.vistasPlata, st.cfg.vistaPlata));
+      if (!st.cfg.plataTocada) ponerConfig("plataTocada", true);
+      break;
+    case "plataNueva": {
+      const [tipo, nombre, moneda] = TIPOS_PLATA.find((t) => t[0] === v);
+      st.plataEd = { id: null, tipo, nombre: tipo === "otra" ? "" : nombre, moneda, monto: "", error: "" };
+      abrir("plataEd"); break;
+    }
+    case "plataEditar": {
+      const x = limpiarPlatas(st.cfg.platas).items.find((y) => y.id === v);
+      if (!x) break;
+      st.plataEd = { id: x.id, tipo: x.tipo, nombre: x.nombre, moneda: x.moneda, monto: montoEnCampo(x.monto), error: "" };
+      abrir("plataEd"); break;
+    }
+    case "plataMoneda": st.plataEd.moneda = v; break;
+    case "plataMover": { const [id, delta] = v.split("|"); ponerPlatas(moverVista(st.cfg.platas, id, +delta)); break; }
+    case "plataVer": ponerPlatas(alternarVista(st.cfg.platas, v)); break;
+    case "plataEdGuardar": {
+      const f = st.plataEd, nombre = f.nombre.trim().slice(0, 24), c = leerMonto(f.monto);
+      if (!nombre) { f.error = "Ponele un nombre."; break; }
+      if (c === null || c < 0) { f.error = "Escribí cuánto tenés con números, por ejemplo 1.200."; break; }
+      const p = limpiarPlatas(st.cfg.platas), antes = p.items.find((x) => x.id === f.id);
+      const item = { id: f.id || "p_" + nuevoId().slice(0, 10), tipo: f.tipo, nombre, moneda: f.moneda, monto: c, color: antes ? antes.color : colorLibre(p.items, f.tipo), fecha: antes && antes.monto === c ? antes.fecha : hoy };
+      ponerPlatas({ ...p, items: antes ? p.items.map((x) => (x.id === item.id ? item : x)) : [...p.items, item] });
+      // La plata nueva queda a la vista, así se entiende enseguida para qué sirven los puntitos.
+      if (!antes) ponerConfig("vistaPlata", item.id);
+      mostrarAviso((antes ? "Guardada: " : "Sumada: ") + nombre, () => ponerPlatas(p));
+      return volver();
+    }
+    case "plataBorrar": {
+      if (st.confirmar !== "plata") { st.confirmar = "plata"; break; }
+      st.confirmar = "";
+      const p = limpiarPlatas(st.cfg.platas);
+      ponerPlatas({ ...p, items: p.items.filter((x) => x.id !== st.plataEd.id) });
+      mostrarAviso("Borrada", () => ponerPlatas(p));
+      return volver();
+    }
+    case "cargarIngreso": return abrirHoja({ tipo: "ingreso", categoria: st.cfg.categorias.ingreso.find((c) => !c.oculta)?.id || RESPALDO.ingreso, medio: "transferencia", detalle: "" });
     case "cerrarCartel": ponerConfig(v, true); break;
     case "tengoCopia":
       ponerConfig("primeraVez", hoy); terminarGuia();
@@ -1617,24 +1854,42 @@ raiz.addEventListener("click", (e) => {
       // Al pasar de gasto a ingreso, la categoría tiene que ser del tipo correcto.
       if (st.form.tipo === "fijo" && b.dataset.k === "tipo") st.form.vals.categoria = v === "ingreso" ? "sueldo" : "servicios";
       break;
-    case "confirmarFijo": case "saltearFijo": {
-      const f = st.fijos.find((x) => x.id === v), mes = hoy.slice(0, 7);
+    case "confirmarFijo": {
+      const f = st.fijos.find((x) => x.id === v), mes = f && mesPendiente(f, hoy);
+      if (!mes) break;
+      // Con qué fecha va y si hay que preguntar algo lo decide fechaAlConfirmar (plan.js): la hora es la de ahora, porque lo dice ahora.
+      const queda0 = teQueda(), { fecha, duda } = fechaAlConfirmar(f, mes, hoy, st.cfg.saldo);
+      const mov = movimientoDeFijo(f, mes, cotizar, { fecha, ts: Date.now() });
+      if (!mov) { mostrarAviso("Falta el valor del dólar para anotarlo. Cargalo en Ajustes › Dólar."); break; }
+      if (!st.dias.some((d) => d.fecha === mov.fecha)) ponerDia({ fecha: mov.fecha, anoto: true });
+      if (!st.movs.some((x) => x.id === mov.id)) guardarMov(mov);
+      ponerItem("fijos", conMesCerrado(f, mes));
+      if (duda && st.guiaPaso === null) st.dudaSaldo = { ids: [mov.id] }; else preguntarSaldo([mov]);
+      mostrarAviso(unir((f.tipo === "ingreso" ? "Anotado: cobraste " : "Anotado: pagaste ") + f.nombre + " " + V.plata(mov.monto), teQueda() !== queda0 ? "" : efecto(queda0, [mov])), () => { quitarMov(mov.id); ponerItem("fijos", f); st.dudaSaldo = null; });
+      break;
+    }
+    case "posponerFijo": {
+      // Se atrasó: no se marca como hecho y se vuelve a preguntar en unos días, también si en el medio cambia el mes.
+      const f = st.fijos.find((x) => x.id === v);
       if (!f) break;
-      if (act === "confirmarFijo") {
-        const mov = movimientoDeFijo(f, mes, cotizar);
-        if (!mov) { mostrarAviso("Falta el valor del dólar para anotarlo. Cargalo en Ajustes › Dólar."); break; }
-        if (!st.dias.some((d) => d.fecha === mov.fecha)) ponerDia({ fecha: mov.fecha, anoto: true });
-        if (!st.movs.some((x) => x.id === mov.id)) guardarMov(mov);
-        mostrarAviso((f.tipo === "ingreso" ? "Anotado: cobraste " : "Anotado: pagaste ") + f.nombre + " " + V.plata(mov.monto), () => { quitarMov(mov.id); ponerItem("fijos", f); });
-      } else mostrarAviso("Listo, este mes no se anota " + f.nombre + ".", () => ponerItem("fijos", f));
-      ponerItem("fijos", { ...f, hechos: [...(f.hechos || []), mes].slice(-24) });
+      ponerItem("fijos", posponer(f, hoy));
+      mostrarAviso("Dale, te pregunto en " + DIAS_PARA_VOLVER_A_PREGUNTAR + " días.", () => ponerItem("fijos", f));
+      break;
+    }
+    case "saltearFijo": {
+      // «Este mes no»: no se anota nada y no se pregunta más por ese mes. El mes que viene vuelve a preguntar.
+      const f = st.fijos.find((x) => x.id === v), mes = f && mesPendiente(f, hoy);
+      if (!mes) break;
+      ponerItem("fijos", conMesCerrado(f, mes));
+      mostrarAviso("Listo, por " + V.mesTexto(mes).toLowerCase() + " no te pregunto más. No anoté nada.", () => ponerItem("fijos", f));
       break;
     }
     case "cambiarFijo": {
-      // Confirmar con otro monto: se abre la hoja de anotar con los datos del fijo.
-      const f = st.fijos.find((x) => x.id === v), mov = movimientoDeFijo({ ...f, moneda: "ARS" }, hoy.slice(0, 7));
-      ponerItem("fijos", { ...f, hechos: [...(f.hechos || []), hoy.slice(0, 7)].slice(-24) });
-      return abrirHoja({ tipo: mov.tipo, moneda: f.moneda === "USD" ? "USD" : "ARS", expr: f.monto % 100 ? "" : String(f.monto / 100), tocada: false, centavos: f.monto, categoria: mov.categoria, medio: mov.medio, fecha: mov.fecha, detalle: f.nombre });
+      // Confirmar con otro monto: se abre la hoja de anotar con los datos del fijo. Recién al guardar queda hecho ese mes.
+      const f = st.fijos.find((x) => x.id === v), mes = f && mesPendiente(f, hoy);
+      if (!mes) break;
+      const { fecha, duda } = fechaAlConfirmar(f, mes, hoy, st.cfg.saldo);
+      return abrirHoja({ tipo: f.tipo || "gasto", moneda: f.moneda === "USD" ? "USD" : "ARS", expr: f.monto % 100 ? "" : String(f.monto / 100), tocada: false, centavos: f.monto, categoria: f.categoria, medio: f.medio || "", fecha, detalle: f.nombre, desdeFijo: f.id, desdeFijoMes: mes, desdeFijoDuda: duda });
     }
     case "formSwitch": st.form.vals[v] = !st.form.vals[v]; break;
     case "guardarPlan": {
@@ -1673,10 +1928,16 @@ raiz.addEventListener("click", (e) => {
     case "fondo": if (e.target !== b) return; return cerrarHoja();
     case "cerrarHoja": return cerrarHoja();
     case "tipo":
-      if (s.tipo !== v) { s.tipo = v; s.categoria = st.cfg.categorias[v].find((c) => !c.oculta)?.id || RESPALDO[v]; }
+      if (s.tipo !== v) { s.tipo = v; s.categoria = st.cfg.categorias[v].find((c) => !c.oculta)?.id || RESPALDO[v]; s.catBase = s.categoria; if (!s.catTocada) sugerirCategoria(); }
       if (v === "ingreso" && !s.medio) s.medio = "transferencia";
       break;
-    case "cat": s.categoria = v; break;
+    case "cat": s.categoria = v; s.catTocada = true; break;
+    case "olvidar": ponerAprendida(v, ""); mostrarAviso("Listo, lo olvidé."); break;
+    case "olvidarTodo":
+      if (st.confirmar !== "olvidar") { st.confirmar = "olvidar"; break; }
+      st.confirmar = "";
+      ponerConfig("aprendidas", Object.fromEntries(Object.keys(st.cfg.aprendidas || {}).map((k) => [k, ""])));
+      mostrarAviso("Listo, olvidé todo lo que me habías enseñado."); return volver();
     case "medio": s.medio = s.medio === v ? "" : v; break;
     case "fecha": s.fecha = v; break;
     case "tecla": {
@@ -1718,11 +1979,22 @@ raiz.addEventListener("click", (e) => {
         mov.monto = aPesos(total, c.valor);
         mov.usd = { monto: total, valor: c.valor, fecha: c.fecha, tipo: d.tipo, fuente: c.fuente, estimado: c.estimado };
       }
-      // Si corrige la categoría de algo, la próxima vez ya la sabe.
-      if (anterior && anterior.categoria !== mov.categoria && mov.detalle) aprender(mov.detalle, mov.categoria);
+      // Si corrige la categoría de algo, o la elige a mano al anotar, la próxima vez ya la sabe.
+      const enseno = mov.detalle && (anterior ? anterior.categoria !== mov.categoria : s.catTocada);
+      const olvidar = enseno ? aprender(mov.detalle, mov.categoria) : null;
       if (anterior?.id.startsWith("imp_") && anterior.categoria !== mov.categoria && mov.detalle)
         ponerConfig("aprendidas", Object.fromEntries(Object.entries({ ...(st.cfg.aprendidas || {}), [claveComercio(mov.detalle)]: mov.categoria }).slice(-500)));
       anotar(mov, anterior);
+      if (enseno) { const deshacerMov = st.aviso.deshacer; mostrarAviso(unir(st.aviso.texto, "La próxima vez ya va a " + V.nombreCat(mov.categoria).split("/")[0]), () => { deshacerMov(); olvidar(); }); }
+      const fijo = s.desdeFijo && st.fijos.find((x) => x.id === s.desdeFijo);
+      if (fijo) {
+        // Lo que se cobra varía: la próxima vez se propone el último monto.
+        const mismoMonto = fijo.tipo === "ingreso" && s.moneda === (fijo.moneda === "USD" ? "USD" : "ARS");
+        const deshacerMov = st.aviso.deshacer;
+        ponerItem("fijos", { ...conMesCerrado(fijo, s.desdeFijoMes || hoy.slice(0, 7)), ...(mismoMonto && { monto: total }) });
+        if (s.desdeFijoDuda && st.guiaPaso === null && !st.dudaSaldo) st.dudaSaldo = { ids: [mov.id] };
+        mostrarAviso(st.aviso.texto, () => { deshacerMov(); ponerItem("fijos", fijo); st.dudaSaldo = null; });
+      }
       // Desde «Mi plata», al guardar se vuelve atrás para ver cómo cambió el número.
       if (st.pantalla === "plata" && history.state?.hoja) { st.hoja = null; history.go(-2); return; }
       cerrarHoja();
@@ -1746,9 +2018,10 @@ raiz.addEventListener("click", (e) => {
 
 raiz.addEventListener("input", (e) => {
   const act = e.target.dataset.act, val = e.target.value;
-  if (act === "detalle") st.hoja.detalle = val;
+  if (act === "detalle") { st.hoja.detalle = val; if (sugerirCategoria()) dibujar(); }
   else if (act === "buscar") { st.filtro.texto = val; dibujar(); }
   else if (act === "nombre") st.cfg.nombre = val;
+  else if (act === "platCampo") { st.plataEd[e.target.dataset.k] = val; st.plataEd.error = ""; }
   else if (act === "plataMonto") { st.plataTexto = val; st.plataError = ""; if (st.dudaPlata) { st.dudaPlata = null; const p = e.target.selectionStart; dibujar(); const c = raiz.querySelector('[data-act="plataMonto"]'); c?.focus(); c?.setSelectionRange?.(p, p); } }
   else if (act === "varioCampo") { st.varios.editando[e.target.dataset.k] = val; st.varios.editando.error = ""; }
   else if (act === "catNombre") itemCat().nombre = val;
@@ -1843,6 +2116,8 @@ else if (!st.cfg.primeraVez) {
   else { st.desdePrimera = true; irA("instalar"); }
 }
 if (!st.cfg.guiaHecha && !st.movs.length && !enLaVieja) { st.guiaPaso = 0; st.guiaBase = 0; }
+// Desde cuándo lo comprado con crédito espera al pago de la tarjeta (ver marcarTarjeta). Es de cada dispositivo.
+if (!st.cfg.creditoDesde) ponerConfig("creditoDesde", Date.now());
 revisarFijos();
 revisarCuotas();
 revisarSalvavidas();

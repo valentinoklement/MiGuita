@@ -24,5 +24,5 @@ Se usa en https://miguita-app.pages.dev
 
 ## Para desarrollar
 - Abrir `index.html` con cualquier servidor local (por ejemplo `python -m http.server`).
-- Pruebas: `npm test` (Node 20 o más; no hay dependencias que instalar). Recorridos completos en un Chrome de verdad: `npm run recorridos`.
+- Pruebas: `npm test` (Node 20 o más; no hay dependencias que instalar). Recorridos completos en un Chrome de verdad: `npm run recorridos`. Si agregás palabras al vocabulario y cambia cómo se lee alguna frase de `tests/frases.txt`, `npm test` lo avisa; si era lo que querías, `npm run frases` lo acepta.
 - Licencias de terceros en `LICENCIAS/`.

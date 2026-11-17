@@ -126,11 +126,12 @@ test("códigos rotos, basura y ataques se rechazan", async () => {
   const z = new Uint8Array(await new Response(new Blob([enorme]).stream().pipeThrough(new CompressionStream("deflate-raw"))).arrayBuffer());
   let s = ""; for (const b of z) s += String.fromCharCode(b);
   await assert.rejects(G.decodificar("G2:" + btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")));
-  const evil = G.limpiar({ id: "g1", nombre: "<img src=x onerror=alert(1)>".repeat(10), miembros: [{ id: "a b", nombre: "x" }, { id: "m1", nombre: "ok", alias: "0000003100000000000001" }],
+  const evil = G.limpiar({ id: "g1", nombre: "<img src=x onerror=alert(1)>".repeat(10), miembros: [{ id: "a b", nombre: "x" }, { id: "m1", nombre: "ok", alias: "0000003100000000000001" }, { id: "m2", nombre: "con cbu", alias: "2850590940090418135201" }],
     gastos: [{ id: "x1", p: "m1", m: "1e400", t: "t", a: ["m1", "a b"], sp: "hack", w: JSON.parse('{"__proto__":5,"m1":1}') }], pagos: [{ id: "p1", de: "m1", a: "m1", m: -5 }] });
   assert.ok(evil.nombre.length <= 60);
-  assert.equal(evil.miembros.length, 1);
-  assert.equal(evil.miembros[0].alias, "", "un CBU que viene en un código no se guarda");
+  assert.equal(evil.miembros.length, 2);
+  assert.equal(evil.miembros[0].alias, "", "un CBU mal copiado que viene en un código no se guarda");
+  assert.equal(evil.miembros[1].alias, "2850590940090418135201", "uno bien escrito, sí");
   assert.equal(evil.gastos[0].sp, "eq");
   assert.equal(evil.gastos[0].m, 0);
   assert.deepEqual(Object.keys(evil.gastos[0].w), ["m1"]);
@@ -141,39 +142,74 @@ test("códigos rotos, basura y ataques se rechazan", async () => {
   assert.equal(muchos.gastos.length, 1500);
 });
 
-test("alias: solo alias, nunca CBU o CVU", () => {
+// Decisión del usuario (2026-11-11): para cobrar se puede poner el alias o el CBU/CVU. Con eso solo se puede mandar plata.
+test("para cobrar: alias, CBU o CVU, y un número mal copiado no pasa", () => {
   assert.deepEqual(G.validarAlias("Mi.Alias.MP"), { ok: true, alias: "mi.alias.mp" });
   assert.deepEqual(G.validarAlias("  "), { ok: true, alias: "" });
-  for (const cbu of ["0000003100012345678901", "0000 0031 0001 2345 6789 01", "285-0590-9400-9041-8135-2"]) assert.match(G.validarAlias(cbu).error, /CBU/, cbu);
+  // CBU de ejemplo conocido (285-0590-9 4009041813520-1): se acepta escrito de corrido, con espacios o con guiones, y queda solo con números.
+  for (const cbu of ["2850590940090418135201", "2850 5909 4009 0418 1352 01", "285-0590-9-4009041813520-1"]) assert.deepEqual(G.validarAlias(cbu), { ok: true, alias: "2850590940090418135201" }, cbu);
+  // Los dígitos verificadores atajan un número cambiado o dos dados vuelta.
+  for (const mal of ["2850590940090418135202", "2850590940090418135210", "2850590840090418135201", "0000003100012345678901"]) assert.match(G.validarAlias(mal).error, /algún número mal/, mal);
+  assert.match(G.validarAlias("28505909400904181352").error, /22 números y ahí hay 20/);
+  assert.match(G.validarAlias("285059094009041813520199").error, /22 números y ahí hay 24/);
   for (const malo of ["corto", "con espacios ok", "a".repeat(21), "alias<script>"]) assert.equal(G.validarAlias(malo).ok, false, malo);
+  // Un CVU (de una billetera) empieza con 000: se arma uno válido con la misma cuenta de los verificadores.
+  const v = (d, w) => (10 - ([...d].reduce((a, x, i) => a + x * w[i], 0) % 10)) % 10;
+  const cvu = "0000003" + v("0000003", [7, 1, 3, 9, 7, 1, 3]) + "1000123456789" + v("1000123456789", [3, 9, 7, 1, 3, 9, 7, 1, 3, 9, 7, 1, 3]);
+  assert.equal(G.validarAlias(cvu).ok, true);
+  assert.deepEqual([G.nombreDeCuenta(cvu), G.nombreDeCuenta("2850590940090418135201"), G.nombreDeCuenta("juan.mp"), G.nombreDeCuenta("")], ["CVU", "CBU", "alias", "alias"]);
 });
 
-test("mi parte: suma y movimientos personales gx_ que se sincronizan", () => {
-  const g = { id: "g7", nombre: "Viaje", moneda: "ARS", yo: "yo", loc: true, ts: 1, miembros: [{ id: "yo" }, { id: "b" }],
+// La plata se mueve cuando se mueve de verdad: lo que pagué sale, lo que me devuelven entra y lo que pagó otro no me resta nada todavía.
+test("el grupo en mi plata: lo que puse, lo que pasé y lo que me pasaron", () => {
+  const g = { id: "g7", nombre: "Viaje", moneda: "ARS", yo: "yo", loc: true, ts: 1, miembros: [{ id: "yo", nombre: "Yo" }, { id: "b", nombre: "Beto" }],
     gastos: [{ id: "1", t: "Nafta", m: 100, p: "b", a: ["yo", "b"], sp: "eq", f: "2026-10-30", ts: 3 }, { id: "2", t: "Hotel", m: 300, p: "yo", a: ["b"], sp: "eq", f: "2026-10-30", ts: 4 },
-      { id: "3", t: "Borrado", m: 50, p: "yo", a: ["yo"], f: "2026-10-30", ts: 5, x: true }], pagos: [] };
-  assert.equal(G.miParte(g), 5000);
-  let r = G.sincronizarMiParte(g, []);
-  assert.deepEqual(r.poner.map((x) => [x.id, x.monto, x.detalle, x.fecha, x.categoria]), [["gx_g7_1", 5000, "Viaje: Nafta", "2026-10-30", "otros"]]);
+      { id: "3", t: "Borrado", m: 50, p: "yo", a: ["yo"], f: "2026-10-30", ts: 5, x: true }, { id: "4", t: "Cena", m: 200, p: "b", pp: { yo: 50, b: 150 }, a: ["yo", "b"], sp: "eq", f: "2026-10-31", ts: 6 }],
+    pagos: [{ id: "p1", de: "yo", a: "b", m: 20, f: "2026-11-01", ts: 7 }, { id: "p2", de: "b", a: "yo", m: 70, f: "2026-11-02", ts: 8 }, { id: "p3", de: "b", a: "b", m: 5, f: "2026-11-02", ts: 9 }, { id: "p4", de: "yo", a: "b", m: 9, f: "2026-11-02", ts: 9, x: true }] };
+  assert.equal(G.miParte(g), 15000);
+  assert.deepEqual(G.miCaja(g), { puse: 35000, pase: 2000, mePasaron: 7000 });
+  let r = G.movimientosDeGrupo(g, []);
+  assert.deepEqual(r.poner.map((x) => [x.id, x.tipo, x.monto, x.detalle, x.fecha, x.categoria]), [
+    ["gx_g7_2", "gasto", 30000, "Viaje: Hotel", "2026-10-30", "otros"],          // lo pagué entero, aunque no era para mí
+    ["gx_g7_4", "gasto", 5000, "Viaje: Cena", "2026-10-31", "otros"],            // pagamos entre dos: sale lo que puse
+    ["gp_g7_p1", "gasto", 2000, "Viaje: le pasé a Beto", "2026-11-01", "otros"],
+    ["gp_g7_p2", "ingreso", 7000, "Viaje: me pasó Beto", "2026-11-02", "otros_in"],
+  ], "la nafta la pagó Beto: no me resta nada hasta que se la paso");
   assert.deepEqual(r.quitar, []);
-  const movs = r.poner.map((x) => ({ ...x, categoria: "auto" })); // la persona le cambió la categoría
-  assert.deepEqual(G.sincronizarMiParte(g, movs).poner, [], "sin cambios no reescribe");
-  g.gastos[0].m = 300;
-  r = G.sincronizarMiParte(g, movs);
-  assert.equal(r.poner[0].monto, 15000);
-  assert.equal(r.poner[0].categoria, "auto", "respeta la categoría que eligió");
-  g.gastos[0].x = true;
-  assert.deepEqual(G.sincronizarMiParte(g, movs).quitar, ["gx_g7_1"], "si se borra el gasto, se quita");
-  g.gastos[0].x = false;
-  assert.deepEqual(G.sincronizarMiParte({ ...g, loc: false }, movs).quitar, ["gx_g7_1"], "apagado: se quita todo");
-  assert.deepEqual(G.sincronizarMiParte({ ...g, moneda: "USD" }, movs).quitar, ["gx_g7_1"], "grupos en dólares no se suman a pesos");
-  assert.deepEqual(G.sincronizarMiParte(g, [{ id: "gx_g70_1" }, { id: "otro" }]).quitar, [], "no toca movimientos de otro grupo");
+  // Lo que salió menos lo que entró es lo que mi plata se movió de verdad.
+  const neto = (ms) => ms.reduce((a, x) => a + (x.tipo === "ingreso" ? x.monto : -x.monto), 0);
+  assert.equal(neto(r.poner), -(35000 + 2000 - 7000));
+  const movs = r.poner.map((x) => (x.id === "gx_g7_2" ? { ...x, categoria: "auto", previo: true } : x)); // la persona le cambió la categoría y dijo que ya estaba en su plata
+  assert.deepEqual(G.movimientosDeGrupo(g, movs).poner, [], "sin cambios no reescribe");
+  g.gastos[1].m = 400;
+  r = G.movimientosDeGrupo(g, movs);
+  assert.deepEqual([r.poner[0].monto, r.poner[0].categoria, r.poner[0].previo, r.poner[0].ts], [40000, "auto", true, 4], "respeta la categoría, el «ya estaba» y la hora");
+  g.gastos[1].x = true;
+  assert.deepEqual(G.movimientosDeGrupo(g, movs).quitar, ["gx_g7_2"], "si se borra la compra, se quita");
+  g.gastos[1].x = false; g.gastos[1].m = 300;
+  // Un pago que se da vuelta pasa de salir a entrar, con la categoría que corresponde.
+  r = G.movimientosDeGrupo({ ...g, pagos: [{ ...g.pagos[0], de: "b", a: "yo" }] }, movs);
+  assert.deepEqual(r.poner.map((x) => [x.id, x.tipo, x.categoria]), [["gp_g7_p1", "ingreso", "otros_in"]]);
+  const todos = movs.map((x) => x.id);
+  assert.deepEqual(G.movimientosDeGrupo({ ...g, loc: false }, movs).quitar, todos, "apagado: se quita todo");
+  assert.deepEqual(G.movimientosDeGrupo({ ...g, moneda: "USD" }, movs).quitar, todos, "grupos en dólares no tocan los pesos");
+  assert.deepEqual(G.movimientosDeGrupo({ ...g, yo: undefined }, movs).quitar, todos, "sin saber quién soy, nada");
+  assert.deepEqual(G.movimientosDeGrupo(g, [{ id: "gx_g70_1" }, { id: "gp_g70_1" }, { id: "otro" }]).quitar, [], "no toca movimientos de otro grupo");
+  // Lo que había de la versión anterior («mi parte» de una compra que pagó otro) sale: ya no es plata que se movió.
+  assert.deepEqual(G.movimientosDeGrupo(g, [{ id: "gx_g7_1", tipo: "gasto", monto: 5000 }]).quitar, ["gx_g7_1"]);
+  // Lo de un grupo de ejemplo es de ejemplo: no viaja, no cuenta y se va con «Quitar ejemplo».
+  const ej = G.movimientosDeGrupo({ ...g, id: "ej_g1" }, [{ id: "gx_ej_g1_2", tipo: "gasto", monto: 1 }]);
+  assert.ok(ej.poner.every((x) => x.id.startsWith("ej_")));
+  assert.deepEqual(ej.quitar, ["gx_ej_g1_2"], "y limpia lo que antes quedaba con nombre de verdad");
 });
 
 test("resumen para WhatsApp con el alias de quien cobra", () => {
   const g = { id: "g", nombre: "Asado", moneda: "ARS", miembros: [{ id: "yo", nombre: "Yo", alias: "yo.cobra" }, { id: "ju", nombre: "Juan" }, { id: "pe", nombre: "Pedro", alias: "pedro.mp" }],
     gastos: [{ id: "1", t: "Carne", m: 9000, p: "yo", a: ["yo", "ju", "pe"], sp: "eq", w: {} }], pagos: [] };
   assert.equal(G.textoWhatsApp(g, (c) => formatear(c)), "*Asado*\nTotal $9.000 · $3.000 por persona\n\nJuan le paga a Yo $3.000\nalias: yo.cobra\n\nPedro le paga a Yo $3.000\nalias: yo.cobra");
+  // Con CBU o CVU dice cuál es, así quien paga sabe qué está copiando.
+  g.miembros[0].alias = "2850590940090418135201";
+  assert.match(G.textoWhatsApp(g, (c) => formatear(c)), /Juan le paga a Yo \$3\.000\nCBU: 2850590940090418135201/);
   g.pagos = [{ id: "p", de: "ju", a: "yo", m: 3000 }, { id: "q", de: "pe", a: "yo", m: 3000 }];
   assert.match(G.textoWhatsApp(g, (c) => formatear(c)), /Todos están al día\.$/);
 });

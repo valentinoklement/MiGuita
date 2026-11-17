@@ -104,3 +104,50 @@ test("los grupos viajan sin lo que cambia solo y se juntan registro por registro
   assert.deepEqual(M.get("grupos|g").gastos.map((x) => x.id), ["x", "y"]);
   assert.ok(R);
 });
+
+/* ---------- lo que se vio en la revisión (2026-11-11) ---------- */
+const meta = (id, ahorrado, mod) => ({ id, nombre: "Viaje", moneda: "ARS", objetivo: 900, ahorrado, ts: 1, mod });
+const juntos = (L, R, base) => Vn.juntar(new Map(Object.entries(L)), new Map(Object.entries(R)), Vn.huellas(new Map(Object.entries(base))));
+
+test("cambiar la prioridad de una meta sin internet no pisa la plata que el otro dispositivo le sumó", () => {
+  // Los dos arrancan igual. La compu le suma plata a la meta; el celu, sin internet, toca la flechita de prioridad.
+  const base = { "metas|m1": meta("m1", 100, 1), "metas|m2": meta("m2", 0, 1), "config|metasOrden": { ids: ["m1", "m2"], mod: 1 } };
+  const compu = { ...base, "metas|m1": meta("m1", 500, 50) };
+  const celu = { ...base, "config|metasOrden": { ids: ["m2", "m1"], mod: 90 } };
+  const M = juntos(celu, compu, base);
+  assert.equal(M.get("metas|m1").ahorrado, 500, "la plata que se sumó sigue ahí");
+  assert.deepEqual(M.get("config|metasOrden").ids, ["m2", "m1"], "y la prioridad nueva también");
+  // La prioridad es una lista aparte: mover una meta no la reescribe.
+  assert.ok(Vn.CONFIG_COMPARTIDA.includes("metasOrden"));
+});
+
+test("si los dos cambiaron la misma meta, gana el cambio más nuevo y no el último que se conecta", () => {
+  const base = { "metas|m1": meta("m1", 100, 1) };
+  const viejo = { "metas|m1": meta("m1", 150, 20) }, nuevo = { "metas|m1": meta("m1", 300, 80) };
+  assert.equal(juntos(viejo, nuevo, base).get("metas|m1").ahorrado, 300);
+  assert.equal(juntos(nuevo, viejo, base).get("metas|m1").ahorrado, 300, "da lo mismo quién sincroniza primero");
+  // Lo mismo para todo lo que lleva la hora del cambio: deudas, fijos, topes, tarjetas, compras y la plata cargada.
+  const s = (monto, mod) => ({ monto, ts: 5, fecha: "2026-11-01", mod });
+  assert.equal(juntos({ "config|saldo": s(10, 99) }, { "config|saldo": s(20, 7) }, { "config|saldo": s(1, 1) }).get("config|saldo").monto, 10);
+});
+
+test("«Borrar todo» y volver a conectar ese dispositivo no les vacía nada a los demás", () => {
+  const platas = { items: [{ id: "p_1", tipo: "usd", nombre: "Dólares", moneda: "USD", monto: 50000, color: 0 }], orden: ["total", "pesos", "p_1"], ocultas: [], mod: 10 };
+  const servidor = { "movs|a": mov("a", 1), "config|platas": platas, "config|saldo": { monto: 9, ts: 5, fecha: "2026-11-01", mod: 5 }, "config|aprendidas": { nafta: "auto" } };
+  // El dispositivo borró todo (sus platas, su plata cargada y lo aprendido se quitan, no se guardan vacíos) y se vuelve a conectar de cero.
+  const M = juntos({}, servidor, {});
+  assert.deepEqual(M.get("config|platas"), platas, "las platas de los otros dispositivos siguen ahí");
+  assert.equal(M.get("config|saldo").monto, 9);
+  assert.deepEqual(M.get("config|aprendidas"), { nafta: "auto" });
+  assert.equal(M.get("movs|a").monto, 1);
+  // Lo que pasaba antes: una lista vacía con la hora de ahora les ganaba a todos.
+  const vacia = { items: [], orden: ["total", "pesos"], ocultas: [], mod: 999 };
+  assert.deepEqual(juntos({ "config|platas": vacia }, servidor, {}).get("config|platas").items, [], "por eso «Borrar todo» ya no deja una lista vacía");
+});
+
+test("lo que la persona enseñó en cada dispositivo se suma, y lo olvidado no vuelve", () => {
+  const base = { "config|aprendidas": { nafta: "auto" } };
+  const celu = { "config|aprendidas": { nafta: "auto", juan: "extra", pago: "" } };       // en el celu enseñó «juan» y olvidó «pago»
+  const compu = { "config|aprendidas": { nafta: "auto", pago: "deudas", ana: "regalos" } }; // en la compu había enseñado «pago» y «ana»
+  assert.deepEqual(juntos(celu, compu, base).get("config|aprendidas"), { nafta: "auto", pago: "", ana: "regalos", juan: "extra" });
+});

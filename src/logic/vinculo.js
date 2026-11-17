@@ -4,13 +4,16 @@
 //
 // Cómo se juntan los cambios (de a tres): cada dispositivo recuerda la huella de cada dato tal como quedó en la última
 // sincronización ("base"). Si solo cambió uno de los dos lados, gana ese cambio (también si fue borrar). Si cambiaron
-// los dos, gana el más nuevo (mod o ts); los grupos se juntan registro por registro.
+// los dos, gana el más nuevo (mod o ts); los grupos se juntan registro por registro y lo aprendido, palabra por palabra.
+// Para que «el más nuevo» sea cierto, todo lo que la persona cambia lleva mod (la app lo pone al guardar): metas, deudas, fijos,
+// topes, tarjetas, compras, la plata cargada y las platas. Lo que no lo lleva (nombre, alias, categorías, medios, dólar) se resuelve
+// a favor del último dispositivo que sincroniza.
 import { LISTAS, VERSION, migrar } from "./migraciones.js";
 import { fusionar } from "./grupos.js";
 import { derivar, cerrarObjeto, abrirObjeto, pedir, nuevoCodigo } from "./sincro.js";
 
 // Lo de la configuración que es de la persona (no de cada aparato: tema, PIN, avisos y demás quedan en cada uno).
-export const CONFIG_COMPARTIDA = ["nombre", "alias", "categorias", "medios", "dolar", "aprendidas", "saldo"];
+export const CONFIG_COMPARTIDA = ["nombre", "alias", "categorias", "medios", "dolar", "aprendidas", "saldo", "platas", "metasOrden"];
 const SAL = "MiGuita-mis-dispositivos-v1";
 const MAX_DESCOMPRIMIDO = 20_000_000;
 
@@ -69,6 +72,7 @@ export function juntar(L, R, B) {
     else if (l === undefined) v = r;       // yo lo borré y el otro lo cambió: queda el cambio
     else if (r === undefined) v = l;
     else if (k.startsWith("grupos|")) v = fusionar(l, r);
+    else if (k === "config|aprendidas") v = { ...r, ...l };  // lo que enseñó cada dispositivo se suma; lo olvidado queda como "" y no vuelve
     else v = reciente(r) > reciente(l) ? r : l;
     if (v !== undefined) M.set(k, v);
   }

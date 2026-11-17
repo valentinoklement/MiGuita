@@ -3,7 +3,7 @@
 import { Art } from "../art/art.js";
 import { amigo, BASES, DETALLES, MIGUITA, CAMISETAS, miguitaCon, personaje } from "../art/amigos.js";
 import { formatear, leerMonto } from "../logic/dinero.js";
-import { centavos, repartir, saldos, saldar, miParte, textoWhatsApp, juntadasVivas, gastosDe, pagosDe, haySueltos, cuentas, detalleDe, miSituacion, pagadores, MAX_HISTORIAL } from "../logic/grupos.js";
+import { centavos, repartir, saldos, saldar, miParte, miCaja, nombreDeCuenta, textoWhatsApp, juntadasVivas, gastosDe, pagosDe, haySueltos, cuentas, detalleDe, miSituacion, pagadores, MAX_HISTORIAL } from "../logic/grupos.js";
 import { sumarDias, fechaLocal } from "../logic/mes.js";
 import { esc } from "./pantallas.js";
 
@@ -79,7 +79,7 @@ export function crearVistasGrupos(st, hoy, V) {
       h += crd(debo || meDeben ?
         (debo ? `<div class="sub">Tenés que pasar</div><div class="big neg-txt">${plataG(g, debo)}</div>` : "") +
         (meDeben ? `<div class="sub">Te tienen que pasar</div><div class="big">${plataG(g, meDeben)}</div>` : "") +
-        `<div class="sub">Entrá a cada juntada para ver a quién y copiar el alias.</div>` :
+        `<div class="sub">Entrá a cada juntada para ver a quién y copiar su alias o CBU.</div>` :
         `<div class="sub">Tu situación</div><div class="big">Estás a mano</div>`);
     }
     h += btn("nuevaJuntada", "Nueva juntada");
@@ -95,10 +95,11 @@ export function crearVistasGrupos(st, hoy, V) {
         (haySueltos(g) ? fila("", "Gastos sueltos", "Los de antes de las juntadas", js.length) : ""));
     else h += comoFunciona();
     h += crd(lbl("Integrantes") + vivos(g).map((m) =>
-      `<button class="mrow rowb" data-act="editarPersona" data-v="${esc(m.id)}">${dibujo(g, m.id)}<span class="rt"><b>${esc(nombre(g, m.id))}</b><small>${m.alias ? "alias: " + esc(m.alias) : "sin alias"}</small></span><span class="chev" aria-hidden="true">›</span></button>`).join("") +
+      `<button class="mrow rowb" data-act="editarPersona" data-v="${esc(m.id)}">${dibujo(g, m.id)}<span class="rt"><b>${esc(nombre(g, m.id))}</b><small>${m.alias ? nombreDeCuenta(m.alias) + ": " + esc(m.alias) : "sin alias ni CBU"}</small></span><span class="chev" aria-hidden="true">›</span></button>`).join("") +
       `<div class="chips"><button class="pp" data-act="nuevaPersona">+ Sumar integrante</button></div>`);
     if (g.yo && g.moneda === "ARS")
-      h += crd(`<div class="srow f"><span class="rt"><b>Contar lo que me toca en mis gastos</b><small>Hasta ahora te tocó ${plataG(g, miParte(g))} en total</small></span>${interruptor("grupoLoc", !!g.loc, "Contar lo que me toca en mis gastos")}</div>`);
+      h += crd(`<div class="srow f"><span class="rt"><b>Que este grupo mueva mi plata</b><small>${g.loc ? "Se resta lo que pagás y se suma lo que te devuelven. Lo que pagó otro no te resta nada hasta que se lo pasás." : "Apagado: lo que pagues o te paguen acá no cambia lo que te queda."}</small></span>${interruptor("grupoLoc", !!g.loc, "Que este grupo mueva mi plata")}</div>` +
+        (() => { const c = miCaja(g); return c.puse || c.pase || c.mePasaron ? `<div class="sub">Hasta ahora te tocó ${plataG(g, miParte(g))}. Pusiste ${plataG(g, c.puse + c.pase)}${c.mePasaron ? " y te devolvieron " + plataG(g, c.mePasaron) : ""}.</div>` : ""; })());
     return h + btn("abrirCompartir", g.sync ? "Invitar al grupo" : "Invitar y conectar", { alt: true }) +
       `<div class="chips"><button class="pp" data-act="verHistorial">Quién cambió qué</button></div>`;
   }
@@ -122,8 +123,8 @@ export function crearVistasGrupos(st, hoy, V) {
       const mias = ts.filter((t) => t.de === g.yo), aMi = ts.filter((t) => t.a === g.yo);
       for (const t of mias)
         h += crd(`<div class="sub">Le pasás a ${esc(nombre(g, t.a))}</div><div class="big">${plataG(g, t.m)}</div>` +
-          `<div class="sub">${alias(t.a) ? "alias: <b>" + esc(alias(t.a)) + "</b>" : "No tiene alias cargado: pedíselo."}</div>` +
-          `<div class="btnrow">${alias(t.a) ? btn("copiarAlias", "Copiar alias", { v: alias(t.a) }) : ""}${btn("yaPague", "Ya le pagué", { alt: !!alias(t.a), v: t.de + "|" + t.a + "|" + t.m })}</div>`, "tuyo");
+          `<div class="sub">${alias(t.a) ? nombreDeCuenta(alias(t.a)) + ": <b>" + esc(alias(t.a)) + "</b>" : "No cargó su alias ni su CBU: pedíselo."}</div>` +
+          `<div class="btnrow">${alias(t.a) ? btn("copiarAlias", "Copiar " + nombreDeCuenta(alias(t.a)), { v: alias(t.a) }) : ""}${btn("yaPague", "Ya le pagué", { alt: !!alias(t.a), v: t.de + "|" + t.a + "|" + t.m })}</div>`, "tuyo");
       if (aMi.length)
         h += crd(lbl("Te tienen que pasar") + aMi.map((t, i) => `<div class="row${i ? "" : " f"}"><span>${esc(nombre(g, t.de))}<small>${plataG(g, t.m)}</small></span><button class="btnmini" data-act="yaPague" data-v="${esc(t.de + "|" + t.a + "|" + t.m)}">Ya me pagó</button></div>`).join(""), "tuyo");
       if (!mias.length && !aMi.length) h += crd(`<div class="sub">Tu parte</div><div class="big">Estás a mano ✓</div>`, "tuyo");
@@ -155,7 +156,7 @@ export function crearVistasGrupos(st, hoy, V) {
     // Para quedar a mano: todo lo que falta y lo que ya se pagó.
     if (compras.length) {
       h += crd(lbl("Para quedar a mano") + (ts.length ? ts.map((t, i) =>
-        `<div class="row${i ? "" : " f"}"><span>${esc(nombre(g, t.de))} → ${esc(nombre(g, t.a))}<small>${alias(t.a) ? "alias: " + esc(alias(t.a)) : ""}</small></span><span class="der">${plataG(g, t.m)}<button class="link" data-act="yaPague" data-v="${esc(t.de + "|" + t.a + "|" + t.m)}">Ya se pagó</button></span></div>`).join("") :
+        `<div class="row${i ? "" : " f"}"><span>${esc(nombre(g, t.de))} → ${esc(nombre(g, t.a))}<small>${alias(t.a) ? nombreDeCuenta(alias(t.a)) + ": " + esc(alias(t.a)) : ""}</small></span><span class="der">${plataG(g, t.m)}<button class="link" data-act="yaPague" data-v="${esc(t.de + "|" + t.a + "|" + t.m)}">Ya se pagó</button></span></div>`).join("") :
         `<div class="empty"><b>Están todos a mano ✓</b></div>`) +
         (pagos.length ? `<div class="sub" style="margin-top:8px">Ya pagado</div>` + pagos.map((p) =>
           `<button class="row rowb pagado" data-act="editarPagoG" data-v="${esc(p.id)}"><span>✓ ${esc(nombre(g, p.de))} le pasó a ${esc(nombre(g, p.a))}</span><span>${plataG(g, centavos(p.m))}</span></button>`).join("") : "") +
@@ -214,9 +215,9 @@ export function crearVistasGrupos(st, hoy, V) {
         lbl("Moneda") + elegir("moneda", [["ARS", "Pesos"], ["USD", "Dólares"]], "Moneda") +
         crd(lbl("Integrantes") + v.miembros.map((m, i) =>
           `<div class="persona"><input class="field" data-act="gPersona" data-i="${i}" data-k="nombre" value="${esc(m.nombre)}" placeholder="${i ? "Nombre" : "Tu nombre"}" aria-label="${i ? "Nombre de la persona " + (i + 1) : "Tu nombre"}" maxlength="40">` +
-          `<input class="field" data-act="gPersona" data-i="${i}" data-k="alias" value="${esc(m.alias)}" placeholder="alias (opcional)" aria-label="Alias de ${i ? "la persona " + (i + 1) : "vos"}" maxlength="22" autocapitalize="none">` +
+          `<input class="field" data-act="gPersona" data-i="${i}" data-k="alias" value="${esc(m.alias)}" placeholder="alias o CBU (opcional)" aria-label="Alias o CBU de ${i ? "la persona " + (i + 1) : "vos"}" maxlength="30" autocapitalize="none">` +
           (i ? `<button class="mbtn" data-act="quitarFila" data-v="${i}" aria-label="Quitar persona ${i + 1}">×</button>` : `<span class="hint">vos</span>`) + `</div>`).join("") +
-          `<div class="chips"><button class="pp" data-act="sumarFila">+ Sumar integrante</button></div><div class="hint">Podés dejarlo solo con vos: cada uno se suma con su nombre cuando le mandás el link. Poné solo el alias (de cualquier billetera o banco), nunca el CBU.</div>`) +
+          `<div class="chips"><button class="pp" data-act="sumarFila">+ Sumar integrante</button></div><div class="hint">Podés dejarlo solo con vos: cada uno se suma con su nombre cuando le mandás el link. El alias, el CBU o el CVU sirven para que le transfieran: con eso solo se puede mandar plata.</div>`) +
         pie("Crear grupo");
     },
     grupoEditar() {
@@ -288,7 +289,7 @@ export function crearVistasGrupos(st, hoy, V) {
       const usado = f().id && (g.gastos.some((x) => !x.x && (x.p === f().id || x.a.includes(f().id))) || g.pagos.some((p) => !p.x && (p.de === f().id || p.a === f().id)));
       return back(g.nombre) + hdr(esc(g.nombre), f().id ? "Editar persona" : "Sumar integrante") +
         campo("nombre", "Nombre", { max: 40 }) +
-        campo("alias", "Alias para cobrar (opcional)", { ph: "solo alias, nunca el CBU", max: 22 }) +
+        campo("alias", "Alias, CBU o CVU para cobrar (opcional)", { ph: "por ejemplo: juan.perez.mp", max: 30 }) +
         personajes() +
         crd(`<div class="srow f"><span class="rt"><b>Soy yo</b><small>Marca cuál sos en este grupo (solo en este celu)</small></span>${interruptor("gSoyYo", !!f().vals.soyYo, "Soy yo")}</div>`) +
         pie("Guardar", f().id && !usado ? "Quitar persona" : "") +
@@ -367,9 +368,9 @@ export function crearVistasGrupos(st, hoy, V) {
       (vivos(g).length ? `<div class="sub" style="margin:4px 2px">O si ya te anotaron, elegite:</div>` : "") +
       vivos(g).map((m, i) => opcion(m.id, m.nombre, amigo(i))).join("") +
       (st.yoElegido ? lbl("Tu nombre en el grupo") + `<div class="quick"><div class="pp"><input class="field" data-act="nombreNuevo" value="${esc(st.nombreNuevo)}" placeholder="Tu nombre" aria-label="Tu nombre en el grupo" maxlength="40" autocomplete="given-name"></div></div>` : "") +
-      (st.yoElegido ? crd(lbl("Tu alias para cobrar (opcional)") +
-        `<input class="field fondo" data-act="aliasQuien" value="${esc(st.aliasQuien)}" placeholder="tu.alias.mp" aria-label="Tu alias para cobrar" maxlength="22" autocapitalize="none" autocomplete="off" spellcheck="false">` +
-        `<div class="sub">Así los demás ven a dónde transferirte. Solo el alias, nunca el CBU.</div>`) : "") +
+      (st.yoElegido ? crd(lbl("Tu alias, CBU o CVU para cobrar (opcional)") +
+        `<input class="field fondo" data-act="aliasQuien" value="${esc(st.aliasQuien)}" placeholder="tu.alias.mp" aria-label="Tu alias, CBU o CVU para cobrar" maxlength="30" autocapitalize="none" autocomplete="off" spellcheck="false">` +
+        `<div class="sub">Así los demás ven a dónde transferirte. Con el alias, el CBU o el CVU solo te pueden mandar plata.</div>`) : "") +
       (st.errorQuien ? `<div class="msg" role="alert">${esc(st.errorQuien)}</div>` : "") +
       btn("listoQuien", "Listo") + `<button class="btn pp w alt" data-act="volver">Cancelar</button>`;
   }
@@ -380,7 +381,7 @@ export function crearVistasGrupos(st, hoy, V) {
     const texto = textoWhatsApp(g, (c) => formatear(c, { moneda: g.moneda === "USD" ? "US$ " : "$" }), st.whatsJ);
     return back(ju ? ju.nombre : g.nombre) + hdr(esc(g.nombre), "Resumen para WhatsApp") + crd(`<div class="wa">${esc(texto)}</div>`) +
       `<div class="btnrow">${btn("copiarResumen", "Copiar resumen")}<a class="btn pp alt" href="https://wa.me/?text=${encodeURIComponent(texto)}" target="_blank" rel="noopener noreferrer">Abrir WhatsApp</a></div>` +
-      `<div class="sub">Se ve el alias de quien cobra en cada pago.</div>`;
+      `<div class="sub">Se ve el alias o el CBU de quien cobra en cada pago.</div>`;
   }
 
   return { lista, unGrupo, juntada, historial, formulario, compartir, unido, quien, whatsapp };

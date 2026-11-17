@@ -5,7 +5,7 @@ import { fusionar } from "../logic/grupos.js";
 import { escuchar, pedir } from "../logic/sincro.js";
 import { svgQR } from "./qr.js";
 
-export function crearConexion({ st, base, listasPlan, ponerConfig, ponerDia, ponerItem, quitarItem, quitarMov, guardarGrupo, sincronizarGrupo, mostrarAviso, dibujar }) {
+export function crearConexion({ st, base, listasPlan, ponerConfig, quitarConfig, ponerDia, ponerItem, quitarItem, quitarMov, guardarGrupo, sincronizarGrupo, mostrarAviso, dibujar }) {
   let llaveVinculo = null, vinculoTimer = 0, vinculoCola = Promise.resolve(), aplicandoRemoto = false, escuchaVinculo = null;
 
   function llaveV() {
@@ -54,7 +54,7 @@ export function crearConexion({ st, base, listasPlan, ponerConfig, ponerDia, pon
   }
   function aplicarRemoto(k, x) {
     const i = k.indexOf("|"), lista = k.slice(0, i), id = k.slice(i + 1);
-    if (lista === "config") { if (x !== undefined) ponerConfig(id, x); return; }
+    if (lista === "config") { if (x !== undefined) ponerConfig(id, x); else quitarConfig(id); return; }
     if (lista === "dias") {
       if (x) ponerDia(x); else { st.dias = st.dias.filter((d) => d.fecha !== id); base.quitar("dias", id); }
       return;
@@ -69,7 +69,10 @@ export function crearConexion({ st, base, listasPlan, ponerConfig, ponerDia, pon
       if (g.sync) sincronizarGrupo(g.id);
       return;
     }
-    if (x) ponerItem(lista, x); else quitarItem(lista, id);
+    // Lo comprado con crédito que llega sin la marca de la tarjeta viene de un dispositivo con la versión vieja: sigue restando como
+    // siempre. Se deja escrito (enTarjeta: false) para que editarlo o deshacer no lo cambie (ver marcarTarjeta en app.js).
+    if (x && lista === "movs" && x.medio === "credito" && x.enTarjeta === undefined) x = { ...x, enTarjeta: false };
+    if (x) ponerItem(lista, x, false); else quitarItem(lista, id); // false: llega tal cual, sin cambiarle la hora
   }
   function cortarEscucha() { escuchaVinculo?.cortar?.(); escuchaVinculo = null; }
   // Mientras la app está a la vista, escucha: si otro dispositivo guarda algo, aparece solo.

@@ -5,7 +5,7 @@
 // Como los fijos: una cuota se anota recién cuando llega su fecha, así lo que falta nunca cuenta como gastado antes de tiempo.
 // El movimiento tiene id fijo "cq_<compra>_<n>" (nunca se duplica, tampoco entre dispositivos) y lleva cuota: { compra, n, de }.
 import { cambiarMes, diasDelMes } from "./mes.js";
-import { enPesos } from "./plan.js";
+import { enPesos, horaDeAuto } from "./plan.js";
 
 export const MAX_CUOTAS = 60;
 export const SIN_TARJETA = "Sin tarjeta";
@@ -25,7 +25,7 @@ export function movimientoDeCuota(c, n, cotizar) {
   // Lo de ejemplo empieza con "ej_", así se va con el resto del ejemplo y no viaja a otros dispositivos.
   const id = (c.id.startsWith("ej_") ? "ej_" : "") + "cq_" + c.id + "_" + n;
   return enPesos({ id, tipo: "gasto", monto, detalle: c.detalle + " · cuota " + n + "/" + c.cuotas, categoria: c.categoria, medio: "credito", fecha,
-    ts: Date.parse(fecha + "T12:00:00"), mod: Date.now(), cuota: { compra: c.id, n, de: c.cuotas } }, { moneda: c.moneda, monto }, cotizar);
+    ts: horaDeAuto(fecha, c.ts), mod: Date.now(), cuota: { compra: c.id, n, de: c.cuotas } }, { moneda: c.moneda, monto }, cotizar);
 }
 
 // Anota las cuotas que ya llegaron a su fecha, aunque la app no se haya abierto ese día.

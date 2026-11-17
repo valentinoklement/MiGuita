@@ -44,7 +44,7 @@ test("si de verdad no se puede saber, pregunta", () => {
 
 test("categorías: palabra completa, lo más específico y vocabulario nuevo aunque la persona tenga las viejas", () => {
   const cat = (t) => leerTexto(t).categoria;
-  const casos = { "barbería 12000": "ropa", "barrio 5000": "otros", "bar 5000": "salidas", "uber eats 8000": "comida", "uber 5000": "transporte", "agua mineral 1500": "super", "agua 9000": "servicios", "pan 500": "super", "asado 30000": "carne", "colectivo 700": "transporte", "edenor 25000": "servicios", "veterinaria 8000": "salud", "facu 40000": "edu" };
+  const casos = { "barbería 12000": "ropa", "barrio 5000": "otros", "bar 5000": "salidas", "uber eats 8000": "comida", "uber 5000": "transporte", "agua mineral 1500": "super", "agua 9000": "servicios", "pan 500": "panaderia", "asado 30000": "carne", "colectivo 700": "transporte", "edenor 25000": "servicios", "veterinaria 8000": "mascotas", "facu 40000": "edu" };
   for (const [t, c] of Object.entries(casos)) assert.equal(cat(t), c, t);
   for (const [t, c] of Object.entries({ "aguinaldo 400 lucas": "sueldo", "changa 50000": "extra", "me regalaron 10000": "regalo_in" })) {
     assert.equal(leerTexto(t).tipo, "ingreso", t);

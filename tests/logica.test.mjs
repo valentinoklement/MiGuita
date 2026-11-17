@@ -8,6 +8,7 @@ import { GASTO, INGRESO, MEDIOS, categoriasIniciales, paraAdivinar } from "../sr
 import { resumenMes, estadoMiguita, sumarDias, fechaLocal, referencia, gastosPor, gastosPorDia, porDiaAgrupado, cambiarMes } from "../src/logic/mes.js";
 import { datosDeEjemplo } from "../src/ui/ejemplo.js";
 import { Art } from "../src/art/art.js";
+import "../src/art/extra.js";
 
 test("formato de plata argentino", () => {
   assert.equal(formatear(18430000), "$184.300");
@@ -31,7 +32,7 @@ const CASOS = [
   // [texto, tipo, pesos, detalle, id de categoría]
   ["nafta 20000", "gasto", 20000, "Nafta", "auto"],
   ["coto 38.500", "gasto", 38500, "Coto", "super"],
-  ["verdulería $8500", "gasto", 8500, "Verdulería", "super"],
+  ["verdulería $8500", "gasto", 8500, "Verdulería", "verduleria"],
   ["café 3800", "gasto", 3800, "Café", "comida"],
   ["uber 4,5k", "gasto", 4500, "Uber", "transporte"],
   ["farmacia 12 lucas", "gasto", 12000, "Farmacia", "salud"],
@@ -68,7 +69,7 @@ test("anotar usa las categorías de la persona: palabras nuevas, ocultas y renom
 });
 
 test("categorías y medios generales, sin nada personal", () => {
-  assert.equal(GASTO.length, 16);
+  assert.equal(GASTO.length, 23);
   assert.equal(INGRESO.length, 4);
   const todo = [...GASTO, ...INGRESO].flatMap(([, n, k]) => [n, ...k]).concat(MEDIOS.map((m) => m[1])).map((x) => x.toLowerCase());
   for (const p of ["guitarra", "perfume", "papá", "banda", "claude"]) assert.ok(!todo.some((x) => x.includes(p) && !x.startsWith("perfumer")), p);

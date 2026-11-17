@@ -67,21 +67,24 @@ export function crearVistasPrimera(st, V) {
       `<button class="btn pp w" data-act="reinstalar">Instalar de nuevo</button>` + chico("seguirSinInstalar", "Seguir acá por ahora");
   }
 
-  // Tutorial: qué se puede hacer con la app. Se puede saltear; queda en Ajustes › Cómo usar MiGuita.
+  // Tutorial: qué se puede hacer con la app. Queda en Ajustes › Cómo usar MiGuita y, los primeros días, a un toque desde Inicio.
+  // Cada pantalla: dibujo, título (lo que va en <em> sale en color), texto corto (lo que va en <mark> se resalta) y una muestra chiquita de la app.
   const PASOS = [
-    () => [Art.miguita("ok"), "Anotá en 10 segundos", "Escribí «15mil nafta» o «10 lucas birra» y listo: la app pone la categoría sola. También podés tocar el micrófono y decir varios gastos juntos."],
-    () => [Art.pan(0.6), "Mirá cuánto te queda", "Decile cuánta plata tenés y te muestra cuánto te queda: cada gasto resta y cada ingreso suma. Si te pasás, Miguita se preocupa con vos."],
-    () => [Art.masa(0.6), "Ahorrá para algo", "En Mis cuentas ponés metas (un viaje, un fondo de emergencia), topes por categoría, deudas, gastos fijos y compras en cuotas que se anotan solos."],
-    () => [`<div class="crew">${["fact", "canon", "bola"].map((k) => Art.factura(k)).join("")}</div>`, "Dividí con amigos", "Armá el grupo una vez e invitalos con un link. En cada juntada marcan quién entra en qué (la comida, el fernet, la birra) y la app dice quién le pasa a quién, con el alias a mano."],
-    () => [Art.masa(0.35), "Sumá días de racha", "Cada día que anotás suma un ingrediente a la receta. ¿Qué sale del horno a los 7 días? ¿Y a los 100? Para saberlo, hay que llegar."],
-    () => [Art.miguita("ok"), "Tus datos son tuyos", "Tus gastos quedan en tu celu. Podés cerrarla con PIN y hacer copias de seguridad desde Ajustes."],
+    () => [Art.miguita("ok"), "Anotá en <em>10 segundos</em>", "Escribí <mark>15mil nafta</mark> y listo: la categoría se pone sola. También podés decirlo con el <mark>micrófono</mark>.", "15mil nafta <b>✓</b>"],
+    () => [Art.pan(0.6), "Mirá cuánto <em>te queda</em>", "Decile cuánta plata tenés. Cada gasto <mark>resta</mark> y cada ingreso <mark>suma</mark>.", "Te queda <b>$80.000</b>"],
+    () => [Art.masa(0.6), "¿Querés <em>ahorrar</em>?", "Tu lugar para ahorrar está en <mark>Mis cuentas › Metas</mark>. Armá una que se llame <mark>Ahorros</mark> y sumale lo que guardás: no se mezcla con lo que podés gastar. Ahí también están los topes, las deudas, los fijos y las cuotas.", "Ahorros <b>$150.000</b>"],
+    () => [`<div class="crew">${["fact", "canon", "bola"].map((k) => Art.factura(k)).join("")}</div>`, "Dividí <em>con amigos</em>", "Cada uno marca <mark>en qué entró</mark> y la app te dice quién le pasa a quién.", "Te deben <b>$5.000</b>"],
+    () => [Art.masa(0.35), "Sumá <em>días de racha</em>", "Cada día que anotás suma un <mark>ingrediente</mark>. ¿Qué sale del horno a los <mark>100 días</mark>? Para saberlo, hay que llegar.", "<b>7</b> días seguidos"],
+    () => [Art.miguita("ok"), "Tus datos <em>son tuyos</em>", "Quedan <mark>en tu celu</mark>. Podés cerrarla con PIN y hacer copias desde Ajustes.", "Solo en tu celu"],
   ];
   function tutorial() {
-    const n = st.tutorialPaso, [dibujo, titulo, texto] = PASOS[n](), ultimo = n === PASOS.length - 1;
-    return `<div class="tuto"><button class="link saltar" data-act="saltarTutorial">Saltear</button>` +
-      `<div class="tuto-dibujo" aria-hidden="true">${dibujo}</div><b>${titulo}</b><span>${texto}</span>` +
-      `<div class="dots" role="img" aria-label="Paso ${n + 1} de ${PASOS.length}">${PASOS.map((_, i) => `<i class="${i === n ? "on" : ""}"></i>`).join("")}</div></div>` +
-      `<div class="btnrow">${n ? `<button class="btn pp alt" data-act="tutorialPaso" data-v="${n - 1}">Atrás</button>` : ""}` +
+    const n = st.tutorialPaso, total = PASOS.length, [dibujo, titulo, texto, muestra] = PASOS[n](), ultimo = n === total - 1;
+    return `<div class="tuto tuto-c${n}">` +
+      `<div class="tuto-cab"><span class="tuto-paso">Paso <b>${n + 1}</b> de ${total}</span><button class="tuto-salir" data-act="saltarTutorial">Salir</button></div>` +
+      `<div class="tuto-barra" aria-hidden="true">${PASOS.map((_, i) => `<i class="${i <= n ? "on" : ""}"></i>`).join("")}</div>` +
+      `<div class="tuto-lienzo pp" aria-hidden="true">${dibujo}<span class="tuto-muestra">${muestra}</span></div>` +
+      `<h1 class="tuto-titulo">${titulo}</h1><p class="tuto-texto">${texto}</p></div>` +
+      `<div class="btnrow tuto-pie">${n ? `<button class="btn pp alt" data-act="tutorialPaso" data-v="${n - 1}">Atrás</button>` : ""}` +
       `<button class="btn pp" data-act="${ultimo ? "saltarTutorial" : "tutorialPaso"}" data-v="${n + 1}">${ultimo ? "¡Empezar!" : "Siguiente"}</button></div>`;
   }
 

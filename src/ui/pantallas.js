@@ -1,22 +1,28 @@
 // Pantallas de MiGuita. Cada función devuelve HTML; los textos de la persona pasan siempre por esc().
 import { AYUDAS } from "./ayuda.js";
-import { apartado, podesUsar, ahorroSinPreguntar, parteDePlata, tuPlata, enElMes, desglose, saldoEfectivo } from "../logic/saldo.js";
+import { apartado, podesUsar, ahorroSinPreguntar, parteDePlata, tuPlata, enElMes, deCuanto, desglose, saldoEfectivo } from "../logic/saldo.js";
 import { navegadorActual } from "./primera.js";
 import { puedeGrabar } from "./voz.js";
 import { Art } from "../art/art.js";
+import { COLORES_PLATA } from "../art/extra.js";
+import { limpiar as limpiarPlatas, vistas as vistasPlata, elegirVista, totalDe, enPesos, etiquetaDe, letraDe } from "../logic/platas.js";
 import { formatear, evaluar } from "../logic/dinero.js";
 import { RESPALDO, BILLETERAS, BILLETERA_GENERAL } from "../logic/categorias.js";
 import { sumarDias, cambiarMes, delMes, referencia, resumenMes, gastosPor, gastosPorDia, estadoMiguita, porDiaAgrupado } from "../logic/mes.js";
 import { infoRacha, apretado, PREMIOS } from "../logic/racha.js";
-import { estadoPresupuestos, estadoConPresupuestos, resumenDeudas, restante, fijosPorConfirmar } from "../logic/plan.js";
+import { estadoPresupuestos, estadoConPresupuestos, resumenDeudas, restante, fijosPorConfirmar, mesPendiente } from "../logic/plan.js";
 import { valorPara, aPesos, nombreTipo } from "../logic/dolar.js";
 import { mesParaMostrar } from "../logic/tumes.js";
 import { EN_PRUEBA } from "../logic/buzon.js";
 import { ICONO_BILLETERA } from "./importar.js";
+import { idsDeTarjeta, paraGastos, sinCubrir, comprasPosibles, pagoParaElegir, pagoParaSaldar, restoSiEligen } from "../logic/tarjeta.js";
+import { repetidos } from "../logic/repetidos.js";
 
 const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 const DIAS = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
 const PREMIO_TEXTO = { 7: "un miñón", 14: "un cañoncito", 21: "medialunas", 30: "una pastafrola", 60: "un pan dulce", 100: "una torta" };
+const DIAS_BOTON_TUTORIAL = 14;
+const TARJETA_SIGUE = "Lo que compraste con crédito y todavía no pagaste. Sigue en tu plata hasta que pagues la tarjeta.";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
@@ -61,12 +67,16 @@ export function crearVistas(st, hoy) {
   const dolarDe = (fecha) => valorPara(fecha, st.cfg.dolar.tipo, st.cotizaciones, st.cfg.dolar.manual);
 
   const hayEjemplo = () => ["movs", "presupuestos", "metas", "deudas", "fijos", "compras"].some((k) => st[k].some((x) => x.id.startsWith("ej_")));
+  // Lo que cuenta como gastado: sin contar dos veces una compra con crédito y el pago de la tarjeta (ver logic/tarjeta.js).
+  // Todo lo que suma gastos usa esta lista; la lista de movimientos muestra cada uno tal cual se anotó.
+  const idsTarjeta = () => idsDeTarjeta(st.cfg.categorias);
+  const movsGasto = () => paraGastos(st.movs, idsTarjeta());
 
   // Estado de Miguita del mes: el peor entre gasto sobre ingresos y los presupuestos.
   function estadoDelMes(mes, r) {
-    return estadoConPresupuestos(estadoMiguita(r.ingresos, r.gastos), estadoPresupuestos(st.presupuestos, st.movs, mes));
+    return estadoConPresupuestos(estadoMiguita(r.ingresos, r.gastos), estadoPresupuestos(st.presupuestos, movsGasto(), mes));
   }
-  const motivosApretado = () => apretado(st.movs, hoy, st.presupuestos,
+  const motivosApretado = () => apretado(movsGasto(), hoy, st.presupuestos,
     resumenDeudas(st.deudas, hoy).activas.filter((d) => d.tipo === "debo").map((d) => ({ restante: restante(d) })), nombreCat);
 
   const MIC = '<path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>';
@@ -84,10 +94,64 @@ export function crearVistas(st, hoy) {
     return crd(`<b class="pregunta">Tenela a mano en tu celu</b><div class="sub">Instalala y se abre desde un ícono, como cualquier app.</div>${verComo}`, "aviso");
   }
 
+  /* ---------- la tarjeta del número de Inicio ---------- */
+  // Con una sola plata es un botón que lleva al detalle. Con varias, arriba del número van los puntitos de colores y tocarlo pasa a la siguiente.
+  function tarjetaPlata(conPlata, r, actual, guiando, saldo) {
+    const platas = limpiarPlatas(st.cfg.platas);
+    const vs = (st.vistasPlata = actual && !guiando ? vistasPlata(platas, { conPesos: conPlata }) : ["pesos"]);
+    const vista = elegirVista(vs, st.cfg.vistaPlata), varias = vs.length > 1, pos = vs.indexOf(vista);
+    const usd = (c) => formatear(c, { moneda: "US$ ", oculto: st.cfg.ocultar });
+    const cot = dolarDe(hoy), dolar = cot?.valor || 0, conDolar = "dólar " + nombreTipo(st.cfg.dolar.tipo).toLowerCase();
+    const delMes = conPlata ? enElMes(saldo, st.movs, st.mes, st.metas, idsTarjeta()) : null;
+    const claseDe = (id) => (id === "total" ? "pd-total" : id === "pesos" ? "pd-pesos" : "pd-" + platas.items.find((x) => x.id === id).color);
+    const nombreDe = (id) => (id === "total" ? "Todo junto" : id === "pesos" ? "Pesos" : esc(platas.items.find((x) => x.id === id).nombre));
+    const puntos = varias ? `<span class="plata-puntos" aria-hidden="true">${vs.map((id) => `<i class="pd ${claseDe(id)}${id === vista ? " on" : ""}"></i>`).join("")}</span>` : "";
+    const pista = varias && !st.cfg.plataTocada ? `<span class="plata-pista">Tocá para ver tus otras platas</span>` : "";
+
+    let dibujo, titulo, numero, abajo;
+    if (vista === "total") {
+      const t = totalDe(platas, delMes?.usar ?? 0, dolar);
+      dibujo = Art.platasTodo(); titulo = "Todo junto"; numero = plata(t.pesos);
+      const metas = apartado(saldo, st.metas);
+      abajo = (t.sinDolar ? "Falta el valor del dólar" : t.usd !== null ? "≈ " + usd(t.usd) : "En pesos") + (metas ? ` · aparte, ${plata(metas)} en metas` : "");
+    } else if (vista !== "pesos") {
+      const x = platas.items.find((y) => y.id === vista), v = enPesos(x, dolar);
+      dibujo = Art.platas(COLORES_PLATA[x.color], letraDe(x)); titulo = esc(x.nombre); numero = formatear(x.monto, { moneda: etiquetaDe(x), oculto: st.cfg.ocultar });
+      abajo = x.moneda !== "USD" ? (x.fecha === hoy ? "Actualizada hoy" : x.fecha ? "Actualizada el " + x.fecha.slice(8, 10) + "/" + x.fecha.slice(5, 7) : "En pesos") : v === null ? "Falta el valor del dólar" : `≈ ${plata(v)} · ${conDolar}`;
+    } else if (conPlata) {
+      const { usar, gastado, neto, tarjeta } = delMes, de = deCuanto(delMes);
+      dibujo = Art.pan(parteDePlata(saldo, st.movs, st.mes, st.metas, idsTarjeta())); titulo = usar < 0 ? "Estás abajo" : "Te queda"; numero = plata(Math.abs(usar));
+      // Una sola frase con la cuenta. «De $Y» solo cuando da: Y − lo gastado = lo que te queda (deCuanto). Con algo sin pagar en la tarjeta,
+      // la frase lo dice: esa plata sigue en «Te queda», pero ya tiene destino. Si se pagó la tarjeta de compras de antes, también.
+      const partes = [];
+      if (gastado) partes.push(de !== null ? `Gastaste ${plata(gastado)} de ${plata(de)}` : neto === 0 ? `Este mes gastaste ${plata(gastado)}` : `Gastaste ${plata(gastado)}`);
+      if (tarjeta.debe > 0) partes.push(`tarjeta por pagar: ${plata(tarjeta.debe)}`);
+      else if (neto < 0) partes.push(`pagaste la tarjeta: ${plata(-neto)}`); // el mismo número que el renglón de Resumen
+      const frase = partes.join(" · ") || "Todavía no gastaste nada este mes";
+      abajo = frase[0].toUpperCase() + frase.slice(1) + (usar < 0 ? ". Pasa, ya se acomoda" : "");
+    } else {
+      dibujo = Art.pan(r.queda); titulo = actual ? "Gastaste este mes" : "En " + mesTexto(st.mes).toLowerCase() + " gastaste"; numero = plata(r.gastos);
+      abajo = !actual && r.ingresos ? "Entraron " + plata(r.ingresos) : varias ? "En «Ver el detalle» está en qué se fue" : "Tocá para ver en qué se fue";
+    }
+
+    // Lo de adentro. El número cambia de clase en cada vista: así vuelve a entrar con su saltito.
+    // Los números largos («USDT 12.500.000») bajan de tamaño para entrar siempre.
+    const largo = numero.length > 13 ? " muy-largo" : numero.length > 10 ? " largo" : "";
+    const cuerpo = `${dibujo}<span class="ht">${puntos}<span class="sub">${titulo}</span><span class="${varias ? "vp" + pos + " plata-salta " : ""}big std${largo}">${numero}</span><span class="sub">${abajo}</span>${pista}</span>`;
+    if (!varias && !conPlata) return `<button class="card pp hr tecard" data-act="abrir" data-v="resumen" aria-label="Ver el resumen del mes">${cuerpo}</button>`;
+    const pie = (texto) => `<span>${texto}</span><i aria-hidden="true">→</i>`;
+    const clases = "hr plata-cuerpo" + largo;
+    if (!varias) return `<button class="card pp tecard solo" data-act="abrir" data-v="resumen" aria-label="Ver de dónde sale lo que te queda"><span class="${clases}">${cuerpo}</span><span class="ver-res">${pie("Ver el detalle")}</span></button>`;
+    const proxima = vs[(pos + 1) % vs.length];
+    const esPesos = vista === "pesos";
+    return `<div class="card pp tecard solo"><button class="plata-toca" data-act="plataSig" aria-label="Mostrando ${nombreDe(vista)}, ${numero}. Tocá para ver ${nombreDe(proxima)}"><span class="${clases}">${cuerpo}</span></button>` +
+      `<button class="ver-res" data-act="abrir" data-v="${esPesos ? "resumen" : "platas"}">${pie(esPesos ? "Ver el detalle" : "Ver mis platas")}</button></div>`;
+  }
+
   /* ---------- Inicio ---------- */
   function inicio() {
     const actual = st.mes === hoy.slice(0, 7);
-    const r = resumenMes(st.movs, referencia(st.mes, hoy));
+    const r = resumenMes(movsGasto(), referencia(st.mes, hoy));
     const movs = porDiaAgrupado(delMes(st.movs, st.mes)).flatMap((g) => g.movs);
     const ra = infoRacha(st.movs, st.dias, hoy);
     const nombre = (st.cfg.nombre || "").trim();
@@ -96,11 +160,13 @@ export function crearVistas(st, hoy) {
     let h = `<div class="top"><div><small>${mesNav()}` +
       `<button class="eyeb" data-act="ocultar" aria-pressed="${st.cfg.ocultar}" aria-label="${st.cfg.ocultar ? "Mostrar montos" : "Ocultar montos"}">${Art.icono(st.cfg.ocultar ? Art.OJO_TAPADO : Art.OJO)}</button></small>` +
       `<h1>Hola${nombre ? ", " + esc(nombre) : ""}${guiando ? "" : `<button class="preg txt" data-act="ayuda" data-v="inicio">¿Cómo se usa?</button>`}</h1>` +
-      `<button class="racha" data-act="abrir" data-v="racha" aria-label="Ver tu racha">${Art.minion()}<span>${ra.actual ? ra.actual + (ra.actual === 1 ? " día" : " días") + (ra.hoyHecho ? "" : " · anotá hoy y sigue") : "Empezá tu racha"}</span></button>` +
+      `<div class="racha-fila"><button class="racha" data-act="abrir" data-v="racha" aria-label="Ver tu racha">${Art.minion()}<span>${ra.actual ? ra.actual + (ra.actual === 1 ? " día" : " días") + (ra.hoyHecho ? "" : " · anotá hoy y sigue") : "Empezá tu racha"}</span></button>` +
+      // Los primeros días, un botoncito para ver el tutorial de los personajes. Después sigue en Ajustes.
+      (!guiando && st.cfg.primeraVez && sumarDias(st.cfg.primeraVez, DIAS_BOTON_TUTORIAL) > hoy ? `<button class="tuto-chip" data-act="abrir" data-v="tutorial">Ver tutorial</button>` : "") + `</div>` +
       `</div><button class="miguita-toque${st.chiste ? " salta" + (st.chiste.n % 2) + (st.chiste.giro ? " gira" : "") : ""}" data-act="tocarMiguita" aria-label="Tocar a Miguita">` +
       `${Art.miguita(estadoDelMes(st.mes, r))}${st.chiste ? `<span class="globo" role="status">${esc(st.chiste.texto)}</span>` : ""}</button></div>`;
 
-    const peor = actual && estadoPresupuestos(st.presupuestos, st.movs, st.mes).find((p) => p.nivel !== "ok");
+    const peor = actual && estadoPresupuestos(st.presupuestos, movsGasto(), st.mes).find((p) => p.nivel !== "ok");
     if (peor) h += `<button class="card pp tecard" data-act="verPlan" data-v="presupuesto">` +
       `<span class="msg">${peor.nivel === "pasado" ? "Superaste el tope de " : "Estás llegando al tope de "}${esc(nombreCat(peor.categoria))}.</span>` +
       `<span class="sub">Gastaste ${plata(peor.gastado)} de ${plata(peor.tope)}.${peor.nivel === "pasado" ? " Pasa: el mes que viene arranca de cero." : ""}</span></button>`;
@@ -124,6 +190,18 @@ export function crearVistas(st, hoy) {
       const entro = st.dudaSaldo.ids.every((id) => st.movs.find((x) => x.id === id)?.tipo === "ingreso");
       h += crd(`<b class="pregunta">${entro ? `¿Esta plata ya estaba dentro de los ${plata(st.cfg.saldo.monto)} que me dijiste?` : `¿Ya habías pagado esto cuando me dijiste que tenías ${plata(st.cfg.saldo.monto)}?`}</b><div class="sub">${entro ? "Si ya estaba, no te la sumo de nuevo." : "Si ya lo habías pagado, no te lo resto de nuevo."}</div>` +
         `<div class="chips"><button class="pp" data-act="saldoYa" aria-pressed="true">${entro ? "Sí, ya estaba" : "Sí, ya estaba pago"}</button><button class="pp" data-act="saldoNo">${entro ? "No, sumala" : "No, restalo"}</button></div>`, "aviso");
+    }
+    // Se pagó la tarjeta y una parte no la cubren compras con crédito anotadas: si esas compras se anotaron sin decir «crédito»,
+    // la persona elige cuáles eran. Sale de los datos (pagoParaElegir): se va sola cuando el pago queda cubierto y vuelve si se deshace.
+    // Si el pago ya cubre compras con crédito y sobra una parte, lo más común son intereses o impuestos: se pregunta así.
+    const pagoEnDuda = guiando || !actual ? null : pagoParaElegir(st.movs, idsTarjeta(), hoy);
+    if (pagoEnDuda) {
+      const sobra = sinCubrir(st.movs, idsTarjeta(), pagoEnDuda), parte = sobra < pagoEnDuda.monto, v = esc(pagoEnDuda.id);
+      h += crd(parte ?
+        `<b class="pregunta">¿Qué son los ${plata(sobra)} de más que pagaste de la tarjeta?</b><div class="sub">Pagaste ${plata(pagoEnDuda.monto)} y lo que anotaste con crédito suma menos. Pueden ser intereses o impuestos, o compras que anotaste sin decir «crédito».</div>` +
+          `<div class="chips"><button class="pp" data-act="tarjetaNueva" data-v="${v}" aria-pressed="true">Intereses o impuestos</button><button class="pp" data-act="tarjetaElegir" data-v="${v}">Elegir compras</button></div>` :
+        `<b class="pregunta">¿Ya anotaste lo que compraste con esa tarjeta?</b><div class="sub">Pagaste ${plata(pagoEnDuda.monto)} de la tarjeta. Si ya anotaste esas compras, elegilas y no cuento el pago dos veces.</div>` +
+          `<div class="chips"><button class="pp" data-act="tarjetaElegir" data-v="${v}" aria-pressed="true">Sí, elegirlas</button><button class="pp" data-act="tarjetaNueva" data-v="${v}">No, es un gasto nuevo</button></div>`, "aviso");
     }
     const sinPreguntar = guiando ? 0 : ahorroSinPreguntar(st.cfg.saldo, st.metas);
     if (sinPreguntar) h += crd(`<b class="pregunta">¿Lo que guardaste para tus metas está dentro de tu plata?</b><div class="sub">Son ${plata(sinPreguntar)}. Si está adentro, te muestro solo lo que podés usar.</div>` +
@@ -162,9 +240,10 @@ export function crearVistas(st, hoy) {
 
     // Fijos que preguntan antes de anotarse.
     if (actual) for (const f of fijosPorConfirmar(st.fijos, hoy)) {
-      const ing = f.tipo === "ingreso";
-      h += crd(`<div class="sec">${ing ? "Ingreso fijo" : "Gasto fijo"} · día ${f.dia}</div><b class="pregunta">${ing ? "¿Ya cobraste " : "¿Ya pagaste "}${esc(f.nombre)}?</b><div class="sub">${plata(f.monto, f.moneda === "USD" ? { moneda: "US$ " } : {})}</div>` +
-        `<div class="chips"><button class="pp" data-act="confirmarFijo" data-v="${esc(f.id)}" aria-pressed="true">Sí, anotar</button><button class="pp" data-act="cambiarFijo" data-v="${esc(f.id)}">Otro monto</button><button class="pp" data-act="saltearFijo" data-v="${esc(f.id)}">Este mes no</button></div>`, "aviso");
+      const ing = f.tipo === "ingreso", mesF = mesPendiente(f, hoy), deOtroMes = mesF !== hoy.slice(0, 7);
+      h += crd(`<div class="sec">${ing ? "Ingreso fijo" : "Gasto fijo"} · día ${f.dia}${deOtroMes ? " de " + mesTexto(mesF).toLowerCase() : ""}</div><b class="pregunta">${ing ? "¿Ya cobraste " : "¿Ya pagaste "}${esc(f.nombre)}${deOtroMes ? " de " + mesTexto(mesF).toLowerCase() : ""}?</b><div class="sub">${plata(f.monto, f.moneda === "USD" ? { moneda: "US$ " } : {})}</div>` +
+        `<div class="chips"><button class="pp" data-act="confirmarFijo" data-v="${esc(f.id)}" aria-pressed="true">Sí, anotar</button><button class="pp" data-act="cambiarFijo" data-v="${esc(f.id)}">Otro monto</button><button class="pp" data-act="posponerFijo" data-v="${esc(f.id)}">Todavía no</button></div>` +
+        `<button class="link chico izq" data-act="saltearFijo" data-v="${esc(f.id)}">Este mes no</button>`, "aviso");
     }
     const c = st.cfg.copias, diasDesde = (f) => (Date.now() - Date.parse(f)) / 864e5;
     if (actual && c.auto && (!c.ultima || diasDesde(c.ultima) >= (c.cada === "mes" ? 30 : 7)))
@@ -177,26 +256,18 @@ export function crearVistas(st, hoy) {
     // Un solo número y, debajo, la cuenta en una frase: así se entiende de dónde sale sin tocar nada. El detalle está en Resumen.
     const miPlata = tuPlata(conPlataEfectiva, st.movs);
     const conPlata = actual && miPlata !== null && !guiando;
-    if (conPlata) {
-      const { usar, gastado, hubo } = enElMes(conPlataEfectiva, st.movs, st.mes, st.metas);
-      const frase = !gastado ? "Todavía no gastaste nada este mes" : (hubo > 0 ? `Gastaste ${plata(gastado)} de ${plata(hubo)}` : `Este mes gastaste ${plata(gastado)}`) + (usar < 0 ? ". Pasa, ya se acomoda" : "");
-      h += `<button class="card pp hr tecard solo" data-act="abrir" data-v="resumen" aria-label="Ver de dónde sale lo que te queda">${Art.pan(parteDePlata(conPlataEfectiva, st.movs, st.mes, st.metas))}<span class="ht"><span class="sub">${usar < 0 ? "Estás abajo" : "Te queda"}</span>` +
-        `<span class="big std">${plata(Math.abs(usar))}</span><span class="sub">${frase}</span></span></button>`;
-    } else {
-      const titulo = actual ? "Gastaste este mes" : "En " + mesTexto(st.mes).toLowerCase() + " gastaste";
-      const abajo = !actual && r.ingresos ? "Entraron " + plata(r.ingresos) : "Tocá para ver en qué se fue";
-      h += `<button class="card pp hr tecard" data-act="abrir" data-v="resumen" aria-label="Ver el resumen del mes">${Art.pan(r.queda)}<span class="ht"><span class="sub">${titulo}</span>` +
-        `<span class="big std">${plata(r.gastos)}</span><span class="sub">${abajo}</span></span></button>`;
-    }
+    h += tarjetaPlata(conPlata, r, actual, guiando, conPlataEfectiva);
 
     const conMic = !guiando && puedeGrabar();
+    const hayPlatas = limpiarPlatas(st.cfg.platas).items.length > 0;
+    const aPlatas = !guiando && actual && (conPlata || hayPlatas) ? `<button class="a-platas" data-act="abrir" data-v="platas">${hayPlatas ? "Mis platas" : "¿Dólares o cripto?"}<span aria-hidden="true">›</span></button>` : "";
     h += (guiando ? "" : conPlata ?
-      `<div class="plata-fila"><button class="ver-res" data-act="abrir" data-v="resumen"><i aria-hidden="true">↑</i>Tocá para ver el detalle</button><button class="btnmini" data-act="abrir" data-v="plata">Me entró plata</button></div>` : miPlata !== null ?
+      `<div class="plata-fila">${aPlatas}<button class="btnmini" data-act="abrir" data-v="plata">Me entró plata</button></div>` : miPlata !== null ?
       `<div class="plata-fila"><span><small>Tu plata ahora</small><b${miPlata < 0 ? ' class="neg-v"' : ""}>${plata(miPlata)}</b></span><button class="btnmini" data-act="abrir" data-v="plata">Me entró plata</button></div>` :
-      `<div class="plata-fila sola"><button class="btnmini" data-act="abrir" data-v="plata">¿Cuánta plata tenés?</button></div>`) +
+      `<div class="plata-fila${aPlatas ? "" : " sola"}">${aPlatas}<button class="btnmini" data-act="abrir" data-v="plata">¿Cuánta plata tenés?</button></div>`) +
       `<label class="quick-t" for="rapido">Escribí qué gastaste y cuánto</label><form class="quick" data-form="rapido"><div class="pp${st.error ? " err" : ""}"><input id="rapido" placeholder="Ej: 15mil nafta" autocomplete="off" enterkeyhint="done" maxlength="300"></div>` +
       (conMic ? `<button class="btn pp mic" type="button" data-act="hablar" aria-label="Hablar: decí tus gastos con la voz">${Art.icono(MIC)}</button>` : "") +
-      `<button class="btn pp anotar" type="submit">Anotar</button></form>` +
+      `<button class="btn pp anotar" type="submit">Anotar</button></form>` + loDeSiempre(guiando || !actual) +
       (conMic && !st.cfg.vozAviso && reales < 3 ? `<div class="nuevo-mic">Nuevo: tocá el micrófono y decí lo que gastaste o te entró</div>` : "") +
       (st.error ? `<div class="msg" role="alert">${esc(st.error)}</div>` : "");
 
@@ -211,19 +282,22 @@ export function crearVistas(st, hoy) {
   /* ---------- la guía de la primera vez: se hace usando la app de verdad ---------- */
   function guia() {
     const p = st.guiaPaso;
-    const globo = (titulo, texto, boton = "") => `<div class="guia-globo"><div class="gcab">${Art.miguita("ok").replace("<svg", '<svg style="width:62px"')}<b>${titulo}</b></div><div class="gtxt">${texto}</div>${boton ? `<button class="btn pp w guia-sig" data-act="guiaSig">${boton}</button>` : ""}<div class="dots" role="img" aria-label="Paso ${p + 1} de 3">${[0, 1, 2].map((i) => `<i class="${i === p ? "on" : ""}"></i>`).join("")}</div></div>`;
-    const saltar = p < 2 ? `<button class="guia-saltar" data-act="guiaFin">Saltear</button>` : "";
+    const globo = (titulo, texto, boton = "") => `<div class="guia-globo"><div class="guia-cuenta"><span>Paso <b>${p + 1}</b> de 3</span><span class="guia-barra" aria-hidden="true">${[0, 1, 2].map((i) => `<i class="${i <= p ? "on" : ""}"></i>`).join("")}</span></div><div class="gcab">${Art.miguita("ok").replace("<svg", '<svg style="width:62px"')}<b>${titulo}</b></div><div class="gtxt">${texto}</div>${boton ? `<button class="btn pp w guia-sig" data-act="guiaSig">${boton}</button>` : ""}</div>`;
+    // Se saltea de a un paso: el último se termina con su botón.
+    const saltar = p < 2 ? `<button class="guia-saltar" data-act="guiaSig">Saltear este paso ›</button>` : "";
     let texto = "";
+    const nuevos = st.movs.length - st.guiaBase;
     if (p === 1) {
-      const nuevos = st.movs.length - st.guiaBase, m = [...st.movs].sort((a, b) => b.ts - a.ts)[0];
+      const m = [...st.movs].sort((a, b) => b.ts - a.ts)[0];
       const que = m?.detalle ? " de " + esc(m.detalle.toLowerCase()) : "";
-      texto = nuevos > 1 ? `Anoté tus ${nuevos} gastos y a cada uno le puse su categoría. Si algo está mal, lo tocás y lo cambiás.` :
+      texto = nuevos < 1 ? `Cada cosa que anotes aparece en esta lista, con su categoría. Si algo está mal, lo tocás y lo cambiás.` :
+        nuevos > 1 ? `Anoté tus ${nuevos} gastos y a cada uno le puse su categoría. Si algo está mal, lo tocás y lo cambiás.` :
         m?.tipo === "ingreso" ? `Entendí que entraron ${plata(m.monto)}${que} y lo puse en ${esc(nombreCat(m.categoria))}. Si algo está mal, lo tocás y lo cambiás.` :
         `Entendí que son ${plata(m?.monto || 0)}${que} y lo puse en ${esc(nombreCat(m?.categoria))}. Si algo está mal, lo tocás y lo cambiás.`;
     }
     return `<div class="guia-fondo"></div>` + saltar + (
       p === 0 ? globo("Empecemos", "Escribí lo último que gastaste. Por ejemplo: <b>10 lucas birra</b>. Después tocá <b>Anotar</b>.") :
-      p === 1 ? globo("¡Anotado!", texto, "Seguir") :
+      p === 1 ? globo(nuevos < 1 ? "Acá va lo que anotes" : "¡Anotado!", texto, "Seguir") :
       globo("Abajo está lo demás", `<div class="g3"><b>Grupos</b> Dividí gastos con amigos.</div><div class="g3"><b>Mis cuentas</b> Cuotas, metas, deudas y gastos fijos.</div><div class="g3"><b>Ajustes</b> Letra más grande, avisos y PIN.</div>`, "¡A usarla!"));
   }
 
@@ -263,21 +337,26 @@ export function crearVistas(st, hoy) {
   /* ---------- Resumen ---------- */
   function resumen() {
     const actual = st.mes === hoy.slice(0, 7);
-    const r = resumenMes(st.movs, referencia(st.mes, hoy));
-    const pc = gastosPor(st.movs, st.mes, "categoria"), pm = gastosPor(st.movs, st.mes, "medio");
-    const dias = gastosPorDia(st.movs, st.mes);
+    const gm = movsGasto(), r = resumenMes(gm, referencia(st.mes, hoy));
+    const pc = gastosPor(gm, st.mes, "categoria"), pm = gastosPor(gm, st.mes, "medio");
+    const dias = gastosPorDia(gm, st.mes);
     const max = Math.max(...dias), diaMax = dias.indexOf(max);
     // Con la plata cargada, arriba va la cuenta del número de Inicio, con lo de este mes. Así nunca aparecen dos números distintos para lo mismo.
-    const d = actual ? desglose(saldoEfectivo(st.cfg.saldo, st.movs), st.movs, st.metas, st.mes) : null;
+    const d = actual ? desglose(saldoEfectivo(st.cfg.saldo, st.movs), st.movs, st.metas, st.mes, idsTarjeta()) : null;
     const fila2 = (t, v, primera) => `<div class="row${primera ? " f" : ""}"><span>${t}</span><span>${v}</span></div>`;
-    const porDia = (() => { const usar = !actual ? 0 : d ? d.queda : r.teQueda; return usar > 0 ? `<div class="sub">Podés gastar ${plata(Math.floor(usar / r.faltan / 100) * 100)} por día hasta fin de mes.</div>` : ""; })();
+    // Lo que falta pagar de la tarjeta ya tiene destino: no entra en lo que se puede gastar por día.
+    const porDia = (() => { const usar = !actual ? 0 : d ? d.queda - d.debeTarjeta : r.teQueda; return usar > 0 ? `<div class="sub">Podés gastar ${plata(Math.floor(usar / r.faltan / 100) * 100)} por día hasta fin de mes.</div>` : ""; })();
     const enDolares = (() => { const v = dolarDe(referencia(st.mes, hoy)); return v && r.gastos ? `<div class="sub">≈ ${formatear(Math.round(r.gastos * 100 / v.valor), { moneda: "US$ ", oculto: st.cfg.ocultar }).replace(/,\d\d$/, "")} gastados · dólar ${nombreTipo(st.cfg.dolar.tipo).toLowerCase()} ${formatear(v.valor)}</div>` : ""; })();
     let h = back("Inicio") + hdr(mesNav(), "Resumen", estadoDelMes(st.mes, r), "resumen") + (d ?
       crd(lbl("De dónde sale lo que te queda") + (d.tenias > 0 ? fila2("Empezaste con", plata(d.tenias), true) : "") +
-        (d.entro ? fila2("Te entró", plata(d.entro, { signo: true }), d.tenias <= 0) : "") + (d.gasto ? fila2("Gastaste", plata(-d.gasto), d.tenias <= 0 && !d.entro) : "") + (d.metas ? fila2("Guardado para tus metas", plata(-d.metas)) : "") +
+        (d.entro ? fila2("Te entró", plata(d.entro, { signo: true }), d.tenias <= 0) : "") + (d.gasto ? fila2("Gastaste", plata(-d.gasto), d.tenias <= 0 && !d.entro) : "") +
+        (d.tarjeta > 0 ? fila2(d.debeTarjeta > 0 ? "Con crédito, todavía no salió de tu plata" : "Con crédito, no salió de tu plata", plata(d.tarjeta, { signo: true })) : d.tarjeta < 0 ? fila2("Pagaste la tarjeta (compras de antes)", plata(d.tarjeta)) : "") +
+        (d.metas ? fila2("Guardado para tus metas", plata(-d.metas)) : "") +
         `<div class="row total"><span>${d.queda < 0 ? "Estás abajo" : "Te queda"}</span><span>${plata(Math.abs(d.queda))}</span></div>` +
+        (d.debeTarjeta ? `<div class="row"><span>Tarjeta por pagar</span><span>${plata(d.debeTarjeta)}</span></div><div class="sub">${TARJETA_SIGUE}</div><div class="chips"><button class="pp" data-act="pagarTarjeta" aria-pressed="true">Pagué la tarjeta</button></div>` +
+          (pagoParaSaldar(st.movs, idsTarjeta()) ? `<button class="link chico izq" data-act="tarjetaSaldada">Ya la pagué toda: quedó una diferencia</button>` : "") : "") +
         (d.tenias < 0 ? `<div class="sub">No todo está anotado: hubo plata que se movió sin pasar por acá.</div>` : "") +
-        `<div class="sub">¿No coincide con lo que tenés de verdad?</div><div class="chips"><button class="pp" data-act="abrir" data-v="plata">Corregir mi plata</button></div>`) + (porDia || enDolares ? crd(porDia + enDolares) : "") :
+        `<div class="sub">¿No coincide con lo que tenés de verdad?</div><div class="chips"><button class="pp" data-act="corregirPlata">Corregir mi plata</button></div>`) + (porDia || enDolares ? crd(porDia + enDolares) : "") :
       crd(`<div class="stats"><div><div class="sub">Entró</div><b class="pos">${plata(r.ingresos)}</b></div><div><div class="sub">Gastaste</div><b class="neg">${plata(r.gastos)}</b></div>${r.ingresos ? `<div><div class="sub">Quedó</div><b>${plata(r.teQueda)}</b></div>` : ""}</div>` +
         (actual ? `<div class="sub">Esto es solo de este mes. Si me decís cuánta plata tenés, te cuento toda.</div><div class="chips"><button class="pp" data-act="abrir" data-v="plata">¿Cuánta plata tenés?</button></div>` : "") + porDia + enDolares));
     if (!r.gastos) return h + crd(`<div class="empty"><b>Sin gastos este mes</b><span>Cuando anotes, acá vas a ver en qué se te va la plata.</span></div>`);
@@ -288,7 +367,7 @@ export function crearVistas(st, hoy) {
       (actual ? `<div class="sub">A este ritmo, a fin de mes vas a gastar ${plata(r.proyeccion)}.</div>` : ""));
     h += crd(lbl("Por día") + Art.barrasDias(dias, diaMax) + `<div class="sub">Más gastaste: ${esc(nombreDia(st.mes + "-" + String(diaMax + 1).padStart(2, "0"), true))}, ${plata(max)}</div>`);
     // Los últimos meses, para comparar.
-    const seis = Array.from({ length: 6 }, (_, i) => cambiarMes(st.mes, i - 5)).map((m) => ({ m, g: delMes(st.movs, m).filter((x) => x.tipo !== "ingreso").reduce((a, x) => a + x.monto, 0) }));
+    const seis = Array.from({ length: 6 }, (_, i) => cambiarMes(st.mes, i - 5)).map((m) => ({ m, g: delMes(gm, m).filter((x) => x.tipo !== "ingreso").reduce((a, x) => a + x.monto, 0) }));
     const tope = Math.max(...seis.map((x) => x.g), 1), previo = seis[4].g;
     h += crd(lbl("Últimos 6 meses") + seis.filter((x) => x.g).map((x) => `<div class="crow"><div class="cr"><div class="row f" style="padding:0 0 3px;min-height:0"><span>${mesTexto(x.m)}</span><span>${plata(x.g)}</span></div>${Art.barra(x.g / tope)}</div></div>`).join("") +
       (previo ? `<div class="sub">${r.gastos > previo ? "Gastaste " + Math.round((r.gastos / previo - 1) * 100) + "% más" : r.gastos < previo ? "Gastaste " + Math.round((1 - r.gastos / previo) * 100) + "% menos" : "Gastaste lo mismo"} que el mes anterior.</div>` : ""));
@@ -347,8 +426,8 @@ export function crearVistas(st, hoy) {
     const accion = (act, t, sub, i) => `<button class="srow rowb" data-act="${act}" style="width:100%;text-align:left"><span class="ri">${Art.icono(i)}</span><span class="rt"><b>${t}</b><small>${esc(sub)}</small></span><span class="chev" aria-hidden="true">›</span></button>`;
     return hdr("Tu app", "Ajustes", "ok") +
       crd(lbl("Tu nombre") + `<div class="quick"><div class="pp"><input class="field" data-act="nombre" value="${esc(st.cfg.nombre || "")}" placeholder="Para saludarte en Inicio" aria-label="Tu nombre" maxlength="30" autocomplete="given-name"></div></div>` +
-        lbl("Mi alias para cobrar") + `<div class="quick"><div class="pp${st.errorAlias ? " err" : ""}"><input class="field" data-act="miAlias" value="${esc(st.cfg.alias || "")}" placeholder="tu alias, nunca el CBU" aria-label="Mi alias para cobrar" maxlength="22" autocapitalize="none" autocomplete="off"></div></div>` +
-        (st.errorAlias ? `<div class="msg" role="alert">${esc(st.errorAlias)}</div>` : "") + `<div class="hint">Se suma a los grupos que crees, para que te transfieran. Nunca pongas el CBU.</div>`) +
+        lbl("Mi alias o CBU para cobrar") + `<div class="quick"><div class="pp${st.errorAlias ? " err" : ""}"><input class="field" data-act="miAlias" value="${esc(st.cfg.alias || "")}" placeholder="tu alias, CBU o CVU" aria-label="Mi alias, CBU o CVU para cobrar" maxlength="30" autocapitalize="none" autocomplete="off"></div></div>` +
+        (st.errorAlias ? `<div class="msg" role="alert">${esc(st.errorAlias)}</div>` : "") + `<div class="hint">Se suma a los grupos que crees, para que te transfieran. Puede ser tu alias, tu CBU o tu CVU: con eso solo te pueden mandar plata.</div>`) +
       crd(lbl("Tu app") +
         ir("notif", "Notificaciones", n.cantidad ? n.cantidad + (n.cantidad === 1 ? " aviso" : " avisos") + " por día · " + (n.forma === "sonido" ? "con sonido" : "en silencio") : "Sin avisos", '<path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20h4"/>', true) +
         ir("personalizacion", "Personalización", "Tema, billetera, categorías y medios de pago", '<circle cx="12" cy="12" r="9"/><circle cx="8.5" cy="10" r="1"/><circle cx="12" cy="7.5" r="1"/><circle cx="15.5" cy="10" r="1"/><path d="M12 21c-1.5 0-2-1-2-2s1-2 2-2h2a5 5 0 0 0 5-4"/>') +
@@ -377,19 +456,29 @@ export function crearVistas(st, hoy) {
   }
 
   function cargarPlata() {
-    const s = st.cfg.saldo, ahora = tuPlata(s, st.movs);
-    const sueldo = st.fijos.find((f) => f.tipo === "ingreso" && f.categoria === "sueldo") || st.fijos.find((f) => f.tipo === "ingreso");
-    const opcion = (act, t, sub) => `<button class="srow rowb" data-act="${act}" style="width:100%;text-align:left"><span class="rt"><b>${t}</b><small>${sub}</small></span><span class="chev" aria-hidden="true">›</span></button>`;
-    const cuanto = crd(lbl(s ? "Tu plata" : "¿Cuánta plata tenés hoy?") + (s ? `<div class="row f"><span>Tenés ahora</span><span>${plata(ahora)}</span></div>` : "") +
-        (s && apartado(s, st.metas) ? `<div class="row"><span>Guardado para tus metas</span><span>${plata(apartado(s, st.metas))}</span></div><div class="row"><span>Te queda</span><span>${plata(podesUsar(s, st.movs, st.metas))}</span></div>` : "") +
-        `<div class="sub">${s ? "¿No coincide con lo que tenés de verdad? Poné el número real y sigo desde ahí." : "Sumá los pesos que tenés en Mercado Pago, en el banco y en efectivo. Desde ahí te resto cada gasto y te sumo cada ingreso."}</div>` +
-        `<div class="quick"><div class="pp${st.plataError ? " err" : ""}"><input class="field" data-act="plataMonto" value="${esc(st.plataTexto || "")}" placeholder="por ejemplo 30.000" inputmode="decimal" aria-label="Cuánta plata tenés hoy" maxlength="16"></div><button class="btn pp anotar" data-act="plataGuardar">${s ? "Corregir" : "Guardar"}</button></div>` +
-        (st.plataError ? `<div class="msg" role="alert">${esc(st.plataError)}</div>` : ""));
-    const entro = crd(lbl("¿Te entró plata?") +
-        opcion("cargarIngreso", "Cobré algo", "Una changa, un regalo, lo que te transfirieron. Se suma a lo que tenés.").replace("srow rowb", "srow f rowb") +
-        opcion("plataSueldo", sueldo ? "Mi sueldo: " + esc(sueldo.nombre) : "Mi sueldo", sueldo ? plata(sueldo.monto, sueldo.moneda === "USD" ? { moneda: "US$ " } : {}) + " · día " + sueldo.dia + (sueldo.activo ? "" : " · pausado") : "Cuánto cobrás y qué día. Se anota solo todos los meses."));
+    // Con ingresos anotados ya hay un número en Inicio aunque nunca se haya cargado la plata: no es «la primera vez».
+    const s = saldoEfectivo(st.cfg.saldo, st.movs), ahora = tuPlata(s, st.movs);
+    const fijos = st.fijos.filter((f) => f.tipo === "ingreso");
+    const opcion = (act, v, t, sub) => `<button class="srow rowb" data-act="${act}"${v ? ` data-v="${esc(v)}"` : ""} style="width:100%;text-align:left"><span class="rt"><b>${t}</b><small>${sub}</small></span><span class="chev" aria-hidden="true">›</span></button>`;
+    // Corregir el número es lo menos común: queda abajo, sin fondo y con el campo a un toque. La primera vez, en cambio, es lo primero.
+    const corrigiendo = !s || st.plataCorregir || !!st.plataError;
+    const debe = s ? enElMes(s, st.movs, hoy.slice(0, 7), st.metas, idsTarjeta()).tarjeta.debe : 0;
+    // La tarjeta va debajo, aparte: no se resta de lo de arriba (sigue en tu plata hasta que la pagues).
+    const filas = !s ? "" : `<div class="row f"><span>${s.implicito ? "Según lo que anotaste, tenés" : "Tenés ahora"}</span><span>${plata(ahora)}</span></div>` +
+      (apartado(s, st.metas) ? `<div class="row"><span>Guardado para tus metas</span><span>${plata(apartado(s, st.metas))}</span></div><div class="row"><span>Te queda</span><span>${plata(podesUsar(s, st.movs, st.metas))}</span></div>` : "") +
+      (debe ? `<div class="row"><span>Tarjeta por pagar</span><span>${plata(debe)}</span></div><div class="sub">${TARJETA_SIGUE}</div>` : "");
+    const campo = `<div class="sub">${s ? "Poné lo que tenés de verdad y sigo desde ahí." : "Sumá los pesos que tenés en Mercado Pago, en el banco y en efectivo. Desde ahí te resto cada gasto y te sumo cada ingreso."}</div>` +
+      `<div class="quick"><div class="pp${st.plataError ? " err" : ""}"><input class="field" data-act="plataMonto" value="${esc(st.plataTexto || "")}" placeholder="por ejemplo 30.000" inputmode="decimal" aria-label="Cuánta plata tenés hoy" maxlength="16"></div><button class="btn pp anotar" data-act="plataGuardar">${s && !s.implicito ? "Corregir" : "Guardar"}</button></div>` +
+      (st.plataError ? `<div class="msg" role="alert">${esc(st.plataError)}</div>` : "");
+    const cuanto = crd(lbl(s ? "Tu plata" : "¿Cuánta plata tenés hoy?") + filas +
+      (corrigiendo ? campo : `<button class="plata-corregir" data-act="corregirPlata">¿No coincide con lo que tenés? Corregilo</button>`), s ? "plata-sec" : "");
+    const cadaMes = fijos.map((f) => opcion("plataFijo", f.id, esc(f.nombre), plata(f.monto, f.moneda === "USD" ? { moneda: "US$ " } : {}) + " · día " + f.dia + (f.activo ? "" : " · pausado"))).join("") +
+      opcion("plataFijo", "", fijos.length ? "Sumar otro que cobro todos los meses" : "¿Cobrás algo todos los meses?", "Un sueldo, una jubilación, un alquiler. Lo cargás una vez y te pregunto cuánto fue.");
+    const entro = crd(`<b class="entro-t">¿Te entró plata?</b><div class="sub">Una changa, un bono, lo que te transfirieron o tu sueldo. Se suma a lo que tenés.</div>` +
+      `<button class="btn pp w grande${s ? "" : " alt"}" data-act="cargarIngreso">Anotar lo que entró</button>` + cadaMes, "entro");
     // Con la plata ya cargada, lo más común es que haya entrado algo; la primera vez, lo primero es decir cuánto hay.
-    return back("Inicio") + hdr("Tu plata", "Mi plata", "", "plata") + (st.dudaPlata ? dudaPlata() : "") + (s ? entro + cuanto : cuanto + entro);
+    const otras = crd(opcion("abrir", "platas", "Dólares, cripto e inversiones", "Lo que tengas en otro lado, a un toque desde Inicio.").replace("srow rowb", "srow f rowb"));
+    return back("Inicio") + hdr("Tu plata", "Mi plata", "", "plata") + (st.dudaPlata ? dudaPlata() : "") + (s ? entro + cuanto : cuanto + entro) + otras;
   }
 
   /* ---------- Personalización ---------- */
@@ -417,7 +506,19 @@ export function crearVistas(st, hoy) {
           `<span style="display:flex;align-items:center;gap:10px">${t === "medios" ? "" : Art.catIcon(c.id).replace("<svg", '<svg style="width:34px;flex:none"')}<span>${esc(c.nombre)}${sub ? `<small>${esc(sub)}</small>` : ""}</span></span><span class="chev" aria-hidden="true">›</span></button>`;
       }).join("")) +
       `<button class="btn pp w" data-act="agregarCat">+ Agregar ${t === "medios" ? "medio de pago" : "categoría"}</button>` +
-      (t === "medios" ? "" : `<div class="sub">Las palabras clave sirven para adivinar la categoría cuando escribís «súper 5000».</div>`);
+      (t === "medios" ? "" : `<div class="sub">Las palabras clave sirven para adivinar la categoría cuando escribís «súper 5000».</div>`) +
+      (loAprendido().length ? `<button class="btn pp w alt" data-act="abrir" data-v="aprendidas">Lo que me enseñaste (${loAprendido().length})</button>` : "");
+  }
+
+  /* ---------- lo que la app aprendió de la persona ---------- */
+  const loAprendido = () => Object.entries(st.cfg.aprendidas || {}).filter(([, id]) => id && cat(id)).reverse();
+  function aprendidas() {
+    const lista = loAprendido();
+    return back("Categorías") + hdr("Personalización", "Lo que me enseñaste") +
+      `<div class="sub">Cada vez que corregís una categoría, me acuerdo para la próxima. Si me enseñaste algo mal, olvidalo acá.</div>` +
+      (lista.length ? crd(lista.map(([k, id], i) => `<div class="row${i ? "" : " f"}"><span>${esc(k)}<small>va a ${esc(nombreCat(id))}</small></span><button class="link" data-act="olvidar" data-v="${esc(k)}" aria-label="Olvidar ${esc(k)}">Olvidar</button></div>`).join("")) +
+        `<button class="btn pp w alt del" data-act="olvidarTodo">${st.confirmar === "olvidar" ? "Tocá de nuevo para olvidar todo" : "Olvidar todo"}</button>` :
+        crd(`<div class="empty"><b>Todavía no me enseñaste nada</b><span>Cuando cambies la categoría de algo, queda acá.</span></div>`));
   }
 
   function editarCat() {
@@ -478,7 +579,34 @@ export function crearVistas(st, hoy) {
       `</div></div></div>`;
   }
 
-  return { inicio, cartelInstalar, movimientos, resumen, racha, festejo, mas, cargarPlata, personalizacion, hayEjemplo, categorias, editarCat, hoja, nombreCat, nombreMedio, nombreDia, mesTexto, plata, motivosApretado, estadoDelMes,
+  // «¿Cuáles eran de la tarjeta?»: después de «Sí, elegirlas». Lo que se elige pasa a ser compra con crédito y el pago la cubre.
+  function comprasTarjeta() {
+    const e = st.elegirTarjeta, ids = idsTarjeta(), pago = e && st.movs.find((x) => x.id === e.pago);
+    if (!pago) return back("Inicio") + crd(`<div class="empty"><b>Ese pago ya no está</b></div>`);
+    // Sin «de $Y»: con un pago mínimo o con saldo a favor, elegir justo lo pagado deja compras afuera. Se eligen todas las de ese resumen;
+    // lo que el pago no cubra queda como «tarjeta por pagar».
+    const lista = comprasPosibles(st.movs, ids, pago), falta = Math.max(0, sinCubrir(st.movs, ids, pago));
+    const marcado = lista.filter((m) => e.marcadas.has(m.id)).reduce((a, m) => a + m.monto, 0);
+    return back("Inicio") + hdr("Pagaste " + plata(pago.monto) + " de la tarjeta", "¿Cuáles eran de la tarjeta?") +
+      crd(`<div class="sub">Tocá todo lo que compraste con esa tarjeta y todavía no estaba pago, aunque hayas pagado menos (el mínimo, una parte). Quedan como compras con crédito y el pago no se cuenta dos veces.</div>` +
+        `<div class="sub"><b>Elegiste ${plata(marcado)}</b>${(() => {
+          // Lo que quedaría sin cubrir con lo elegido, probado sobre una copia (tiene en cuenta el saldo a favor y lo que ya se debía).
+          const resto = restoSiEligen(st.movs, ids, pago, e.marcadas);
+          return resto > 0 ? `. Los ${plata(resto)} que no cubren los cuento como un gasto nuevo (intereses, impuestos)` : marcado > falta ? `. Lo que este pago no cubre queda como tarjeta por pagar` : "";
+        })()}</div>`) +
+      crd(lista.map((m, i) => `<button class="row rowb${i ? "" : " f"}" data-act="tarjetaMarcar" data-v="${esc(m.id)}" aria-pressed="${e.marcadas.has(m.id)}"><span><span class="tilde">${e.marcadas.has(m.id) ? "✓" : ""}</span>${esc(m.detalle || nombreCat(m.categoria))}<small>${esc(nombreCat(m.categoria))} · ${esc(nombreDia(m.fecha))}</small></span><span class="der">${plata(m.monto)}</span></button>`).join("")) +
+      `<button class="btn pp w" data-act="tarjetaListo">Listo</button>`;
+  }
+
+  // «Lo de siempre»: lo que se anota igual una y otra vez, a un toque. Va debajo del campo, solo cuando hay algo repetido.
+  function loDeSiempre(no) {
+    st.repetidos = no ? [] : repetidos(st.movs, hoy);
+    if (!st.repetidos.length) return "";
+    return `<div class="repes" role="group" aria-label="Lo de siempre: tocá para anotarlo de nuevo"><span class="repes-t">Lo de siempre</span>` +
+      st.repetidos.map((x, i) => `<button class="pp repe" data-act="repetir" data-v="${i}" aria-label="Anotar de nuevo ${esc(x.detalle)}, ${plata(x.monto)}"><span>${esc(x.detalle)}</span> <b>${plata(x.monto)}</b></button>`).join("") + `</div>`;
+  }
+
+  return { inicio, cartelInstalar, movimientos, idsTarjeta, movsGasto, comprasTarjeta, resumen, racha, festejo, mas, cargarPlata, personalizacion, hayEjemplo, categorias, editarCat, aprendidas, hoja, nombreCat, nombreMedio, nombreDia, mesTexto, plata, motivosApretado, estadoDelMes,
     guia, ayuda, ayudaHoja,
     ayudas: { back, hdr, lbl, crd, chips, interruptor, preg } };
 }

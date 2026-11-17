@@ -14,7 +14,7 @@
 // - Los montos del grupo van en pesos (como en los códigos G1 y G2 de la app anterior) y todas las cuentas
 //   se hacen en centavos enteros con centavos().
 // - x:true es una lápida: el registro está borrado, pero viaja para que el borrado llegue a todos.
-// - yo (quién soy en este celu) y loc (sumar mi parte a mis gastos) son de cada celu y nunca viajan.
+// - yo (quién soy en este celu) y loc (lo que pago y me pagan en el grupo mueve mi plata) son de cada persona y nunca viajan al grupo.
 
 const num = (v) => { const n = +v; return isFinite(n) ? n : 0; };
 export const centavos = (n) => Math.round(num(n) * 100);
@@ -163,13 +163,25 @@ export function conHistorial(antes, g, ahora = Date.now()) {
   return { ...g, hist: hist.slice(-MAX_HISTORIAL) };
 }
 
-/* ---------- alias ---------- */
-// Solo alias de billetera o banco (6 a 20 letras, números, puntos o guiones). Un CBU/CVU (22 números) nunca se guarda.
+/* ---------- alias, CBU o CVU para cobrar ---------- */
+// Lo que alguien le pasa a otro para que le transfiera: el alias (6 a 20 letras, números, puntos o guiones) o el CBU/CVU (22 números).
+// Con el CBU o el CVU solo se puede mandar plata, nunca sacarla: por eso se pueden compartir.
+// Los dos traen dígitos verificadores (uno para el banco y la sucursal, otro para la cuenta): si no cierran, hay un número mal copiado.
+const verificador = (digitos, pesos) => (10 - ([...digitos].reduce((a, d, i) => a + d * pesos[i], 0) % 10)) % 10;
+const cbuValido = (d) => verificador(d.slice(0, 7), [7, 1, 3, 9, 7, 1, 3]) === +d[7] && verificador(d.slice(8, 21), [3, 9, 7, 1, 3, 9, 7, 1, 3, 9, 7, 1, 3]) === +d[21];
+export const esCBU = (alias) => /^\d{22}$/.test(alias || "");
+// Cómo se llama lo que cargó: «alias», «CBU» (de un banco) o «CVU» (de una billetera: empieza con 000).
+export const nombreDeCuenta = (alias) => (esCBU(alias) ? (alias.startsWith("000") ? "CVU" : "CBU") : "alias");
 export function validarAlias(texto) {
   const s = String(texto ?? "").trim();
   if (!s) return { ok: true, alias: "" };
-  if ((s.match(/\d/g) || []).length >= 18) return { ok: false, error: "Eso parece un CBU o CVU. Por seguridad, solo se guarda el alias." };
-  if (!/^[A-Za-z0-9.-]{6,20}$/.test(s)) return { ok: false, error: "El alias tiene de 6 a 20 letras, números, puntos o guiones, sin espacios." };
+  const d = s.replace(/[\s.\-]/g, "");
+  if (/^\d{18,}$/.test(d)) {
+    if (d.length !== 22) return { ok: false, error: "El CBU o CVU tiene 22 números y ahí hay " + d.length + ". Copialo de nuevo desde tu banco o billetera." };
+    if (!cbuValido(d)) return { ok: false, error: "Ese CBU o CVU tiene algún número mal. Copialo de nuevo desde tu banco o billetera." };
+    return { ok: true, alias: d };
+  }
+  if (!/^[A-Za-z0-9.-]{6,20}$/.test(s)) return { ok: false, error: "El alias tiene de 6 a 20 letras, números, puntos o guiones, sin espacios. El CBU o CVU, 22 números." };
   return { ok: true, alias: s.toLowerCase() };
 }
 
@@ -300,38 +312,54 @@ export function miSituacion(g) {
   return { debo, meDeben };
 }
 
-/* ---------- mi parte en mis gastos ---------- */
+/* ---------- el grupo en mi plata ---------- */
 export function miParte(g) {
   if (!g.yo) return 0;
   return (g.gastos || []).reduce((a, x) => a + (x.x ? 0 : (partesDe(x)[g.yo] || 0)), 0);
 }
 
-// Movimientos personales que tiene que haber por este grupo (id fijo "gx_<grupo>_<gasto>").
-// Con loc apagado no hay ninguno. Devuelve qué poner y qué quitar; respeta categoría y medio que la persona cambió.
-export function sincronizarMiParte(g, movs, categoria = "otros", hoy = "") {
-  const prefijo = "gx_" + g.id + "_";
-  const actuales = new Map(movs.filter((x) => x.id.startsWith(prefijo)).map((x) => [x.id, x]));
+// Con "loc" prendido, lo que pasa con mi plata en el grupo va a mis movimientos cuando la plata se mueve de verdad:
+//   - una compra que pagué yo: sale lo que puse (id "gx_<grupo>_<gasto>");
+//   - un pago que hice («Ya le pagué»): sale lo que pasé (id "gp_<grupo>_<pago>");
+//   - un pago que me hicieron («Ya me pagó»): entra (mismo id).
+// Lo que pagó otro no mueve mi plata hasta que se lo paso. Así «Te queda» coincide con lo que la persona tiene de verdad.
+// Solo en grupos en pesos y con "yo" elegido. Devuelve qué poner y qué quitar; respeta la categoría, el medio y el "previo"
+// que la persona cambió en el movimiento. Lo de un grupo de ejemplo también es de ejemplo (id con "ej_" adelante).
+export function movimientosDeGrupo(g, movs, hoy = "") {
+  const ej = g.id.startsWith("ej_") ? "ej_" : "";
+  const prefijos = ["gx_" + g.id + "_", "gp_" + g.id + "_"].flatMap((x) => (ej ? [ej + x, x] : [x]));
+  const actuales = new Map(movs.filter((x) => prefijos.some((p) => x.id.startsWith(p))).map((x) => [x.id, x]));
   const poner = [], quedan = new Set();
+  const nombre = (id) => (g.miembros || []).find((m) => m.id === id)?.nombre || "alguien";
+  const sumar = (id, tipo, monto, detalle, f, ts) => {
+    const viejo = actuales.get(id), fecha = f || viejo?.fecha || hoy;
+    if (!fecha || monto <= 0) return;
+    const mov = { id, tipo, monto, detalle: detalle.slice(0, 80), categoria: (viejo?.tipo === tipo && viejo.categoria) || (tipo === "ingreso" ? "otros_in" : "otros"), medio: viejo?.medio || "",
+      fecha, ts: viejo?.ts || num(ts) || Date.now(), mod: viejo?.mod || 0, grupo: g.id, ...(viejo?.previo && { previo: true }) };
+    quedan.add(id);
+    if (!viejo || viejo.tipo !== tipo || viejo.monto !== monto || viejo.detalle !== mov.detalle || viejo.fecha !== fecha) poner.push({ ...mov, mod: Date.now() });
+  };
   if (g.loc && g.yo && g.moneda === "ARS") {
-    for (const x of g.gastos || []) {
-      if (x.x) continue;
-      const parte = partesDe(x)[g.yo] || 0;
-      if (parte <= 0) continue;
-      const id = prefijo + x.id, viejo = actuales.get(id);
-      const fecha = x.f || viejo?.fecha || hoy;
-      if (!fecha) continue;
-      const mov = { id, tipo: "gasto", monto: parte, detalle: (g.nombre + ": " + x.t).slice(0, 80), categoria: viejo?.categoria || categoria, medio: viejo?.medio || "",
-        fecha, ts: viejo?.ts || num(x.ts) || Date.now(), mod: viejo?.mod || 0, grupo: g.id };
-      quedan.add(id);
-      if (!viejo || viejo.monto !== mov.monto || viejo.detalle !== mov.detalle || viejo.fecha !== mov.fecha) poner.push({ ...mov, mod: Date.now() });
+    for (const x of g.gastos || []) if (!x.x) sumar(ej + "gx_" + g.id + "_" + x.id, "gasto", pagadores(x)[g.yo] || 0, g.nombre + ": " + x.t, x.f, x.ts);
+    for (const p of g.pagos || []) {
+      if (p.x || p.de === p.a || (p.de !== g.yo && p.a !== g.yo)) continue;
+      const sale = p.de === g.yo;
+      sumar(ej + "gp_" + g.id + "_" + p.id, sale ? "gasto" : "ingreso", centavos(p.m), g.nombre + (sale ? ": le pasé a " + nombre(p.a) : ": me pasó " + nombre(p.de)), p.f, p.ts);
     }
   }
-  const quitar = [...actuales.keys()].filter((id) => !quedan.has(id));
-  return { poner, quitar };
+  return { poner, quitar: [...actuales.keys()].filter((id) => !quedan.has(id)) };
+}
+// Lo que mi plata se movió en el grupo: lo que puse en compras, lo que pasé y lo que me pasaron (centavos).
+export function miCaja(g) {
+  const r = { puse: 0, pase: 0, mePasaron: 0 };
+  if (!g.yo) return r;
+  for (const x of g.gastos || []) if (!x.x) r.puse += pagadores(x)[g.yo] || 0;
+  for (const p of g.pagos || []) if (!p.x && p.de !== p.a) { if (p.de === g.yo) r.pase += centavos(p.m); else if (p.a === g.yo) r.mePasaron += centavos(p.m); }
+  return r;
 }
 
 /* ---------- resumen para WhatsApp ---------- */
-// Con j: el resumen de esa juntada (las compras y quién le pasa cuánto a quién, con el alias).
+// Con j: el resumen de esa juntada (las compras y quién le pasa cuánto a quién, con el alias, el CBU o el CVU de quien cobra).
 export function textoWhatsApp(g, formato, j) {
   const vivos = (g.miembros || []).filter((m) => !m.x);
   const nombre = (id) => vivos.find((m) => m.id === id)?.nombre || "?";
@@ -346,7 +374,7 @@ export function textoWhatsApp(g, formato, j) {
     t += "\n*Para quedar a mano:*";
     for (const p of ts) {
       const alias = vivos.find((m) => m.id === p.a)?.alias;
-      t += "\n" + nombre(p.de) + " → " + nombre(p.a) + ": " + formato(p.m) + (alias ? " (alias " + alias + ")" : "");
+      t += "\n" + nombre(p.de) + " → " + nombre(p.a) + ": " + formato(p.m) + (alias ? " (" + nombreDeCuenta(alias) + " " + alias + ")" : "");
     }
     return t;
   }
@@ -356,7 +384,7 @@ export function textoWhatsApp(g, formato, j) {
   if (!pagos.length) return t + "\n\nTodos están al día.";
   for (const p of pagos) {
     const alias = vivos.find((m) => m.id === p.a)?.alias;
-    t += "\n\n" + nombre(p.de) + " le paga a " + nombre(p.a) + " " + formato(p.m) + (alias ? "\nalias: " + alias : "");
+    t += "\n\n" + nombre(p.de) + " le paga a " + nombre(p.a) + " " + formato(p.m) + (alias ? "\n" + nombreDeCuenta(alias) + ": " + alias : "");
   }
   return t;
 }

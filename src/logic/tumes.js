@@ -2,17 +2,18 @@
 import { cambiarMes, delMes, diasDelMes, gastosPor } from "./mes.js";
 
 // Los números del mes. Las cuotas que se anotan solas cuentan como gasto, pero no como día anotado.
-export function datosDelMes(movs, dias, mes) {
-  const del = delMes(movs, mes);
+// gastosMovs: la lista para sumar gastos, sin contar dos veces la tarjeta (paraGastos en tarjeta.js); los días anotados salen de todo lo anotado.
+export function datosDelMes(movs, dias, mes, gastosMovs = movs) {
+  const del = delMes(gastosMovs, mes);
   const gastos = del.filter((x) => x.tipo !== "ingreso").reduce((a, x) => a + x.monto, 0);
   const ingresos = del.filter((x) => x.tipo === "ingreso").reduce((a, x) => a + x.monto, 0);
-  const anotados = new Set([...del.filter((x) => !x.cuota && !x.fijo).map((x) => x.fecha), ...dias.filter((d) => d.fecha.slice(0, 7) === mes).map((d) => d.fecha)]);
+  const anotados = new Set([...delMes(movs, mes).filter((x) => !x.cuota && !x.fijo).map((x) => x.fecha), ...dias.filter((d) => d.fecha.slice(0, 7) === mes).map((d) => d.fecha)]);
   let mejor = 0, seguidos = 0;
   for (let d = 1; d <= diasDelMes(mes); d++) {
     seguidos = anotados.has(mes + "-" + String(d).padStart(2, "0")) ? seguidos + 1 : 0;
     mejor = Math.max(mejor, seguidos);
   }
-  return { mes, gastos, ingresos, top: gastosPor(movs, mes, "categoria").slice(0, 3), diasAnotados: anotados.size, totalDias: diasDelMes(mes), mejorRacha: mejor };
+  return { mes, gastos, ingresos, top: gastosPor(gastosMovs, mes, "categoria").slice(0, 3), diasAnotados: anotados.size, totalDias: diasDelMes(mes), mejorRacha: mejor };
 }
 
 // El mes que ya cerró y todavía no se mostró. Lo de ejemplo no cuenta. null si no hay ninguno.

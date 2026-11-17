@@ -6,6 +6,15 @@ import { resumenMes } from "../src/logic/mes.js";
 const saldo = { monto: 3000000, ts: 1000, fecha: "2026-11-02" };
 const m = (id, tipo, pesos, fecha, ts, extra = {}) => ({ id, tipo, monto: pesos * 100, detalle: "", categoria: "otros", medio: "", fecha, ts, mod: ts, ...extra });
 
+// Sin tarjeta de crédito, lo de la tarjeta queda en cero: se comprueba y se deja de lado para comparar lo demás.
+const sinTarjeta = (o) => {
+  const { tarjeta, neto, debeTarjeta, ...resto } = o;
+  if (tarjeta && typeof tarjeta === "object") assert.deepEqual(tarjeta, { compras: 0, devuelto: 0, pagado: 0, pagos: 0, debe: 0 });
+  else if (tarjeta !== undefined) assert.equal(tarjeta, 0);
+  for (const x of [neto, debeTarjeta]) if (x !== undefined) assert.equal(x, 0);
+  return resto;
+};
+
 test("arranca del número cargado y se mueve con lo que se anota después", () => {
   assert.equal(tuPlata(null, []), null);
   assert.equal(tuPlata(saldo, []), 3000000);
@@ -95,7 +104,7 @@ test("la cuenta que se muestra da lo mismo que el número de Inicio", () => {
   const movs = [m("a", "gasto", 20000, "2026-11-02", 2000), m("b", "ingreso", 50000, "2026-11-03", 3000)];
   const metas = [meta("x", 1000000)];
   const d = desglose(saldo, movs, metas, "2026-11");
-  assert.deepEqual(d, { tenias: 3000000, entro: 5000000, gasto: 2000000, metas: 1000000, queda: 5000000 });
+  assert.deepEqual(sinTarjeta(d), { tenias: 3000000, entro: 5000000, gasto: 2000000, metas: 1000000, queda: 5000000 });
   assert.equal(d.queda, podesUsar(saldo, movs, metas));
   assert.equal(desglose(null, movs, metas, "2026-11"), null);
 });
@@ -104,27 +113,27 @@ test("las dos respuestas a la pregunta dan cuentas que cierran y no se contradic
   const nafta = m("nafta", "gasto", 20000, "2026-11-08", 500);
   // «Ya está restado»: tenés 100.000 después de gastar 20.000, así que empezaste con 120.000.
   const yaEstaba = { monto: 10000000, ts: 1000, fecha: "2026-11-08" };
-  assert.deepEqual(enElMes(yaEstaba, [nafta], "2026-11"), { usar: 10000000, gastado: 2000000, hubo: 12000000 });
-  assert.deepEqual(desglose(yaEstaba, [nafta], [], "2026-11"), { tenias: 12000000, entro: 0, gasto: 2000000, metas: 0, queda: 10000000 });
+  assert.deepEqual(sinTarjeta(enElMes(yaEstaba, [nafta], "2026-11")), { usar: 10000000, gastado: 2000000, hubo: 12000000 });
+  assert.deepEqual(sinTarjeta(desglose(yaEstaba, [nafta], [], "2026-11")), { tenias: 12000000, entro: 0, gasto: 2000000, metas: 0, queda: 10000000 });
   // «Restalo»: empezaste con 100.000 y quedan 80.000.
   const restado = saldoDesde(10000000, [nafta]);
-  assert.deepEqual(enElMes(restado, [nafta], "2026-11"), { usar: 8000000, gastado: 2000000, hubo: 10000000 });
-  assert.deepEqual(desglose(restado, [nafta], [], "2026-11"), { tenias: 10000000, entro: 0, gasto: 2000000, metas: 0, queda: 8000000 });
+  assert.deepEqual(sinTarjeta(enElMes(restado, [nafta], "2026-11")), { usar: 8000000, gastado: 2000000, hubo: 10000000 });
+  assert.deepEqual(sinTarjeta(desglose(restado, [nafta], [], "2026-11")), { tenias: 10000000, entro: 0, gasto: 2000000, metas: 0, queda: 8000000 });
 });
 
 test("con la plata cargada otro mes, la cuenta arranca con lo que quedó al empezar este mes", () => {
   const movs = [m("n", "gasto", 10000, "2026-11-20", 2000), m("d", "gasto", 5000, "2026-12-03", 3000), m("e", "ingreso", 2000, "2026-12-04", 4000)];
   const d = desglose(saldo, movs, [], "2026-12");
-  assert.deepEqual(d, { tenias: 2000000, entro: 200000, gasto: 500000, metas: 0, queda: 1700000 });
+  assert.deepEqual(sinTarjeta(d), { tenias: 2000000, entro: 200000, gasto: 500000, metas: 0, queda: 1700000 });
   assert.equal(d.queda, podesUsar(saldo, movs, []));
   assert.equal(enElMes(saldo, movs, "2026-12").gastado, d.gasto);
 });
 
 test("«gastaste tanto de tanto» usa lo mismo que el pan", () => {
   const movs = [m("a", "gasto", 15000, "2026-11-02", 2000)];
-  assert.deepEqual(enElMes(saldo, movs, "2026-11"), { usar: 1500000, gastado: 1500000, hubo: 3000000 });
+  assert.deepEqual(sinTarjeta(enElMes(saldo, movs, "2026-11")), { usar: 1500000, gastado: 1500000, hubo: 3000000 });
   assert.equal(parteDePlata(saldo, movs, "2026-11"), 0.5);
-  assert.deepEqual(enElMes(saldo, movs, "2026-12"), { usar: 1500000, gastado: 0, hubo: 1500000 });
+  assert.deepEqual(sinTarjeta(enElMes(saldo, movs, "2026-12")), { usar: 1500000, gastado: 0, hubo: 1500000 });
 });
 
 test("sin plata cargada, lo que sobra pasa al mes siguiente", () => {
@@ -133,9 +142,9 @@ test("sin plata cargada, lo que sobra pasa al mes siguiente", () => {
   assert.equal(saldoEfectivo(null, [m("n", "gasto", 1, "2026-11-02", 1)]), null); // solo gastos: todavía no se sabe cuánto hay
   const s = saldoEfectivo(null, movs);
   assert.equal(tuPlata(s, movs), 8000000); // primero el gasto y después el ingreso
-  assert.deepEqual(desglose(s, movs, [], "2026-11"), { tenias: 0, entro: 10000000, gasto: 2000000, metas: 0, queda: 8000000 });
+  assert.deepEqual(sinTarjeta(desglose(s, movs, [], "2026-11")), { tenias: 0, entro: 10000000, gasto: 2000000, metas: 0, queda: 8000000 });
   // Empieza diciembre: los 80.000 siguen estando.
-  assert.deepEqual(desglose(s, movs, [], "2026-12"), { tenias: 8000000, entro: 0, gasto: 0, metas: 0, queda: 8000000 });
+  assert.deepEqual(sinTarjeta(desglose(s, movs, [], "2026-12")), { tenias: 8000000, entro: 0, gasto: 0, metas: 0, queda: 8000000 });
   // Lo gastado antes del mes del primer ingreso no se resta: se pagó con plata que la app no conocía.
   const conViejo = [m("v", "gasto", 90000, "2026-10-20", 500), ...movs];
   assert.equal(tuPlata(saldoEfectivo(null, conViejo), conViejo), 8000000);

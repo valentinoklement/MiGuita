@@ -9,7 +9,7 @@ const DIAS_ATRAS = [
   [1, "gasto", 3800, "Café", "comida", ""],
   [1, "gasto", 12900, "Farmacia", "salud", "debito"],
   [2, "gasto", 9800, "Suscripción de música", "subs", "credito"],
-  [3, "gasto", 26400, "Verdulería", "super", "efectivo"],
+  [3, "gasto", 26400, "Verdulería", "verduleria", "efectivo"],
   [4, "gasto", 15000, "Cine", "salidas", "mp"],
   [6, "gasto", 7200, "Colectivo", "transporte", "debito"],
   [8, "gasto", 42000, "Zapatillas", "ropa", "credito"],

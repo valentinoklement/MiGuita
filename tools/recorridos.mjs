@@ -108,7 +108,7 @@ async function celu({ ancho = 375, alto = 812, ua = ANDROID, letra = "" } = {}) 
     async anotar(t) { await ev(`(() => { const e = document.querySelector("#rapido"); e.value = ${j(t)}; e.closest("form").requestSubmit(); })()`); await esperar(150); },
     async teclas(t) { for (const k of t) { await ev(`[...document.querySelectorAll("[data-act=tecla]")].find((b) => b.dataset.v === ${j(k)}).click()`); await esperar(25); } },
     // Primera vez en Android, sin la guía.
-    async empezar() { await c.ir(); await c.clic("[data-act=seguirSinInstalar]"); await c.clic("[data-act=guiaFin]"); await esperar(80); },
+    async empezar() { await c.ir(); await c.clic("[data-act=seguirSinInstalar]"); for (let i = 0; i < 3; i++) await c.clic("[data-act=guiaSig]"); await esperar(80); },
     async numero() { return ev(`document.querySelector(".tecard .big").innerText`); },
     async frase() { return ev(`[...document.querySelectorAll(".tecard .sub")].pop().innerText`); },
     async sinProblemas() {
@@ -122,6 +122,8 @@ async function celu({ ancho = 375, alto = 812, ua = ANDROID, letra = "" } = {}) 
 }
 
 const paso = (nombre, fn) => test(nombre, { skip: RUTA ? false : "No encontré Chrome" }, fn);
+// Un fijo creado hoy con un día que ya pasó empieza el mes que viene: para probarlo se hace de cuenta que arrancó antes.
+const fijosDesdeAntes = (c) => c.ev(`new Promise((ok, mal) => { const r = indexedDB.open("miguita"); r.onerror = mal; r.onsuccess = () => { const t = r.result.transaction("fijos", "readwrite"), o = t.objectStore("fijos"); o.getAll().onsuccess = (e) => { for (const f of e.target.result) o.put({ ...f, desde: "2020-01" }); }; t.oncomplete = ok; t.onerror = mal; }; })`);
 
 paso("instalar en Android: se usa primero y después aparece un botón", async () => {
   const c = await celu();
@@ -340,12 +342,634 @@ paso("mudanza: el link de la dirección nueva avisa si no pudo traer los datos",
   await c.cerrar();
 });
 
+paso("guía: se saltea de a un paso y dice en cuál vas", async () => {
+  const c = await celu();
+  await c.ir();
+  await c.clic("[data-act=seguirSinInstalar]");
+  await c.ve(/Paso 1 de 3/);
+  await c.boton("Saltear este paso");
+  await c.ve(/Paso 2 de 3/);
+  await c.ve(/Acá va lo que anotes/);
+  await c.noVe(/¡Anotado!/);
+  await c.boton("Saltear este paso");
+  await c.ve(/Paso 3 de 3/);
+  await c.noVe(/Saltear este paso/);
+  await c.boton("¡A usarla!");
+  await c.noVe(/Paso 3 de 3/);
+  await c.cerrar();
+});
+
+paso("tutorial: desde el botoncito de Inicio, paso a paso, hasta el final", async () => {
+  const c = await celu();
+  await c.empezar();
+  await c.boton("Ver tutorial");
+  for (let i = 1; i <= 6; i++) {
+    await c.ve(new RegExp("Paso " + i + " de 6"));
+    // Dos personas pidieron «un lugar para ahorrar»: ya existe (las metas) y el tutorial dice dónde está.
+    if (i === 3) await c.ve(/Mis cuentas › Metas/);
+    if (i < 6) await c.boton("Siguiente");
+  }
+  await c.boton("¡Empezar!");
+  await c.ve(/Escribí qué gastaste/);
+  await c.cerrar();
+});
+
+paso("la tarjeta: con una sola plata es como siempre, y el detalle está pegado a ella", async () => {
+  const c = await celu();
+  await c.empezar();
+  await c.anotar("cobré 100000");
+  assert.equal(await c.ev(`!!document.querySelector(".tecard .ver-res") && !document.querySelector(".plata-puntos")`), true);
+  assert.equal(await c.ev(`document.querySelector(".tecard").tagName`), "BUTTON");
+  await c.clic(".tecard");
+  await c.ve(/De dónde sale lo que te queda/i);
+  await c.cerrar();
+});
+
+paso("mis platas: dólares en la tarjeta, puntitos, orden y vuelve a la última", async () => {
+  const c = await celu();
+  await c.empezar();
+  await c.anotar("cobré 100000");
+  await c.boton("¿Dólares o cripto?");
+  await c.ve(/¿Tenés plata en otro lado\?/);
+  await c.boton("+ Dólares");
+  await c.escribir("[data-act=platCampo][data-k=monto]", "1200");
+  await c.clic("[data-act=plataEdGuardar]");
+  await c.ve(/Mis platas/);
+  await c.clic("[data-act=volver]");
+  await c.hasta(`document.querySelector(".tecard .big")?.innerText === "US$ 1.200"`, "que muestre los dólares");
+  assert.equal(await c.ev(`document.querySelectorAll(".plata-puntos .pd").length`), 3, "todo junto, pesos y dólares");
+  await c.ve(/Tocá para ver tus otras platas/);
+  for (let i = 0; i < 3 && !/Te queda/.test(await c.ev(`document.querySelector(".tecard").innerText`)); i++) await c.clic("[data-act=plataSig]");
+  await c.noVe(/Tocá para ver tus otras platas/);
+  assert.equal(await c.numero(), "$100.000");
+  // El detalle sigue a un toque.
+  await c.clic(".ver-res");
+  await c.ve(/De dónde sale lo que te queda/i);
+  await c.clic("[data-act=volver]");
+  // Abre en la última que quedó a la vista.
+  await c.clic("[data-act=plataSig]");
+  const antes = await c.numero();
+  await esperar(200);
+  await c.ir();
+  assert.equal(await c.numero(), antes);
+  // Apagar los dólares vuelve a un solo número, sin puntitos.
+  await c.clic("[data-act=abrir][data-v=platas]");
+  await c.clic('[data-act=plataVer][data-v="' + await c.ev(`document.querySelector("[data-act=plataEditar]").dataset.v`) + '"]');
+  await c.clic("[data-act=volver]");
+  await c.hasta(`!document.querySelector(".plata-puntos")`, "que se vayan los puntitos");
+  await c.cerrar();
+});
+
+paso("metas: sacar plata vuelve a lo que te queda, salvo que ya la hayas gastado", async () => {
+  const c = await celu();
+  await c.empezar();
+  await c.anotar("cobré 100000");
+  await c.clic(".nav [data-v=plan]");
+  await c.boton("Metas");
+  await c.boton("+ Nueva meta");
+  await c.escribir("[data-act=campo][data-k=nombre]", "Viaje");
+  await c.escribir("[data-act=campo][data-k=objetivo]", "500000");
+  await c.escribir("[data-act=campo][data-k=ahorrado]", "40000");
+  await c.clic("[data-act=guardarPlan]");
+  await c.ve(/Viaje/);
+  await c.boton("Sacar");
+  await c.escribir("[data-act=campo][data-k=monto]", "900000");
+  await c.clic("[data-act=guardarPlan]");
+  await c.ve(/Es más de lo que tenés guardado/);
+  await c.escribir("[data-act=campo][data-k=monto]", "10000");
+  await c.clic("[data-act=guardarPlan]");
+  await c.ve(/\$30\.000 de \$500\.000/);
+  await c.boton("Sacar");
+  await c.escribir("[data-act=campo][data-k=monto]", "5000");
+  await c.clic("[data-act=formSwitch][data-v=gasto]");
+  await c.clic("[data-act=guardarPlan]");
+  await c.ve(/\$25\.000 de \$500\.000/);
+  await c.clic(".nav [data-v=inicio]");
+  await c.ve(/De la meta: Viaje/);
+  await c.cerrar();
+});
+
+paso("metas: «Ahorros» sin objetivo se guarda, suma y nunca se cumple", async () => {
+  const c = await celu();
+  await c.empezar();
+  await c.anotar("cobré 100000");
+  await c.clic(".nav [data-v=plan]");
+  await c.boton("Metas");
+  await c.boton("+ Nueva meta");
+  await c.ve(/Objetivo \(opcional\)/i);
+  await c.ve(/Sin objetivo es un lugar para ir guardando/);
+  await c.noVe(/Fecha límite/i);
+  await c.escribir("[data-act=campo][data-k=nombre]", "Ahorros");
+  await c.clic("[data-act=guardarPlan]");
+  await c.ve(/\$0 guardados/);
+  await c.ve(/Para ir guardando/);
+  await c.boton("Sumar");
+  await c.escribir("[data-act=campo][data-k=monto]", "20000");
+  await c.ve(/\$20\.000 guardados/);
+  await c.clic("[data-act=guardarPlan]");
+  await c.ve(/\$20\.000 guardados/);
+  await c.noVe(/Lo lograste|Meta cumplida|NaN|Infinity/);
+  // Con objetivo vuelve la fecha; al borrarlo, se va.
+  await c.clic("[data-act=editarPlan]");
+  await c.escribir("[data-act=campo][data-k=objetivo]", "50000");
+  await c.ve(/Fecha límite/i);
+  await c.escribir("[data-act=campo][data-k=objetivo]", "");
+  await c.noVe(/Fecha límite/i);
+  await c.cerrar();
+});
+
+paso("fijos: «todavía no» pregunta de nuevo a los 3 días, y «este mes no» lo cierra sin anotar nada", async () => {
+  const c = await celu();
+  await c.empezar();
+  await c.anotar("cafe 1000");
+  await c.clic(".nav [data-v=plan]");
+  await c.boton("Fijos");
+  await c.boton("+ Nuevo fijo");
+  await c.boton("Un ingreso");
+  await c.escribir("[data-act=campo][data-k=nombre]", "Honorarios");
+  await c.escribir("[data-act=campo][data-k=monto]", "300000");
+  await c.escribir("[data-act=campo][data-k=dia]", "1");
+  await c.boton("Que me pregunte");
+  await c.clic("[data-act=guardarPlan]");
+  // Si hoy ya pasó el día 1, empieza el mes que viene: se simula que arrancó antes.
+  await fijosDesdeAntes(c);
+  await c.ir();
+  await c.ve(/¿Ya cobraste Honorarios\?/);
+  await c.boton("Todavía no");
+  await c.noVe(/¿Ya cobraste Honorarios\?/);
+  await c.ve(/te pregunto en 3 días/);
+  await c.clic("[data-act=deshacer]");
+  await c.ve(/¿Ya cobraste Honorarios\?/);
+  // «Este mes no» está, más chico que los tres botones, y no anota nada.
+  assert.ok(await c.ev(`(() => { const chico = document.querySelector("[data-act=saltearFijo]"), grande = document.querySelector("[data-act=posponerFijo]");
+    return chico.innerText.trim() === "Este mes no" && parseFloat(getComputedStyle(chico).fontSize) < parseFloat(getComputedStyle(grande).fontSize) && chico.getBoundingClientRect().height >= 40; })()`), "«Este mes no» es más chico que los botones, pero se puede tocar");
+  await c.clic("[data-act=saltearFijo]");
+  await c.noVe(/¿Ya cobraste Honorarios\?/);
+  await c.ve(/no te pregunto más\. No anoté nada/);
+  await c.noVe(/\+\$300\.000/);
+  await c.clic("[data-act=deshacer]");
+  await c.ve(/¿Ya cobraste Honorarios\?/);
+  await c.boton("Otro monto");
+  await c.teclas("350000");
+  await c.clic("[data-act=guardar]");
+  await c.hasta(`!/¿Ya cobraste Honorarios/.test(document.querySelector("#app").innerText)`, "que se vaya la pregunta");
+  await c.ve(/\+\$350\.000/);
+  await c.cerrar();
+});
+
+paso("categorías: lo que corregís queda aprendido", async () => {
+  const c = await celu();
+  await c.empezar();
+  await c.anotar("papas fritas 2500");
+  await c.ve(/Salidas/);
+  await c.clic("[data-act=editar]");
+  await c.clic("[data-act=cat][data-v=super]");
+  await c.clic("[data-act=guardar]");
+  await c.ve(/La próxima vez ya va a Súper/);
+  await c.anotar("papas fritas 3000");
+  await c.hasta(`[...document.querySelectorAll("[data-act=editar]")][0].innerText.includes("Súper")`, "que la próxima ya vaya al súper");
+  await c.cerrar();
+});
+
+/* ---------- que el número se pueda creer (encargo del 2026-11-11) ---------- */
+// En cada camino por el que se mueve plata: el número de Inicio cambia lo que tiene que cambiar y el cartelito lo dice.
+const cargarPlata = async (c, monto) => {
+  await c.clic("[data-act=abrir][data-v=plata]");
+  if (await c.ev(`!document.querySelector("[data-act=plataMonto]")`)) await c.clic("[data-act=corregirPlata]");
+  await c.escribir("[data-act=plataMonto]", String(monto));
+  await c.clic("[data-act=plataGuardar]");
+  await c.ve(/Te queda/);
+};
+const aviso = (c) => c.ev(`document.querySelector(".snack span")?.innerText || ""`);
+const esperaAviso = (c, re) => c.hasta(`${re}.test(document.querySelector(".snack span")?.innerText || "")`, "el cartelito " + re);
+const numeroEs = (c, n) => c.hasta(`document.querySelector(".tecard .big")?.innerText === ${j(n)}`, "que el número de Inicio sea " + n);
+const entra = async (c, donde) => {
+  const r = await c.ev(`({ inner: innerWidth, sw: document.documentElement.scrollWidth, fuera: [...document.querySelectorAll("#app *")].filter((e) => { if (e.closest("svg") || e.closest(".vh")) return false; const q = e.getBoundingClientRect(); return q.width && q.right > ${c.ancho} + 1; }).map((e) => String(e.className || e.tagName)).slice(0, 5) })`);
+  assert.ok(r.inner <= c.ancho + 2 && r.sw <= c.ancho + 2 && !r.fuera.length, donde + ": " + JSON.stringify(r));
+};
+
+paso("deudas: pagar una deuda baja lo que te queda, y el cartelito lo dice", async () => {
+  const c = await celu({ ancho: 320, alto: 640 });
+  await c.empezar();
+  await cargarPlata(c, 100000);
+  await c.clic(".nav [data-v=plan]");
+  await c.clic("[data-act=planTab][data-v=deudas]");
+  for (const [quien, total] of [["Juan", "30000"], ["Ana", "20000"]]) {
+    await c.clic("[data-act=nuevoPlan]");
+    await c.escribir("[data-act=campo][data-k=quien]", quien);
+    await c.escribir("[data-act=campo][data-k=total]", total);
+    await c.clic("[data-act=guardarPlan]");
+  }
+  // La que más falta va primero: Juan, $30.000. Con la opción prendida (como viene), se resta.
+  await c.clic("[data-act=pagarDeuda]");
+  await c.ve(/Restarlo de mi plata/);
+  await c.ve(/Se anota como gasto en Deudas/);
+  await entra(c, "Pagar una deuda");
+  await c.clic("[data-act=guardarPlan]");
+  await esperaAviso(c, /Pagaste \$30\.000\. ¡Saldada! Te queda \$70\.000/);
+  // La otra, con la opción apagada: no se resta, y también se dice.
+  await c.clic("[data-act=pagarDeuda]");
+  await c.clic("[data-act=formSwitch][data-v=anotar]");
+  await c.ve(/Apagado: solo baja la deuda\. Lo que te queda no cambia/);
+  await c.clic("[data-act=guardarPlan]");
+  await esperaAviso(c, /Pagaste \$20\.000\. ¡Saldada! No cambia lo que te queda/);
+  await c.clic(".nav [data-v=inicio]");
+  await numeroEs(c, "$70.000");
+  await c.ve(/Pago: Juan/);
+  await c.noVe(/Pago: Ana/);
+  // Borrar el pago devuelve la plata, y deshacer el borrado la vuelve a restar.
+  await c.clic("[data-act=editar]");
+  await c.clic("[data-act=borrarMov]");
+  await c.clic("[data-act=borrarMov]");
+  await numeroEs(c, "$100.000");
+  await c.clic("[data-act=deshacer]");
+  await numeroEs(c, "$70.000");
+  await c.cerrar();
+});
+
+paso("tarjeta: pagarla tiene su categoría, se anote escribiendo o desde una deuda", async () => {
+  const c = await celu();
+  await c.empezar();
+  await cargarPlata(c, 500000);
+  await c.anotar("pagué la visa 150000");
+  await c.ve(/Pago de tarjeta/);
+  await numeroEs(c, "$350.000");
+  // Una deuda que es una tarjeta: su pago también queda en «Pago de tarjeta», no en «Deudas».
+  await c.clic(".nav [data-v=plan]");
+  await c.clic("[data-act=planTab][data-v=deudas]");
+  await c.clic("[data-act=nuevoPlan]");
+  await c.escribir("[data-act=campo][data-k=quien]", "Banco");
+  await c.escribir("[data-act=campo][data-k=concepto]", "Tarjeta Mastercard");
+  await c.escribir("[data-act=campo][data-k=total]", "50000");
+  await c.clic("[data-act=guardarPlan]");
+  await c.clic("[data-act=pagarDeuda]");
+  await c.ve(/Se anota como gasto en Pago de tarjeta/);
+  await c.clic("[data-act=guardarPlan]");
+  await esperaAviso(c, /Pagaste \$50\.000\. ¡Saldada! Te queda \$300\.000/);
+  await c.clic(".nav [data-v=inicio]");
+  await c.ve(/Pago: Tarjeta Mastercard/);
+  await c.noVe(/Deudas ·/);
+  await c.cerrar();
+});
+
+paso("tarjeta de crédito: lo comprado con crédito resta cuando pagás la tarjeta, una sola vez", async () => {
+  const c = await celu({ ancho: 320, alto: 640 });
+  await c.empezar();
+  await cargarPlata(c, 500000);
+  await c.anotar("zapatillas con crédito 80000");
+  await esperaAviso(c, /No cambia lo que te queda: es con tarjeta de crédito/);
+  await numeroEs(c, "$500.000");
+  assert.match(await c.frase(), /Gastaste \$80\.000 · tarjeta por pagar: \$80\.000/);
+  // En Resumen, la cuenta lo explica y deja pagarla.
+  await c.clic(".tecard");
+  await c.ve(/Con crédito, todavía no salió de tu plata/);
+  await c.ve(/Tarjeta por pagar/);
+  await entra(c, "Resumen con la tarjeta");
+  await c.clic("[data-act=pagarTarjeta]");
+  await c.hasta(`document.querySelector(".sheet") && /80\.000/.test(document.querySelector(".sheet").innerText)`, "la hoja con lo que falta pagar");
+  await c.clic("[data-act=guardar]");
+  await c.clic(".nav [data-v=inicio]");
+  await numeroEs(c, "$420.000");
+  assert.doesNotMatch(await c.frase(), /tarjeta por pagar/);
+  // Lo gastado sigue siendo 80.000, no 160.000: pagar la tarjeta no es otro gasto. Compra y pago en el mismo mes: la tarjeta no agrega renglones.
+  await c.clic(".tecard");
+  await c.noVe(/Tarjeta por pagar/);
+  assert.equal((await c.ev(`[...document.querySelectorAll(".row")].find((r) => /^Gastaste/.test(r.innerText))?.innerText`)).replace(/\s+/g, " "), "Gastaste −$80.000");
+  await c.noVe(/Pago de tarjeta ·/);
+  await c.cerrar();
+});
+
+paso("tarjeta de crédito: si las compras ya estaban anotadas, el pago no se cuenta dos veces", async () => {
+  const c = await celu();
+  await c.empezar();
+  await cargarPlata(c, 500000);
+  await c.anotar("zapatillas 80000");
+  await numeroEs(c, "$420.000");
+  await c.anotar("pagué la visa 80000");
+  await numeroEs(c, "$340.000");
+  await c.ve(/¿Ya anotaste lo que compraste con esa tarjeta\?/);
+  await c.boton("Sí, elegirlas");
+  await c.ve(/¿Cuáles eran de la tarjeta\?/);
+  await c.ve(/Elegiste \$0/);
+  await entra(c, "La lista para elegir");
+  await c.clic("[data-act=tarjetaMarcar]");
+  await c.ve(/Elegiste \$80\.000/);
+  await c.clic("[data-act=tarjetaListo]");
+  await numeroEs(c, "$420.000");
+  await esperaAviso(c, /esa compra quedó con la tarjeta/);
+  await c.noVe(/¿Ya anotaste lo que compraste/);
+  // Deshacer vuelve a como estaba, y la pregunta vuelve sola.
+  await c.clic("[data-act=deshacer]");
+  await numeroEs(c, "$340.000");
+  await c.ve(/¿Ya anotaste lo que compraste con esa tarjeta\?/);
+  // «No, es un gasto nuevo»: queda restado y no pregunta más.
+  await c.boton("No, es un gasto nuevo");
+  await esperaAviso(c, /lo cuento como un gasto nuevo/);
+  await c.noVe(/¿Ya anotaste lo que compraste/);
+  await numeroEs(c, "$340.000");
+  await c.cerrar();
+});
+
+paso("tarjeta de crédito: el resumen trae impuestos; elegidas las compras, la pregunta no vuelve", async () => {
+  const c = await celu({ ancho: 320, alto: 640 });
+  await c.empezar();
+  await cargarPlata(c, 500000);
+  await c.anotar("zapatillas 80000");
+  await c.anotar("café 2500");
+  await c.anotar("pagué la visa 85000");
+  await numeroEs(c, "$332.500");
+  await c.boton("Sí, elegirlas");
+  await c.hasta(`[...document.querySelectorAll("[data-act=tarjetaMarcar]")].some((b) => /Zapatillas/.test(b.innerText))`, "la lista con las zapatillas");
+  await c.ev(`[...document.querySelectorAll("[data-act=tarjetaMarcar]")].find((b) => /Zapatillas/.test(b.innerText)).click()`);
+  await c.ve(/Los \$5\.000 que no cubren los cuento como un gasto nuevo/);
+  await entra(c, "La lista con lo que sobra");
+  await c.clic("[data-act=tarjetaListo]");
+  await numeroEs(c, "$412.500");
+  await esperaAviso(c, /Los \$5\.000 que no cubren las cuento como un gasto nuevo/);
+  await c.noVe(/¿Ya anotaste lo que compraste|¿Qué son los/);
+  // Si el resumen ya cubre compras con crédito y sobra algo, se pregunta por esa parte (si hay gastos que podrían ser compras de la tarjeta).
+  await c.anotar("almuerzo 3000");
+  await c.anotar("remera con crédito 20000");
+  await c.anotar("pagué la visa 21000");
+  await c.ve(/¿Qué son los \$1\.000 de más que pagaste de la tarjeta\?/);
+  await c.boton("Intereses o impuestos");
+  await c.noVe(/¿Qué son los/);
+  await c.cerrar();
+});
+
+paso("lo de siempre: a la tercera vez aparece debajo del campo, y un toque lo anota", async () => {
+  const c = await celu({ ancho: 320, alto: 640, letra: "enorme" });
+  await c.empezar();
+  await c.anotar("café 2500");
+  await c.anotar("café 2500");
+  await c.noVe(/Lo de siempre/);
+  await c.anotar("café 2500");
+  await c.ve(/Lo de siempre/);
+  await entra(c, "Inicio con lo de siempre");
+  await c.clic("[data-act=repetir][data-v='0']");
+  await esperaAviso(c, /Anotado: Café \$2\.500/);
+  assert.equal(await c.ev(`[...document.querySelectorAll("[data-act=editar]")].filter((b) => /Café/.test(b.innerText)).length`), 4);
+  await c.clic("[data-act=deshacer]");
+  await c.hasta(`[...document.querySelectorAll("[data-act=editar]")].filter((b) => /Café/.test(b.innerText)).length === 3`, "que deshacer lo saque");
+  await c.cerrar();
+});
+
+paso("grupos: «Ya le pagué» baja lo que te queda, y se puede apagar en el grupo", async () => {
+  const hoy = new Date().toISOString().slice(0, 10);
+  const grupo = { id: "gplata", nombre: "Asado", moneda: "ARS", ts: 1, miembros: [{ id: "a", nombre: "Juana", ts: 1 }, { id: "b", nombre: "Pedro", ts: 1 }],
+    gastos: [{ id: "x", t: "Carne", m: 40000, p: "a", a: ["a", "b"], sp: "eq", w: {}, f: hoy, ts: 2, x: false, por: "a" }], pagos: [] };
+  const c = await celu({ ancho: 320, alto: 640 });
+  await c.empezar();
+  await cargarPlata(c, 100000);
+  await c.ir("#g=" + encodeURIComponent(await codificar(grupo)));
+  await c.clic("[data-act=elegirYo][data-v=b]");
+  await c.clic("[data-act=listoQuien]");
+  await c.ve(/Tenés que pasar/);
+  // La carne la pagó Juana: a Pedro todavía no le salió plata.
+  await c.ve(/Que este grupo mueva mi plata/);
+  await entra(c, "El grupo");
+  await c.clic("[data-act=abrirJuntada]");
+  await c.ve(/Le pasás a Juana/);
+  await c.boton("Ya le pagué");
+  await esperaAviso(c, /Juana\. Te queda \$80\.000/);
+  await c.clic(".nav [data-v=inicio]");
+  await numeroEs(c, "$80.000");
+  await c.ve(/Asado: le pasé a Juana/);
+  // Se apaga en el grupo: lo del grupo sale de sus movimientos y el número vuelve.
+  await c.clic(".nav [data-v=grupos]");
+  await c.clic("[data-act=abrirGrupo]");
+  await c.clic("[data-act=grupoLoc]");
+  await esperaAviso(c, /ya no toca tu plata.*Te queda \$100\.000/);
+  await c.clic(".nav [data-v=inicio]");
+  await numeroEs(c, "$100.000");
+  await c.noVe(/le pasé a Juana/);
+  // Y con el grupo apagado, un pago avisa que no cambia nada (antes no decía nada y quedaba la duda).
+  await c.clic(".nav [data-v=grupos]");
+  await c.clic("[data-act=abrirGrupo]");
+  await c.clic("[data-act=grupoLoc]");
+  await esperaAviso(c, /mueve tu plata.*Te queda \$80\.000/);
+  await c.cerrar();
+});
+
+paso("metas: sacar de ahorros que estaban aparte no toca lo que te queda si ya se gastó, y vuelve si no", async () => {
+  const c = await celu({ ancho: 320, alto: 640 });
+  await c.empezar();
+  await cargarPlata(c, 100000);
+  await c.clic(".nav [data-v=plan]");
+  await c.boton("Metas");
+  await c.boton("+ Nueva meta");
+  await c.escribir("[data-act=campo][data-k=nombre]", "Viaje");
+  await c.escribir("[data-act=campo][data-k=objetivo]", "500000");
+  await c.escribir("[data-act=campo][data-k=ahorrado]", "40000");
+  await c.clic("[data-act=guardarPlan]");
+  await c.clic(".nav [data-v=inicio]");
+  await c.ve(/¿Lo que guardaste para tus metas está dentro de tu plata\?/);
+  await c.clic("[data-act=ahorroAparte]");
+  await numeroEs(c, "$100.000");
+  await c.clic(".nav [data-v=plan]");
+  await c.boton("Sacar");
+  await c.escribir("[data-act=campo][data-k=monto]", "10000");
+  await c.ve(/vuelve a lo que te queda/);
+  await c.clic("[data-act=formSwitch][data-v=gasto]");
+  await c.ve(/Lo que te queda no cambia: esa plata ya estaba separada/);
+  await entra(c, "Sacar de una meta");
+  await c.clic("[data-act=guardarPlan]");
+  await esperaAviso(c, /Sacaste \$10\.000 de Viaje\. Lo que te queda no cambia/);
+  await c.boton("Sacar");
+  await c.escribir("[data-act=campo][data-k=monto]", "10000");
+  await c.clic("[data-act=guardarPlan]");
+  await esperaAviso(c, /Sacaste \$10\.000 de Viaje\. Te queda \$110\.000/);
+  await c.clic("[data-act=deshacer]");
+  await c.clic(".nav [data-v=inicio]");
+  await numeroEs(c, "$100.000");
+  await c.ve(/De la meta: Viaje/);
+  await c.cerrar();
+});
+
+paso("ejemplo: lo que se hace con los datos de ejemplo se va con el ejemplo", async () => {
+  const c = await celu();
+  await c.empezar();
+  await cargarPlata(c, 100000);
+  await c.clic(".nav [data-v=mas]");
+  await c.clic("[data-act=abrir][data-v=privacidad]");
+  await c.clic("[data-act=ponerEjemplo]");
+  // Se saca de la meta de ejemplo «ya gastada» y se paga la deuda de ejemplo.
+  await c.clic(".nav [data-v=plan]");
+  await c.boton("Metas");
+  await c.boton("Sacar");
+  await c.escribir("[data-act=campo][data-k=monto]", "5000");
+  await c.clic("[data-act=formSwitch][data-v=gasto]");
+  await c.clic("[data-act=guardarPlan]");
+  await c.clic("[data-act=planTab][data-v=deudas]");
+  await c.clic("[data-act=pagarDeuda]");
+  await c.clic("[data-act=guardarPlan]");
+  await c.clic(".nav [data-v=inicio]");
+  await numeroEs(c, "$100.000");
+  await c.ve(/De la meta: Viaje/);
+  await c.ve(/Pago: Préstamo/);
+  await c.clic("[data-act=quitarEjemplo]");
+  await c.ve(/Todavía no anotaste nada/);
+  await numeroEs(c, "$100.000");
+  assert.equal(await c.ev(`new Promise((ok, mal) => { const r = indexedDB.open("miguita"); r.onerror = mal; r.onsuccess = () => { const q = r.result.transaction("movs").objectStore("movs").getAll(); q.onsuccess = () => ok(q.result.length); q.onerror = mal; }; })`), 0, "no queda ningún movimiento de verdad");
+  await c.cerrar();
+});
+
+
+paso("fijos: un cobro confirmado después de cargar la plata suma, y pregunta si ya estaba", async () => {
+  const c = await celu();
+  await c.empezar();
+  await cargarPlata(c, 100000);
+  await c.clic(".nav [data-v=plan]");
+  await c.boton("Fijos");
+  await c.boton("+ Nuevo fijo");
+  await c.boton("Un ingreso");
+  await c.escribir("[data-act=campo][data-k=nombre]", "Sueldo");
+  await c.escribir("[data-act=campo][data-k=monto]", "300000");
+  await c.escribir("[data-act=campo][data-k=dia]", "1");
+  await c.boton("Que me pregunte");
+  await c.clic("[data-act=guardarPlan]");
+  await fijosDesdeAntes(c);
+  await c.ir();
+  await c.ve(/¿Ya cobraste Sueldo/);
+  await c.clic("[data-act=confirmarFijo]");
+  // Antes quedaba con la fecha vieja y no sumaba. Ahora suma, y como la plata se cargó después del día del cobro, pregunta.
+  await numeroEs(c, "$400.000");
+  await c.ve(/¿Esta plata ya estaba dentro de los \$100\.000 que me dijiste\?/);
+  await c.clic("[data-act=saldoYa]");
+  await numeroEs(c, "$100.000");
+  await c.ve(/Sueldo/);
+  await c.cerrar();
+});
+
+paso("borrar todo: también se va la plata cargada", async () => {
+  const c = await celu();
+  await c.empezar();
+  await cargarPlata(c, 100000);
+  await c.anotar("nafta 20000");
+  await c.clic("[data-act=saldoNo]");
+  await numeroEs(c, "$80.000");
+  await c.clic(".nav [data-v=mas]");
+  await c.clic("[data-act=abrir][data-v=privacidad]");
+  await c.clic("[data-act=borrarTodo]");
+  await c.clic("[data-act=borrarTodo]");
+  await c.clic(".nav [data-v=inicio]");
+  await c.ve(/Gastaste este mes/);
+  await numeroEs(c, "$0");
+  await c.noVe(/Te queda/);
+  // Y sigue así al volver a abrir.
+  await c.ir();
+  await c.ve(/Gastaste este mes/);
+  await c.noVe(/Te queda/);
+  await c.cerrar();
+});
+
+paso("aprender: vale en la hoja de anotar, deshacer lo desaprende y se puede olvidar", async () => {
+  const c = await celu();
+  await c.empezar();
+  // En la hoja, al escribir el detalle se elige sola la categoría.
+  await c.clic("[data-act=nuevo], #rapido");
+  await c.ev(`(() => { const e = document.querySelector("#rapido"); e.value = ""; e.closest("form").requestSubmit(); })()`);
+  await c.escribir("[data-act=detalle]", "nafta");
+  await c.hasta(`document.querySelector("[data-act=cat][aria-pressed=true]")?.dataset.v === "auto"`, "que elija Nafta/auto sola");
+  await c.clic("[data-act=cerrarHoja]");
+  // Algo que no conoce: pregunta, se le enseña, y «Deshacer» deshace también lo aprendido.
+  await c.anotar("zapallin 1000");
+  await c.ve(/¿En qué categoría va «Zapallin»\?/);
+  await c.clic("[data-act=dudaCatSel][data-v=regalos]");
+  await esperaAviso(c, /La próxima vez ya lo sé/);
+  await c.clic("[data-act=deshacer]");
+  await c.anotar("zapallin 2000");
+  await c.ve(/¿En qué categoría va «Zapallin»\?/);
+  await c.clic("[data-act=dudaCatSel][data-v=regalos]");
+  // Ahora sí quedó: en la hoja de anotar también lo sabe.
+  await c.ev(`(() => { const e = document.querySelector("#rapido"); e.value = ""; e.closest("form").requestSubmit(); })()`);
+  await c.escribir("[data-act=detalle]", "zapallin");
+  await c.hasta(`document.querySelector("[data-act=cat][aria-pressed=true]")?.dataset.v === "regalos"`, "que use lo aprendido en la hoja");
+  await c.clic("[data-act=cerrarHoja]");
+  // Pasar algo de gasto a ingreso también se aprende.
+  await c.anotar("juancho 5000");
+  await c.clic("[data-act=dudaCatSel][data-v='']");
+  await c.clic("[data-act=editar]");
+  await c.clic("[data-act=tipo][data-v=ingreso]");
+  await c.clic("[data-act=guardar]");
+  await c.anotar("juancho 7000");
+  await c.ve(/\+\$7\.000/);
+  // Y lo que enseñó se puede ver y olvidar.
+  await c.clic(".nav [data-v=mas]");
+  await c.clic("[data-act=abrir][data-v=personalizacion]");
+  await c.clic("[data-act=abrir][data-v=categorias]");
+  await c.boton("Lo que me enseñaste");
+  await c.ve(/zapallin/);
+  await c.ve(/juancho/);
+  await entra(c, "Lo que me enseñaste");
+  await c.clic("[data-act=olvidar][data-v=zapallin]");
+  await c.noVe(/zapallin/);
+  await c.clic(".nav [data-v=inicio]");
+  await c.anotar("zapallin 3000");
+  await c.ve(/¿En qué categoría va «Zapallin»\?/);
+  await c.cerrar();
+});
+
+paso("para cobrar se puede poner el alias, el CBU o el CVU", async () => {
+  const c = await celu({ ancho: 320, alto: 640 });
+  await c.empezar();
+  await c.clic(".nav [data-v=mas]");
+  const poner = async (v) => { await c.ev(`(() => { const e = document.querySelector("[data-act=miAlias]"); e.value = ${j(v)}; e.dispatchEvent(new Event("input", { bubbles: true })); e.dispatchEvent(new Event("change", { bubbles: true })); })()`); await esperar(80); };
+  await poner("2850 5909 4009 0418 1352 02");
+  await c.ve(/Ese CBU o CVU tiene algún número mal/);
+  await entra(c, "Ajustes con el aviso del CBU");
+  await poner("2850 5909 4009 0418 1352 01");
+  await c.noVe(/algún número mal/);
+  // Queda guardado solo con números y llega al grupo que se arma.
+  await c.clic(".nav [data-v=grupos]");
+  await c.clic("[data-act=nuevoGrupo]");
+  assert.equal(await c.ev(`document.querySelector("[data-act=gPersona][data-k=alias]").value`), "2850590940090418135201");
+  await entra(c, "Grupo nuevo");
+  await c.cerrar();
+});
+
+paso("mi plata: con ingresos anotados y sin número cargado, lo primero es anotar lo que entró", async () => {
+  const c = await celu();
+  await c.empezar();
+  await c.anotar("cobré 100000");
+  await numeroEs(c, "$100.000");
+  await c.boton("Me entró plata");
+  const t = await c.texto();
+  assert.ok(t.indexOf("¿Te entró plata?") >= 0 && t.indexOf("¿Te entró plata?") < t.indexOf("Tu plata".toUpperCase()), "«¿Te entró plata?» va arriba:\n" + t);
+  await c.ve(/Según lo que anotaste, tenés\s+\$100\.000/);
+  await c.noVe(/¿Cuánta plata tenés hoy\?/);
+  await c.ve(/¿No coincide con lo que tenés\? Corregilo/);
+  await c.clic("[data-act=volver]");
+  // Con otras platas y sin la plata en pesos cargada, tocar pasa a la siguiente: el texto ya no dice «tocá para ver en qué se fue».
+  const d = await celu();
+  await d.empezar();
+  await d.anotar("nafta 20000");
+  await d.ve(/Tocá para ver en qué se fue/);
+  await d.clic("[data-act=abrir][data-v=plata]");
+  await d.clic("[data-act=abrir][data-v=platas]");
+  await d.boton("+ Dólares");
+  await d.escribir("[data-act=platCampo][data-k=monto]", "500");
+  await d.clic("[data-act=plataEdGuardar]");
+  await d.clic(".nav [data-v=inicio]");
+  await d.clic("[data-act=plataSig]");
+  await d.ve(/En «Ver el detalle» está en qué se fue/);
+  await d.noVe(/Tocá para ver en qué se fue/);
+  await c.cerrar();
+  await d.cerrar();
+});
+
 for (const [ancho, alto] of [[320, 640], [360, 740], [375, 812]]) for (const letra of ["", "grande", "enorme"])
   paso(`nada se sale de la pantalla: ${ancho} de ancho, letra ${letra || "normal"}`, async () => {
     const c = await celu({ ancho, alto, letra });
     await c.empezar();
     await c.anotar("alquiler 1250000");
     await c.anotar("cobré 5000000");
+    // Lo que alarga la pantalla: «lo de siempre» con un detalle largo, la tarjeta por pagar y sus renglones en Resumen.
+    for (let i = 0; i < 3; i++) await c.anotar("cafecito con medialunas de manteca 2500");
+    await c.anotar("zapatillas con crédito 80000");
+    await c.anotar("pagué la visa 30000");
+    await c.ve(/Lo de siempre/);
+    await c.ve(/tarjeta por pagar/);
     const mide = async (donde) => {
       const r = await c.ev(`({ inner: innerWidth, sw: document.documentElement.scrollWidth, fuera: [...document.querySelectorAll("#app *")].filter((e) => { if (e.closest("svg") || e.closest(".vh")) return false; const q = e.getBoundingClientRect(); return q.width && q.right > ${ancho} + 1; }).map((e) => String(e.className || e.tagName)).slice(0, 5) })`);
       assert.ok(r.inner <= ancho + 2 && r.sw <= ancho + 2 && !r.fuera.length, donde + ": " + JSON.stringify(r));
@@ -357,5 +981,16 @@ for (const [ancho, alto] of [[320, 640], [360, 740], [375, 812]]) for (const let
     await c.teclas("1250000"); await mide("Hoja de anotar"); await c.clic("[data-act=cerrarHoja]");
     for (const v of ["plan", "grupos", "mas"]) { await c.clic(`.nav [data-v=${v}]`); await mide(v); }
     await c.clic("[data-act=abrir][data-v=personalizacion]"); await mide("Personalización");
+    await c.clic(".nav [data-v=inicio]"); await c.clic("[data-act=abrir][data-v=platas]"); await mide("Mis platas vacía");
+    for (const t of ["+ Dólares", "+ USDT", "+ Inversiones"]) {
+      await c.boton(t); await mide("Sumar " + t); await c.escribir("[data-act=platCampo][data-k=monto]", "12500000"); await c.clic("[data-act=plataEdGuardar]");
+      await c.clic(".nav [data-v=inicio]"); await mide("Inicio con " + t); await c.clic("[data-act=abrir][data-v=platas]"); await mide("Mis platas con " + t);
+    }
+    await c.clic(".nav [data-v=inicio]");
+    for (let i = 0; i < 5; i++) { await c.clic("[data-act=plataSig]"); await mide("Inicio, plata " + i); }
+    await c.clic("[data-act=abrir][data-v=plata]"); await mide("Mi plata con todo"); await c.clic("[data-act=volver]");
+    await c.boton("Ver tutorial");
+    for (let i = 0; i < 6; i++) { await mide("Tutorial " + i); if (i < 5) await c.boton("Siguiente"); }
+    await c.boton("¡Empezar!");
     await c.cerrar();
   });

@@ -1,0 +1,467 @@
+# Frases como las escribe o las dice la gente. Una por línea; las líneas con # son títulos.
+# `npm test` avisa si alguna cambia de lectura (ver tools/frases.mjs). Para sumar una: agregala y corré `npm run frases`.
+
+# --- Las de siempre: montos, jerga, varias juntas, plata que entra y que sale ---
+10 lucas
+una luca pan
+dos lucas nafta
+media luca kiosco
+luca y media cafe
+2 lucas y media taxi
+un palo alquiler
+medio palo auto
+palo y medio
+dos palos alquiler
+1,5 palos auto
+1.5 lucas
+3 gambas chicle
+500 mangos pan
+dos mil quinientos cafe
+veinte mil super
+treinta y cinco mil gas
+2 mil 500 pan
+nafta 20k
+nafta 20mil
+alquiler 350 mil
+15,500 super
+$500 pan
+3x2000 birra
+1500 kiosco
+2 pizzas 18000
+2 pizzas
+3 kg de pan 6000
+3 kg de pan
+24 cuotas tele 500000
+24 cuotas tele
+un alfajor 1500
+cuota 3/12 5000
+Cuota 3/12
+gasté 3000 en pizza
+US$ 100 hotel
+100 dolares hotel
+hotel 100 usd
+100 verdes hotel
+nafta 20
+super 1500 verdu 2000
+barbería 12000
+barrio 5000
+bar 5000
+uber eats 8000
+uber 5000
+agua mineral 1500
+agua 9000
+pan 500
+asado 30000
+colectivo 700
+edenor 25000
+veterinaria 8000
+facu 40000
+aguinaldo 400 lucas
+changa 50000
+me regalaron 10000
+10 lucas birra
+10lucas birra
+15mil nafta
+15 mil nafta
+nafta 15000
+nafta 20 dolares
+cerveza 8000
+un vino 12000
+fernet 15000
+whisky 30000
+tragos 20000
+porron 3000
+gin tonic 9000
+pizza 15000
+15 mil de nafta, 10 lucas de birra y 8 mil en el súper
+nafta 15 mil, birra 10 lucas, súper 8 mil
+Nafta 15 mil birra 10 lucas súper 8 mil
+15 mil nafta 10 lucas birra 8 mil súper
+Hoy pague 30 mil de luz. También 3 mil 500 en el kiosco.
+nafta 15 mil
+pan y leche 5000
+2 cafes y una medialuna 5000
+2 cafes y una medialuna
+15 mil nafta y aceite
+hotel 100 dolares y 20 mil de nafta
+cobré el sueldo 500 mil y 20 mil de nafta
+me pasaron 20 lucas
+Juan me pasó 20 mil
+me transfirió 15 mil mi hermana
+me entraron 50 lucas
+recibí 30 mil
+cobré 500 mil
+le cobré 10 lucas a Pedro
+me pagó 8 mil Ana
+me devolvieron 5 mil
+me regalaron 20 lucas
+vendí la bici 200 mil
+gané 40 lucas
+me dio 3 mil mi vieja
+me prestó 100 mil mi viejo
+me depositaron el sueldo 900 mil
+le pasé 10 lucas a Juan
+le pagué 8 mil a Ana
+le transferí 20 mil a mi hermana
+le presté 50 lucas a Pedro
+me cobró 20 mil el plomero
+me cobraron 5 mil de luz
+gasté 3 mil
+pagué 10 mil de gas
+compré un regalo 15 mil
+le devolví 5 mil a Ana
+dejé propina 2 mil
+me descontaron 4 mil
+sumame 10 lucas
+Súmame 10 luquitas.
+sumá 5000
+¡Súmame 10 lucitas!
+sumame 10 lucas del laburo
+sumame 10 lucas de nafta
+Réstame 5 mil
+restá 5000
+sacame 3 lucas
+Súmame 10 lucas y réstame 5 mil
+anotame 10 lucas de nafta
+poneme 3 lucas de café
+agregá 2 mil de pan
+se me fueron 30 lucas en el súper
+garpé 10 lucas de luz
+me costó 15 mil el corte de pelo
+me cayeron 20 lucas
+me llegaron 40 lucas
+me acreditaron 20 lucas
+me reintegraron 5 mil
+más 10 lucas
+10 lucas más
+menos 10 lucas
+10 lucas menos
+me llegó la luz 20 mil
+10 lucas de nafta más 5 mil de birra
+me dieron 3 lucas de propina
+me pagaron la changa 30 lucas
+me pagaron 900 mil
+Juan me pagó 8 mil
+hice una changa 50 lucas
+Me pasaron 20 lucas de Juan y 10 lucas de Pedro
+Cobré 500 mil y 20 mil de nafta
+Le pasé 10 lucas a Juan y Pedro me pasó 5 mil
+Carnaval 5000
+carnaval 8000
+20 mil
+dos lucas
+nafta 200
+datos 7
+Android 14
+Chrome/130.0 Mobile Safari/537.36
+SamsungBrowser/25.0 Chrome/121.0 Mobile Safari/537.36
+Chrome/130.0 Mobile Safari/537.36 Instagram 300
+Version/18.0 Mobile/15E148 Safari/604.1
+CriOS/130.0 Mobile/15E148 Safari/604.1
+Version/18.6 Mobile/15E148 Safari/604.1
+Version/26.0 Mobile/15E148 Safari/604.1
+audio/mp4
+ 15 mil nafta 
+verdu 8000
+verdulería 8000
+tomates 3000
+2 kilos de papas 4000
+manzanas 5000
+bananas 2000
+lechuga 1500
+palta 3000
+tortitas 3000
+masitas 4000
+facturas 5000
+medialunas 6000
+bizcochitos 2000
+tortitas negras 2500
+pan 3000
+panadería 4000
+churros 3500
+criollitos 2000
+vigilantes 3000
+cañoncitos 4000
+sanguches de miga 9000
+factura de luz 30000
+birra 3000
+papas fritas 2500
+papitas 2000
+fernet 9000
+gin tonic 8000
+malbec 7000
+porrones 6000
+speed 2500
+coto 30000
+yerba 4000
+fideos 2000
+leche 1500
+pago naranja x 20000
+3 papas fritas grandes 2500
+papas fritas 3000
+comisión 80000
+honorarios 90000
+cobré el sueldo 500000
+# --- Gastos que parecían plata que entró (encargo 2026-11-11) ---
+comisión del banco 3000
+comision bancaria 1200
+honorarios del contador 50000
+honorarios contador 45000
+honorarios de la abogada 80000
+bono de consulta 8000
+bono contribución colegio 15000
+mantenimiento de cuenta 4500
+# --- Y las mismas palabras cuando sí es plata que entra ---
+bono 50000
+me pagaron el bono 80000
+comisión por ventas 80000
+cobré la comisión 60000
+honorarios 200000
+cobré honorarios 150000
+# --- Plata que entró y se leía como gasto ---
+me llegó plata de papá 20000
+me llego plata de papa 20000
+sumame 15 lucas de papá
+me pasó plata mi papá 30000
+papá me pasó 40 lucas
+me cayó plata de mamá 10 mil
+me llegaron 50 lucas del laburo
+auh 60000
+beca 40000
+asignación familiar 55000
+jornal 25000
+# --- Papá no es una papa ---
+papá 5000
+papa 5000
+papas 3000
+2 kg de papa 2400
+puré de papa 3000
+mi papa 5000
+le pasé a papa 5000
+regalo para papá 20000
+milanesa con papas 9000
+# --- Apellidos y marcas que también son otra cosa ---
+expensas fernandez 90000
+expensas Fernández 90000
+farmacia patagonia 12000
+patagonia 5000
+birra patagonia 4000
+miller 3000
+fernandez 20000
+Fernández 20000
+kiosco los andes 2500
+peaje quilmes 1800
+super dia 30000
+almuerzo del dia 8000
+panaderia la imperial 4000
+ferreteria corona 9000
+farmacia stella 7000
+zapatillas puma 120000
+personal 15000
+higiene personal 5000
+claro 22000
+max 9000
+# --- Naranja: la fruta y la tarjeta ---
+tarjeta naranja 80000
+cuota naranja 30000
+resumen naranja 150000
+naranja x 45000
+naranjas 2000
+1 kg de naranja 1500
+jugo de naranja 2500
+# --- La cosa manda sobre el detalle ---
+carne picada 9000
+picada 15000
+picada con amigos 20000
+helado de frutilla 4000
+gin con pepino 9000
+torta de limón 12000
+tarta de manzana 6000
+licuado de banana 3500
+empanadas de carne 12000
+milanesa de pollo 7000
+pizza con birra 18000
+vino para la cena 7000
+remis a la farmacia 4000
+taxi al boliche 6000
+uber al aeropuerto 25000
+regalo de cumple 15000
+torta para el cumple 22000
+frutillas 3000
+limones 1500
+pepinos 900
+# --- Palabras de pago que acompañan a cualquier cosa ---
+cuota gimnasio 20000
+cuota del gym 20000
+cuota del colegio 90000
+cuota del auto 180000
+cuota 30000
+tarjeta sube 3000
+tarjeta 200000
+compras farmacia 9000
+compras 25000
+pago luz 30000
+pago de la tarjeta 250000
+clase de yoga 8000
+clases de ingles 30000
+consulta 15000
+consulta abogado 30000
+service del auto 60000
+# --- Montos que se confundían ---
+manzanas verdes 3000
+cebollas de verdeo 1200
+2 palitos salados 3000
+palitos salados 1500
+2 palitos salados
+2 palitos el auto
+dos palitos y medio la moto
+3 gambas al ajillo 12000
+200 verdes
+compré 300 dolares
+# --- Pago de tarjeta ---
+pagué la tarjeta 180000
+resumen de la tarjeta 300000
+visa 150000
+pagué la visa 150000
+mastercard 90000
+la master 90000
+resumen visa 210000
+amex 60000
+tarjeta de crédito 120000
+pago mínimo 40000
+zapatillas visa 80000
+zapatillas con la visa 80000
+super con tarjeta 45000
+nafta con tarjeta de crédito 30000
+curso master 50000
+préstamo 50000
+cuota del préstamo 50000
+le devolví a juan 10000
+deuda con ana 20000
+# --- Categorías nuevas: trabajo, mascotas y casa ---
+herramientas 45000
+herramientas para el laburo 60000
+taladro 80000
+amoladora 95000
+insumos 30000
+insumos para el laburo 30000
+materiales 70000
+ropa de trabajo 40000
+alimento del perro 25000
+alimento balanceado 32000
+comida del gato 18000
+veterinaria 18000
+vacuna del perro 15000
+piedritas 6000
+ferretería 7000
+plomero 40000
+electricista 35000
+gasista 50000
+colchón 300000
+muebles 150000
+heladera 900000
+juego de sábanas 30000
+cosas para la casa 22000
+pintureria 45000
+seguro de hogar 12000
+obra social 40000
+# --- Otros gastos comunes ---
+casino 20000
+quiniela 2000
+apuestas 10000
+hotel 80000
+pasaje a córdoba 60000
+monotributo 40000
+abl 15000
+patente 30000
+multa 50000
+peluquería 12000
+corte de pelo 9000
+netflix 9000
+spotify 4000
+alquiler 450000
+expensas 90000
+luz 30000
+gas 15000
+internet 25000
+recarga celular 5000
+super 45000
+chino 8000
+verdulería 9000
+carnicería 20000
+panadería 3000
+facturas 4500
+medialunas 3000
+kiosco 2500
+puchos 4000
+farmacia 12000
+nafta 40000
+estacionamiento 3000
+peaje 1500
+sube 5000
+uber 7000
+gym 30000
+cine 12000
+entradas recital 90000
+birra 5000
+fernet 14000
+coca con fernet 6000
+papas fritas 4000
+2 papas fritas grandes 6000
+birra en el super 5000
+super fernet 9000
+regalo mamá 30000
+cumple de juan 20000
+libros 25000
+curso 60000
+zapatillas 120000
+remera 25000
+# --- Cosas que la app no sabe: tiene que preguntar, no inventar ---
+juan 5000
+cosas 3000
+varios 10000
+transferencia 15000
+dos palitos salados 3000
+2 palitos de la selva 1500
+3 gambas chicle
+vacuna del gato 12000
+# --- Viajes ---
+viaje a la costa 80000
+viaje en uber 5000
+viaje en colectivo 700
+pasaje de avión 250000
+pasaje a córdoba 40000
+nafta para el viaje 30000
+airbnb 120000
+taxi al aeropuerto 15000
+vacaciones 300000
+excursión 25000
+seguro de viaje 20000
+valija 60000
+# --- Con qué se pagó: importa para la tarjeta de crédito ---
+zapatillas con crédito 80000
+super con débito 45000
+super en efectivo 9000
+pagué la tarjeta de crédito con débito 50000
+me pagaron en efectivo 20000
+cena con la visa 30000
+tarjeta de crédito 120000
+pagué con tarjeta de crédito 30000
+gasté 30000 con la tarjeta de crédito
+cuota por el crédito 50000
+pagué 50000 por el crédito del auto
+heladera con el crédito de mercado pago 500000
+heladera con crédito de mercado pago 500000
+cargué 2000 en crédito para el celu
+me depositaron 200000 por el crédito
+zapatillas 80000 con crédito.
+zapatillas con crédito, 80 lucas
+zapatillas con la de crédito 80000
+30 lucas de nafta con la de débito
+nafta con mi tarjeta de crédito 30000
+cena con la visa de crédito 30000
+devolución en la tarjeta de crédito 5000
+me devolvieron 5000 en la tarjeta de crédito
+pagué la visa con crédito 10000
+vacaciones nafta 30000
+super vacaciones 40000

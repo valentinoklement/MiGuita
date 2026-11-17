@@ -39,7 +39,7 @@ test("Miguita toma el peor entre ingresos y presupuestos", () => {
 
 test("metas: falta, porcentaje, por mes y fecha pasada", () => {
   const hoy = "2026-10-31";
-  assert.deepEqual(infoMeta({ objetivo: 610000, ahorrado: 380000, fecha: "" }, hoy), { falta: 230000, parte: 380000 / 610000, cumplida: false, vencida: false, porMes: null });
+  assert.deepEqual(infoMeta({ objetivo: 610000, ahorrado: 380000, fecha: "" }, hoy), { falta: 230000, parte: 380000 / 610000, cumplida: false, vencida: false, porMes: null, sinObjetivo: false });
   // De octubre a abril: 7 meses contando el actual. 1.200.000 / 7 = 171.428,57 → se redondea para arriba a pesos.
   assert.equal(infoMeta({ objetivo: 120000000, ahorrado: 0, fecha: "2027-04-30" }, hoy).porMes, 17142900);
   assert.equal(infoMeta({ objetivo: 1000, ahorrado: 0, fecha: "2026-10-31" }, hoy).porMes, 1000, "vence este mes: todo ahora");
@@ -48,6 +48,13 @@ test("metas: falta, porcentaje, por mes y fecha pasada", () => {
   assert.equal(ok.cumplida, true);
   assert.equal(ok.parte, 1);
   assert.equal(ok.vencida, false, "cumplida no se marca vencida");
+});
+
+test("metas: sin objetivo es para ir guardando: no falta nada, no se cumple y la fecha no cuenta", () => {
+  const hoy = "2026-10-31";
+  assert.deepEqual(infoMeta({ objetivo: 0, ahorrado: 50000, fecha: "" }, hoy), { falta: 0, parte: 0, cumplida: false, vencida: false, porMes: null, sinObjetivo: true });
+  assert.equal(infoMeta({ objetivo: 0, ahorrado: 0, fecha: "2026-01-01" }, hoy).vencida, false, "una fecha vieja no la marca vencida");
+  assert.equal(infoMeta({ objetivo: 0, ahorrado: 0, fecha: "2027-04-30" }, hoy).porMes, null);
 });
 
 test("deudas: debés, te deben, vencidas y saldadas", () => {
@@ -123,7 +130,7 @@ test("plan de ejemplo: ids ej_ y nada se anota solo este mes", () => {
 });
 
 test("fijos de ingreso y fijos que preguntan antes de anotarse", async () => {
-  const { fijosPorConfirmar, movimientoDeFijo } = await import("../src/logic/plan.js");
+  const { fijosPorConfirmar, movimientoDeFijo, mesPendiente, posponer, conMesCerrado } = await import("../src/logic/plan.js");
   const sueldo = fijo({ id: "s1", tipo: "ingreso", modo: "recordar", nombre: "Sueldo", categoria: "sueldo", dia: 1, monto: 62000000 });
   assert.equal(correrFijos([sueldo], [], "2026-10-31").nuevos.length, 0, "el que pregunta no se anota solo");
   assert.deepEqual(fijosPorConfirmar([sueldo], "2026-10-31").map((f) => f.id), ["s1"]);
@@ -131,6 +138,22 @@ test("fijos de ingreso y fijos que preguntan antes de anotarse", async () => {
   assert.deepEqual(fijosPorConfirmar([{ ...sueldo, dia: 31 }], "2026-10-30"), [], "todavía no llegó el día");
   assert.deepEqual(fijosPorConfirmar([{ ...sueldo, activo: false }], "2026-10-31"), []);
   assert.deepEqual(fijosPorConfirmar([{ ...sueldo, desde: "2026-11" }], "2026-10-31"), []);
+  // «Todavía no»: hoy no pregunta más, mañana sí, y el mes no queda como hecho.
+  assert.deepEqual(fijosPorConfirmar([{ ...sueldo, pospuesto: "2026-11-01" }], "2026-10-31"), [], "dijo todavía no");
+  assert.deepEqual(fijosPorConfirmar([{ ...sueldo, dia: 7, pospuesto: "2026-10-31" }], "2026-10-31").map((f) => f.id), ["s1"], "llegó el día de volver a preguntar");
+  // «Todavía no» vuelve a preguntar a los 3 días (pedido del usuario): ni mañana ni pasado.
+  const dijoNo = posponer({ ...sueldo, dia: 28 }, "2026-10-31");
+  assert.deepEqual([dijoNo.pospuesto, dijoNo.dijoNo], ["2026-11-03", "2026-10-31"]);
+  for (const dia of ["2026-10-31", "2026-11-01", "2026-11-02"]) assert.deepEqual(fijosPorConfirmar([dijoNo], dia), [], dia + ": todavía no pregunta");
+  assert.equal(mesPendiente(dijoNo, "2026-11-03"), "2026-10", "al tercer día pregunta de nuevo, por octubre aunque ya sea noviembre");
+  assert.deepEqual(dijoNo.hechos, [], "el mes no queda como hecho");
+  // «Este mes no»: ese mes se cierra sin anotar nada, se olvida el «todavía no», y el mes siguiente vuelve a preguntar.
+  const cerrado = conMesCerrado(dijoNo, "2026-10");
+  assert.deepEqual(cerrado.hechos, ["2026-10"]);
+  assert.ok(!("pospuesto" in cerrado) && !("dijoNo" in cerrado));
+  for (const dia of ["2026-10-31", "2026-11-03", "2026-11-27"]) assert.equal(mesPendiente(cerrado, dia), "", dia + ": por octubre no pregunta más");
+  assert.equal(mesPendiente(cerrado, "2026-11-28"), "2026-11", "cuando llega el día del mes siguiente, vuelve a preguntar");
+  assert.deepEqual(conMesCerrado(cerrado, "2026-10").hechos, ["2026-10"], "cerrarlo dos veces no lo duplica");
   const mov = movimientoDeFijo(sueldo, "2026-10");
   assert.deepEqual([mov.id, mov.tipo, mov.fecha, mov.monto, mov.categoria], ["fx_s1_2026-10", "ingreso", "2026-10-01", 62000000, "sueldo"]);
   const auto = correrFijos([{ ...sueldo, modo: "auto" }], [], "2026-10-31").nuevos;
