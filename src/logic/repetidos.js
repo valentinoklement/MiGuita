@@ -3,8 +3,10 @@
 import { claveDe } from "./anotar.js";
 import { sumarDias } from "./mes.js";
 
-export const VECES_REPETIDO = 3;   // desde la tercera vez
-export const DIAS_REPETIDO = 45;   // en el último mes y medio
+// Pedido del usuario (2026-11-18): desde la quinta vez, y las cinco en los últimos diez días (hoy y los nueve de antes). Si se deja
+// de comprar unos días, deja de aparecer solo.
+export const VECES_REPETIDO = 5;
+export const DIAS_REPETIDO = 10;
 export const CUANTOS_REPETIDOS = 3;
 
 export function repetidos(movs, hoy, { veces = VECES_REPETIDO, dias = DIAS_REPETIDO, cuantos = CUANTOS_REPETIDOS } = {}) {

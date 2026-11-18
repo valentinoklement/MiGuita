@@ -1324,7 +1324,7 @@ raiz.addEventListener("click", (e) => {
       [...st.grupos].forEach((x) => quitarItem("grupos", x.id));
       // También la plata cargada, las otras platas y lo aprendido. Se quitan (no se guardan vacías con la hora de ahora):
       // así, si este dispositivo se vuelve a conectar, no les gana a los demás y no les vacía nada.
-      ["saldo", "platas", "aprendidas", "metasOrden", "vistaPlata", "plataTocada", "mesVisto", "avisados", "vistos", "ultimoFestejo"].forEach(quitarConfig);
+      ["saldo", "platas", "aprendidas", "metasOrden", "vistaPlata", "plataTocada", "siempreCerrado", "mesVisto", "avisados", "vistos", "ultimoFestejo"].forEach(quitarConfig);
       st.dudaSaldo = st.dudaPlata = st.dudaCat = st.dudaMonto = null; st.plataTexto = "";
       mostrarAviso("Se borró todo lo anotado en este celu."); break;
     /* Grupos */
@@ -1809,6 +1809,8 @@ raiz.addEventListener("click", (e) => {
       anotar({ id: nuevoId(), tipo: "gasto", monto: x.monto, detalle: x.detalle, categoria: x.categoria, medio: x.medio, fecha: hoy, ts: ahora, mod: ahora });
       break;
     }
+    // La pestañita de «Lo de siempre»: abre o cierra. Queda así en este dispositivo (no viaja a los otros).
+    case "verSiempre": ponerConfig("siempreCerrado", !st.cfg.siempreCerrado); break;
     case "ahorroAdentro": case "ahorroAparte": {
       ponerSaldo(responderAhorro(st.cfg.saldo, st.metas, act === "ahorroAparte"));
       break;

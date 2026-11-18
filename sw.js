@@ -1,5 +1,5 @@
 // Guarda la app para que funcione sin internet. Subir VERSION cada vez que cambia un archivo.
-const VERSION = "miguita-e30-4";
+const VERSION = "miguita-e31-1";
 const ARCHIVOS = [
   "./", "./index.html", "./manifest.webmanifest",
   "./src/ui/styles.css", "./src/ui/parche.js", "./src/ui/conexion.js", "./src/ui/avisos.js", "./src/ui/grabador.js", "./src/ui/mudanza.js", "./src/logic/contador.js", "./src/ui/ayuda.js", "./src/logic/saldo.js", "./src/logic/tarjeta.js", "./src/logic/repetidos.js", "./src/ui/analisis.js", "./src/logic/analisis.js", "./src/ui/voz.js", "./src/logic/instalar.js", "./src/logic/voz.js", "./src/ui/arranque.js", "./src/ui/app.js", "./src/ui/pantallas.js", "./src/ui/plan.js", "./src/ui/grupos.js", "./src/ui/qr.js", "./src/ui/ajustes.js", "./src/ui/bloqueo.js", "./src/ui/huella.js", "./src/ui/primera.js", "./src/ui/importar.js", "./src/ui/chistes.js", "./src/ui/pdf.js", "./src/vendor/qrcode.js", "./src/vendor/jsQR.js", "./src/ui/ejemplo.js", "./src/art/art.js", "./src/art/amigos.js", "./src/art/extra.js", "./src/logic/iconos.js", "./src/ui/lienzo.js", "./src/ui/platas.js", "./src/logic/platas.js", "./src/data/db.js",

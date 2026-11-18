@@ -650,11 +650,14 @@ export function crearVistas(st, hoy) {
   }
 
   // «Lo de siempre»: lo que se anota igual una y otra vez, a un toque. Va debajo del campo, solo cuando hay algo repetido.
+  // El título es una pestañita: se toca para ocultar los botones o volver a mostrarlos (cfg.siempreCerrado, de cada dispositivo).
   function loDeSiempre(no) {
     st.repetidos = no ? [] : repetidos(st.movs, hoy);
     if (!st.repetidos.length) return "";
-    return `<div class="repes" role="group" aria-label="Lo de siempre: tocá para anotarlo de nuevo"><span class="repes-t">Lo de siempre</span>` +
-      st.repetidos.map((x, i) => `<button class="pp repe" data-act="repetir" data-v="${i}" aria-label="Anotar de nuevo ${esc(x.detalle)}, ${plata(x.monto)}"><span>${esc(x.detalle)}</span> <b>${plata(x.monto)}</b></button>`).join("") + `</div>`;
+    const abierto = !st.cfg.siempreCerrado;
+    return `<div class="repes" role="group" aria-label="${abierto ? "Lo de siempre: tocá para anotarlo de nuevo" : "Lo de siempre"}">` +
+      `<button class="repes-t" data-act="verSiempre" aria-expanded="${abierto}">Lo de siempre<span class="repes-f" aria-hidden="true"></span></button>` +
+      (abierto ? st.repetidos.map((x, i) => `<button class="pp repe" data-act="repetir" data-v="${i}" aria-label="Anotar de nuevo ${esc(x.detalle)}, ${plata(x.monto)}"><span>${esc(x.detalle)}</span> <b>${plata(x.monto)}</b></button>`).join("") : "") + `</div>`;
   }
 
   return { inicio, cartelInstalar, movimientos, idsTarjeta, movsGasto, comprasTarjeta, resumen, racha, festejo, mas, cargarPlata, personalizacion, hayEjemplo, categorias, editarCat, elegirIconoCat, dibujoCat, aprendidas, hoja, nombreCat, iconoCat: iconoDe, nombreMedio, nombreDia, mesTexto, plata, motivosApretado, estadoDelMes,

@@ -483,6 +483,12 @@ em.nuevo{font-style:normal;font-size:10px;font-weight:800;text-transform:upperca
 .snack span{min-width:0;overflow-wrap:anywhere}
 /* Celu chico con la letra muy grande: el número importa más que el dibujo del pan. */
 @media (max-width:359px){.letra-enorme .plata-cuerpo>svg{display:none}.letra-enorme .plata-cuerpo .ht{margin-left:0}.letra-enorme .hr .big.std{font-size:28px}}
+/* Lo mismo en «Gastaste este mes» (sin plata cargada, y la de los meses pasados): el número nunca se achica más que su ancho
+   (min-width:auto) y el que cede es el pan, solo lo que haga falta; con lugar, el pan queda de 100 como siempre. Antes, con la letra
+   grande y un total largo, el número empujaba la pantalla de costado (lo encontró el recorrido de «Lo de siempre»). */
+.tecard.hr>svg.lf{flex:0 1 100px;min-width:0}
+.tecard.hr>.ht{flex:1 1 0;min-width:auto}
+@media (max-width:359px){.letra-enorme .tecard.hr>svg.lf{display:none}}
 .letra-fila{flex-wrap:wrap}
 .quick-t{font:800 15px "Bricolage Grotesque",sans-serif;margin-bottom:-6px}
 .preg.txt{width:auto;height:auto;min-height:30px;padding:2px 10px;border-radius:99px;font:800 13px/1.2 "Bricolage Grotesque",sans-serif;white-space:nowrap}
@@ -542,7 +548,11 @@ em.nuevo{font-style:normal;font-size:10px;font-weight:800;text-transform:upperca
 .neg-v{color:var(--negscr)}
 /* «Lo de siempre»: debajo del campo de Inicio, lo que se anota igual una y otra vez, a un toque. */
 .repes{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;margin-top:-4px}
-.repes-t{font:800 13px "Bricolage Grotesque",sans-serif;opacity:.75;flex:0 0 auto}
+/* El título es la pestañita que abre y cierra: una pastilla con borde de puntos (los botones de anotar son llenos) y una flechita
+   que apunta a la derecha cerrada y abajo abierta. */
+.repes-t{font:800 13px "Bricolage Grotesque",sans-serif;color:var(--tscr);flex:0 0 auto;min-height:44px;display:inline-flex;align-items:center;gap:8px;padding:0 14px;border:2px dashed var(--lscr);border-radius:99px}
+.repes-f{width:7px;height:7px;border-right:2.5px solid currentColor;border-bottom:2.5px solid currentColor;transform:rotate(-45deg);margin:0 2px 0 -1px;flex:none}
+.repes-t[aria-expanded="true"] .repes-f{transform:translateY(-2px) rotate(45deg)}
 .repes .repe{--r:99px;padding:5px 12px;font:700 14px "Manrope",sans-serif;min-height:44px;display:inline-flex;align-items:center;gap:5px;max-width:100%;min-width:0}
 .repes .repe span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .repes .repe b{font:800 14px "Bricolage Grotesque",sans-serif;white-space:nowrap;flex:none}

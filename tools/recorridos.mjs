@@ -814,22 +814,57 @@ paso("tarjeta de crédito: el resumen trae impuestos; elegidas las compras, la p
   await c.cerrar();
 });
 
-paso("lo de siempre: a la tercera vez aparece debajo del campo, y un toque lo anota", async () => {
+paso("lo de siempre: a la quinta vez aparece debajo del campo, un toque lo anota y la pestañita lo oculta", async () => {
   const c = await celu({ ancho: 320, alto: 640, letra: "enorme" });
   await c.empezar();
-  await c.anotar("café 2500");
-  await c.anotar("café 2500");
+  for (let i = 0; i < 4; i++) await c.anotar("café 2500");
   await c.noVe(/Lo de siempre/);
   await c.anotar("café 2500");
   await c.ve(/Lo de siempre/);
   await entra(c, "Inicio con lo de siempre");
+  // Inicio muestra los últimos cinco movimientos: lo anotado se mira en el total del mes (cinco cafés de $2.500).
+  await numeroEs(c, "$12.500");
   await c.clic("[data-act=repetir][data-v='0']");
   await esperaAviso(c, /Anotado: Café \$2\.500/);
-  assert.equal(await c.ev(`[...document.querySelectorAll("[data-act=editar]")].filter((b) => /Café/.test(b.innerText)).length`), 4);
+  await numeroEs(c, "$15.000");
   await c.clic("[data-act=deshacer]");
-  await c.hasta(`[...document.querySelectorAll("[data-act=editar]")].filter((b) => /Café/.test(b.innerText)).length === 3`, "que deshacer lo saque");
+  await numeroEs(c, "$12.500");
+  // La pestañita: abierta de entrada; al tocarla se ocultan los botones y queda solo el título, también después de recargar.
+  const botones = `document.querySelectorAll("[data-act=repetir]").length`, abierta = `document.querySelector("[data-act=verSiempre]").getAttribute("aria-expanded")`;
+  assert.equal(await c.ev(abierta), "true");
+  assert.equal(await c.ev(botones), 1);
+  await c.clic("[data-act=verSiempre]");
+  await c.hasta(`${botones} === 0`, "que se oculten los botones");
+  assert.equal(await c.ev(abierta), "false");
+  await c.ve(/Lo de siempre/);
+  await entra(c, "Inicio con lo de siempre cerrado");
+  await c.s("Page.reload");
+  await esperar(300);
+  await c.hasta("window.__miguitaLista === true", "que la app vuelva a arrancar");
+  await c.ve(/Lo de siempre/);
+  assert.equal(await c.ev(botones), 0, "sigue cerrada después de recargar");
+  await c.clic("[data-act=verSiempre]");
+  await c.hasta(`${botones} === 1`, "que vuelvan los botones");
+  assert.equal(await c.ev(abierta), "true");
+  await c.clic("[data-act=repetir][data-v='0']");
+  await esperaAviso(c, /Anotado: Café \$2\.500/);
+  await numeroEs(c, "$15.000");
   await c.cerrar();
 });
+
+for (const [ancho, letra] of [[320, "grande"], [360, "enorme"], [320, "enorme"], [320, ""], [375, ""]])
+  paso(`«Gastaste este mes» con un total largo no se sale: ${ancho} de ancho, letra ${letra || "normal"}`, async () => {
+    const c = await celu({ ancho, alto: 700, letra });
+    await c.empezar();
+    for (const [gasto, total] of [["café 2500", "$2.500"], ["súper 85000", "$87.500"], ["alquiler 1250000", "$1.337.500"], ["auto 9000000", "$10.337.500"]]) {
+      await c.anotar(gasto);
+      await numeroEs(c, total);
+      await entra(c, "Inicio con " + total);
+      // Con lugar, el pan sigue de 100 (no se achica porque sí).
+      if (!letra && (ancho === 375 || total === "$2.500")) assert.equal(Math.round(await c.ev(`document.querySelector(".tecard.hr>svg.lf").getBoundingClientRect().width`)), 100, "el pan con " + total);
+    }
+    await c.cerrar();
+  });
 
 paso("grupos: «Ya le pagué» baja lo que te queda, y se puede apagar en el grupo", async () => {
   const hoy = new Date().toISOString().slice(0, 10);
@@ -1082,7 +1117,7 @@ for (const [ancho, alto] of [[320, 640], [360, 740], [375, 812]]) for (const let
     await c.anotar("alquiler 1250000");
     await c.anotar("cobré 5000000");
     // Lo que alarga la pantalla: «lo de siempre» con un detalle largo, la tarjeta por pagar y sus renglones en Resumen.
-    for (let i = 0; i < 3; i++) await c.anotar("cafecito con medialunas de manteca 2500");
+    for (let i = 0; i < 5; i++) await c.anotar("cafecito con medialunas de manteca 2500");
     await c.anotar("zapatillas con crédito 80000");
     await c.anotar("pagué la visa 30000");
     await c.ve(/Lo de siempre/);
@@ -1092,6 +1127,9 @@ for (const [ancho, alto] of [[320, 640], [360, 740], [375, 812]]) for (const let
       assert.ok(r.inner <= ancho + 2 && r.sw <= ancho + 2 && !r.fuera.length, donde + ": " + JSON.stringify(r));
     };
     await mide("Inicio");
+    await c.clic("[data-act=verSiempre]"); await c.hasta(`!document.querySelector("[data-act=repetir]")`, "que se cierre lo de siempre");
+    await mide("Inicio con lo de siempre cerrado");
+    await c.clic("[data-act=verSiempre]"); await c.hasta(`!!document.querySelector("[data-act=repetir]")`, "que se abra lo de siempre");
     await c.clic(".tecard"); await mide("Resumen"); await c.clic("[data-act=volver]");
     await c.clic("[data-act=abrir][data-v=plata]"); await mide("Mi plata"); await c.clic("[data-act=volver]");
     await c.ev(`(() => { const e = document.querySelector("#rapido"); e.value = ""; e.closest("form").requestSubmit(); })()`); await esperar(150);
