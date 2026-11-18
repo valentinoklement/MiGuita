@@ -465,6 +465,7 @@ em.nuevo{font-style:normal;font-size:10px;font-weight:800;text-transform:upperca
 /* Tamaño de letra (Ajustes › Personalización): agranda toda la app junta, letras, botones y dibujos, para que nada se desarme. */
 .letra-grande .app{zoom:1.15}
 .letra-enorme .app{zoom:1.3}
+/* Si cambia el zoom de la letra, cambiar también el del lienzo (.lienzo, al final): 1/zoom. */
 /* En un celu chico o con la letra grande, Miguita se achica para que el encabezado entre en la pantalla. */
 .top>:first-child{flex:1 1 auto;min-width:0}
 .top>.miguita-toque,.top>svg.sl{flex:0 1 124px;min-width:32px}
@@ -545,3 +546,23 @@ em.nuevo{font-style:normal;font-size:10px;font-weight:800;text-transform:upperca
 .repes .repe{--r:99px;padding:5px 12px;font:700 14px "Manrope",sans-serif;min-height:44px;display:inline-flex;align-items:center;gap:5px;max-width:100%;min-width:0}
 .repes .repe span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .repes .repe b{font:800 14px "Bricolage Grotesque",sans-serif;white-space:nowrap;flex:none}
+
+/* ---------- el ícono de una categoría: elegirlo o dibujarlo ---------- */
+.icono-fila>svg{width:44px;height:auto;flex:none}
+/* El lienzo es papel claro en los dos temas: así se ven la línea oscura y el color, igual que en los demás íconos. */
+.lienzo{--f:#F4E6C8;--bd:var(--lscr);--r:18px;padding:8px;width:100%;max-width:380px;margin:0 auto;touch-action:none;-webkit-user-select:none;user-select:none;cursor:crosshair}
+/* El lienzo anula el zoom de la letra grande (.letra-grande .app y .letra-enorme .app, más arriba: si cambian, cambiar acá 1/zoom).
+   Así el dedo y el rectángulo del lienzo se miden igual en todos los navegadores: Safari da el rectángulo sin el zoom y el toque con él. */
+.letra-grande .lienzo{zoom:.869565}
+.letra-enorme .lienzo{zoom:.769231}
+.lienzo svg{display:block;width:100%;height:auto;aspect-ratio:40/36;background-image:radial-gradient(circle,rgba(42,22,8,.22) 1px,transparent 1.3px);background-size:10% 11.111%;background-position:5% 5.5%}
+.dib-fila{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.dib-fila .chips{flex:1 1 160px}
+.dib-muestra{flex:none;width:84px;cursor:default}
+.colores{display:flex;flex-wrap:wrap;gap:8px}
+.colores .color{--r:99px;width:44px;height:44px;display:flex;align-items:center;justify-content:center}
+.colores .color span{width:24px;height:24px;border-radius:50%;box-shadow:0 0 0 2px #2A1608}
+.colores .color[aria-pressed="true"]{--f:var(--gold)}
+/* La lista de categorías: las palabras clave largas bajan de renglón en vez de salirse de la pantalla. */
+.cat-fila{display:flex;align-items:center;gap:10px;min-width:0}
+.cat-fila>span{min-width:0;white-space:normal;overflow-wrap:anywhere}

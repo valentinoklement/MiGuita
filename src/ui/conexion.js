@@ -27,7 +27,7 @@ export function crearConexion({ st, base, listasPlan, ponerConfig, quitarConfig,
     if (!vin || navigator.onLine === false) return;
     const local = structuredClone(base.leerEstado()), antes = huellas(aplanar(local));
     let r;
-    try { r = await sincronizarDatos(await llaveV(), local, vin.base); }
+    try { r = await sincronizarDatos(await llaveV(), local, vin.base, undefined, vin.v); }
     catch (e) {
       const error = e.message === "version" ? "version" : /403/.test(e.message) ? "codigo" : "red";
       if (st.cfg.vinculo?.codigo === vin.codigo && st.cfg.vinculo.error !== error) { ponerConfig("vinculo", { ...st.cfg.vinculo, error }); dibujar(); }

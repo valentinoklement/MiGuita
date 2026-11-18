@@ -61,4 +61,21 @@ test("ningún nombre ajeno se dibuja como HTML", () => {
   limpio("movimientos", V.movimientos());
   st.dudaMonto = { texto: X, p: { opciones: [100, 200] } }; st.dudaCat = { id: "m", detalle: X, tipo: "gasto" };
   limpio("dudas", V.inicio());
+  // Una categoría que llega de otro dispositivo o de una copia con un ícono o un dibujo armados para meter HTML.
+  st.cfg.categorias.gasto.push({ id: "c_x", nombre: X, claves: [X], oculta: false, icono: X, dibujo: { c: X, t: [[1, 2, X, 3], X] } },
+    { id: X, nombre: X, claves: [], oculta: false, icono: "constructor" });
+  st.movs.push({ id: "mx", tipo: "gasto", monto: 100, detalle: X, categoria: X, medio: "", fecha: hoy, ts: 1, mod: 1 });
+  st.catTab = "gasto";
+  limpio("categorías", V.categorias());
+  for (const id of ["c_x", X]) {
+    st.editCat = { tipo: "gasto", id };
+    limpio("editar categoría", V.editarCat());
+    limpio("elegir ícono", V.elegirIconoCat());
+    st.dibujo = { c: X, t: [[1, 2, X, 3]] };
+    limpio("dibujar ícono", V.dibujoCat());
+    assert.ok(!V.dibujoCat().includes("function"), "un id raro no trae otra cosa");
+  }
+  limpio("resumen con el ícono", V.resumen());
+  st.hoja = { tipo: "gasto", expr: "", centavos: 0, detalle: X, categoria: "c_x", medio: "", fecha: hoy, moneda: "ARS", modo: "nuevo" };
+  limpio("hoja con el ícono", V.hoja());
 });

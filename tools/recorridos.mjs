@@ -478,6 +478,123 @@ paso("metas: «Ahorros» sin objetivo se guarda, suma y nunca se cumple", async 
   await c.cerrar();
 });
 
+// Un trazo con el dedo en el lienzo del ícono (toques de verdad, como en un celu), de (x0, y0) a (x1, y1) en proporción del lienzo.
+async function trazar(c, x0, y0, x1, y1) {
+  const r = await c.ev(`(() => { const l = document.querySelector("[data-lienzo] svg"); l.scrollIntoView({ block: "center" }); const q = l.getBoundingClientRect(); return { x: q.left, y: q.top, w: q.width, h: q.height }; })()`);
+  const en = (fx, fy) => ({ x: r.x + fx * r.w, y: r.y + fy * r.h });
+  await c.s("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [en(x0, y0)] });
+  for (let i = 1; i <= 8; i++) await c.s("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [en(x0 + (x1 - x0) * i / 8, y0 + (y1 - y0) * i / 8)] });
+  await c.s("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  await esperar(80);
+}
+
+for (const [ancho, alto, letra] of [[375, 812, ""], [320, 640, "enorme"]])
+  paso(`categorías: elegir un ícono o dibujar el propio, y se ve al anotar (${ancho} de ancho, letra ${letra || "normal"})`, async () => {
+    const c = await celu({ ancho, alto, letra });
+    await c.empezar();
+    await c.clic(".nav [data-v=mas]");
+    await c.clic("[data-act=abrir][data-v=personalizacion]");
+    await c.clic("[data-act=abrir][data-v=categorias]");
+    await c.clic("[data-act=agregarCat]");
+    await c.escribir("[data-act=catNombre]", "Mate");
+    await c.ev(`document.querySelector("[data-act=catNombre]").dispatchEvent(new Event("change", { bubbles: true }))`);
+    // Elegir de la lista: primero los que no usa nadie; «Deshacer» vuelve al de antes.
+    await c.clic("[data-act=abrir][data-v=elegirIconoCat]");
+    await c.ve(/Sin usar/i);
+    await c.ve(/Ya los usa otra categoría/i);
+    assert.ok(await c.ev(`!!document.querySelectorAll(".cats")[0].querySelector("[data-v=mate]") && !!document.querySelectorAll(".cats")[1].querySelector("[data-v=super]")`), "el mate está sin usar y el changuito lo usa Súper");
+    await c.clic("[data-act=elegirIcono][data-v=mate]");
+    await c.ve(/Listo: Mate tiene ícono nuevo/);
+    const muestraMate = `document.querySelector(".icono-fila svg").innerHTML.includes("M21 12L28 2.5")`;
+    assert.ok(await c.ev(muestraMate), "la categoría muestra el mate");
+    await c.clic("[data-act=deshacer]");
+    await c.hasta(`!(${muestraMate})`, "que vuelva el de antes");
+    // Dibujar el propio.
+    await c.clic("[data-act=abrir][data-v=elegirIconoCat]");
+    await c.clic("[data-act=dibujarCat]");
+    await c.ve(/Dibujá tu ícono/);
+    await trazar(c, 0.2, 0.5, 0.8, 0.5);
+    const etiqueta = `document.querySelector("[data-lienzo] svg").getAttribute("aria-label")`;
+    await c.hasta(`/con 1 trazo$/.test(${etiqueta})`, "un trazo");
+    // Cae donde se tocó, también con la letra muy grande (la app tiene zoom).
+    const n = (await c.ev(`document.querySelector("[data-lienzo] g.ln path").getAttribute("d")`)).match(/\d+(\.\d+)?/g).map(Number);
+    assert.ok(Math.abs(n[0] - 8) < 1.5 && Math.abs(n[1] - 18) < 1.5, "empieza donde se tocó: " + n.join(" "));
+    assert.ok(Math.abs(n.at(-2) - 32) < 1.5 && Math.abs(n.at(-1) - 18) < 1.5, "termina donde se soltó: " + n.join(" "));
+    await trazar(c, 0.5, 0.15, 0.5, 0.85);
+    await c.hasta(`/con 2 trazos$/.test(${etiqueta})`, "dos trazos");
+    await c.clic("[data-act=trazoDeshacer]");
+    await c.hasta(`/con 1 trazo$/.test(${etiqueta})`, "deshacer saca el último");
+    await c.clic("[data-act=dibujoColor][data-v='3']");
+    assert.equal(await c.ev(`document.querySelector("[data-act=dibujoColor][data-v='3']").getAttribute("aria-pressed")`), "true");
+    await c.clic("[data-act=dibujoListo]");
+    await c.ve(/Listo: Mate tiene tu dibujo/);
+    await c.ve(/Tu dibujo/);
+    await c.ve(/‹ Categorías/); // de vuelta en la categoría, sin pasar por la lista
+    // Se ve en la lista de categorías y en la hoja de anotar (verde: el color elegido).
+    await c.clic("[data-act=volver]");
+    assert.ok(await c.ev(`[...document.querySelectorAll("[data-act=editarCat]")].find((b) => b.innerText.includes("Mate")).innerHTML.includes("#79A874")`), "en la lista");
+    await c.clic(".nav [data-v=inicio]");
+    await c.ev(`(() => { const e = document.querySelector("#rapido"); e.value = ""; e.closest("form").requestSubmit(); })()`); await esperar(150);
+    assert.ok(await c.ev(`[...document.querySelectorAll("[data-act=cat]")].find((b) => b.innerText.includes("Mate"))?.innerHTML.includes("#79A874")`), "en la hoja de anotar");
+    await c.clic("[data-act=cerrarHoja]");
+    await c.cerrar();
+  });
+
+paso("categorías: si la app se recarga dibujando un ícono, volver atrás lleva a la lista, sin errores", async () => {
+  const c = await celu();
+  await c.empezar();
+  await c.clic(".nav [data-v=mas]");
+  await c.clic("[data-act=abrir][data-v=personalizacion]");
+  await c.clic("[data-act=abrir][data-v=categorias]");
+  await c.clic("[data-act=editarCat][data-v=super]");
+  await c.clic("[data-act=abrir][data-v=elegirIconoCat]");
+  await c.clic("[data-act=dibujarCat]");
+  await c.ve(/Dibujá tu ícono/);
+  // Como al tocar «Actualizar» o cuando el celu cierra la app en segundo plano: la página se recarga y el historial queda.
+  await c.s("Page.reload");
+  await esperar(300);
+  await c.hasta("window.__miguitaLista === true", "que la app vuelva a arrancar");
+  await c.ev("history.back()");
+  await c.ve(/Categorías y medios/);
+  // El historial quedó en otra pantalla: «‹ Personalización» igual lleva a Personalización (no a Ajustes).
+  await c.clic("[data-act=volver]");
+  await c.ve(/Tamaño de letra/);
+  for (let i = 0; i < 2; i++) { await c.ev("history.back()"); await esperar(150); }
+  await c.ve(/Categorías y medios|Tamaño de letra/);
+  await c.cerrar();
+});
+
+paso("categorías: lo que quedó en el historial de una categoría no se aplica a otra", async () => {
+  const c = await celu();
+  await c.empezar();
+  const aCategorias = async () => { await c.clic(".nav [data-v=mas]"); await c.clic("[data-act=abrir][data-v=personalizacion]"); await c.clic("[data-act=abrir][data-v=categorias]"); };
+  const enOtraCosa = /Elegí el ícono|Dibujá tu ícono/;
+  // Con las pestañas de abajo: se deja el ícono de Súper a medias y se abre Carnicería.
+  await aCategorias();
+  await c.clic("[data-act=editarCat][data-v=super]");
+  await c.clic("[data-act=abrir][data-v=elegirIconoCat]");
+  await c.clic(".nav [data-v=inicio]");
+  await aCategorias();
+  await c.clic("[data-act=editarCat][data-v=carne]");
+  for (let i = 0; i < 5; i++) { await c.ev("history.back()"); await esperar(200); await c.noVe(enOtraCosa); }
+  // Recargando en medio del dibujo de Súper, y después abriendo Carnicería: «‹ Categorías» vuelve a la lista.
+  await aCategorias();
+  await c.clic("[data-act=editarCat][data-v=super]");
+  await c.clic("[data-act=abrir][data-v=elegirIconoCat]");
+  await c.clic("[data-act=dibujarCat]");
+  await c.s("Page.reload");
+  await esperar(300);
+  await c.hasta("window.__miguitaLista === true", "que la app vuelva a arrancar");
+  await c.ev("history.back()");
+  await c.ve(/Categorías y medios/);
+  await c.clic("[data-act=editarCat][data-v=carne]");
+  await c.ve(/Carnicería/);
+  await c.clic("[data-act=volver]");
+  await c.ve(/Categorías y medios/);
+  await c.noVe(enOtraCosa);
+  await c.cerrar();
+});
+
 paso("fijos: «todavía no» pregunta de nuevo a los 3 días, y «este mes no» lo cierra sin anotar nada", async () => {
   const c = await celu();
   await c.empezar();
@@ -981,6 +1098,10 @@ for (const [ancho, alto] of [[320, 640], [360, 740], [375, 812]]) for (const let
     await c.teclas("1250000"); await mide("Hoja de anotar"); await c.clic("[data-act=cerrarHoja]");
     for (const v of ["plan", "grupos", "mas"]) { await c.clic(`.nav [data-v=${v}]`); await mide(v); }
     await c.clic("[data-act=abrir][data-v=personalizacion]"); await mide("Personalización");
+    await c.clic("[data-act=abrir][data-v=categorias]"); await mide("Categorías");
+    await c.clic("[data-act=agregarCat]"); await mide("Categoría nueva");
+    await c.clic("[data-act=abrir][data-v=elegirIconoCat]"); await mide("Elegir el ícono");
+    await c.clic("[data-act=dibujarCat]"); await mide("Dibujar el ícono");
     await c.clic(".nav [data-v=inicio]"); await c.clic("[data-act=abrir][data-v=platas]"); await mide("Mis platas vacía");
     for (const t of ["+ Dólares", "+ USDT", "+ Inversiones"]) {
       await c.boton(t); await mide("Sumar " + t); await c.escribir("[data-act=platCampo][data-k=monto]", "12500000"); await c.clic("[data-act=plataEdGuardar]");

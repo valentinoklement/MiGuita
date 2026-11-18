@@ -26,7 +26,7 @@ export function crearVistasAnalisis(st, hoy, V) {
   function bloqueCambio() {
     const c = loQueCambio(V.movsGasto(), hoy);
     if (!c) return "";
-    const frase = (d, titulo, sub) => `<div class="frase">${Art.catIcon(d.categoria)}<span><b>${titulo}</b><small>${sub}</small></span></div>`;
+    const frase = (d, titulo, sub) => `<div class="frase">${V.iconoCat(d.categoria)}<span><b>${titulo}</b><small>${sub}</small></span></div>`;
     let h = `<div class="gcab-a">${Art.miguita("ok").replace("<svg", '<svg style="width:66px;flex:none"')}<b>Lo que cambió en ${mesTexto(c.mes).toLowerCase()}</b></div>`;
     if (c.subio) h += frase(c.subio, `${esc(nombreCat(c.subio.categoria))}: ${pct(c.subio.parte)} más que tu promedio`, `Gastaste ${plata(c.subio.monto)}. Lo normal son ${plata(c.subio.promedio)}.`);
     if (c.bajo) h += frase(c.bajo, `${esc(nombreCat(c.bajo.categoria))}: ${pct(c.bajo.parte)} menos. ¡Bien ahí!`, `Te ahorraste unos ${plata(c.bajo.promedio - c.bajo.monto)}.`);

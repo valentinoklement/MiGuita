@@ -17,6 +17,8 @@ import { nuevoCodigo, buscarCodigo, derivar, sincronizar, bajar, escuchar } from
 import { CONFIG_COMPARTIDA, leerCodigoVinculo } from "../logic/vinculo.js";
 import { porContar, contar } from "../logic/contador.js";
 import { parchar } from "./parche.js";
+import { prepararLienzo } from "./lienzo.js";
+import { limpiarDibujo, conTrazo, trazoListo, COLORES_DIBUJO } from "../logic/iconos.js";
 import { crearConexion } from "./conexion.js";
 import { crearAvisos } from "./avisos.js";
 import { crearGrabador } from "./grabador.js";
@@ -47,7 +49,7 @@ import { resumenParaIA } from "../logic/analisis.js";
 import { hayQuePreguntar, anotadoAntes, saldoDesde, podesUsar, saldoEfectivo, porQueNoCuenta, plataNueva, sumarAMeta, ahorrosAlDia, responderAhorro, sacarDeMeta, gastoDeMetaAparte } from "../logic/saldo.js";
 
 const PESTANAS = [["inicio", "Inicio"], ["plan", "Mis cuentas"], ["grupos", "Grupos"], ["mas", "Ajustes"]];
-const TAB_DE = { mudanza: "inicio", movimientos: "inicio", resumen: "inicio", racha: "inicio", tuMes: "inicio", platas: "inicio", plataEd: "inicio", personalizacion: "mas", categorias: "mas", editarCat: "mas", aprendidas: "mas", form: "plan",
+const TAB_DE = { mudanza: "inicio", movimientos: "inicio", resumen: "inicio", racha: "inicio", tuMes: "inicio", platas: "inicio", plataEd: "inicio", personalizacion: "mas", categorias: "mas", editarCat: "mas", elegirIconoCat: "mas", dibujoCat: "mas", aprendidas: "mas", form: "plan",
   plata: "inicio", grupo: "grupos", juntada: "grupos", historial: "grupos", gform: "grupos", compartir: "grupos", unido: "grupos", quien: "grupos", whatsapp: "grupos",
   comprasTarjeta: "inicio", notif: "mas", seguridad: "mas", dolar: "mas", copias: "mas", dispositivos: "mas", comentario: "mas", privacidad: "mas", instalar: "mas", yaInstalada: "mas", tutorial: "mas", importar: "inicio", grabar: "inicio", revisar: "inicio" };
 const SIN_BARRA = ["tutorial", "yaInstalada", "grabar", "revisar", "mudanza"];
@@ -101,6 +103,7 @@ const st = {
   filtro: { texto: "", tipo: "todos", cat: "" },
   catTab: "gasto",
   editCat: null,
+  dibujo: null,      // { c, t }: el ícono que se está dibujando (pantalla dibujoCat)
   avisoLuego: 0,
   planTab: "presupuesto",
   form: null,        // { tipo, id, vals, error }
@@ -974,15 +977,28 @@ async function leerCopia() {
 }
 
 /* ---------- navegación (el botón "atrás" del celu también funciona) ---------- */
+// Las pantallas de una categoría guardan en el historial de cuál eran: así una vieja (de otra categoría) no se aplica a la de ahora.
+const DE_CATEGORIA = ["editarCat", "elegirIconoCat", "dibujoCat"];
+const catActual = () => (st.editCat ? st.editCat.tipo + "|" + st.editCat.id : "");
 function abrir(p) {
-  history.pushState({ p }, "");
+  history.pushState(DE_CATEGORIA.includes(p) ? { p, cat: catActual() } : { p }, "");
   st.pantalla = p;
   st.confirmar = "";
   scrollTo(0, 0);
 }
+// Si el historial no coincide con lo que se ve (después de recargar, o cuando una pantalla se cambió por otra), «‹» va a la de arriba.
+const ARRIBA = { dibujoCat: "elegirIconoCat", elegirIconoCat: "editarCat", editarCat: "categorias", aprendidas: "categorias", categorias: "personalizacion" };
 function volver() {
   if (history.state?.p === st.pantalla && TAB_DE[st.pantalla]) history.back();
-  else { st.pantalla = TAB_DE[st.pantalla] || "inicio"; dibujar(); }
+  else { st.pantalla = pantallaValida(ARRIBA[st.pantalla] || TAB_DE[st.pantalla] || "inicio"); dibujar(); }
+}
+// Las pantallas de una categoría necesitan saber cuál se edita (y la de dibujar, el dibujo): después de recargar no están en memoria,
+// y si lo que se edita es un medio de pago, no tiene ícono. En esos casos, a la lista.
+function pantallaValida(p) {
+  if (p === "editarCat" && !st.editCat) return "categorias";
+  if ((p === "elegirIconoCat" || p === "dibujoCat") && (!st.editCat || st.editCat.tipo === "medios")) return "categorias";
+  if (p === "dibujoCat" && !st.dibujo) return "elegirIconoCat";
+  return p;
 }
 function abrirHoja(datos) {
   history.pushState({ p: st.pantalla, hoja: 1 }, "");
@@ -1002,7 +1018,12 @@ addEventListener("popstate", (e) => {
   if (st.ayuda) st.ayuda = "";
   else if (st.hoja) st.hoja = null;
   else if (st.festejo) st.festejo = null;
-  else st.pantalla = e.state?.p || "inicio";
+  else {
+    let p = e.state?.p || "inicio";
+    // Una pantalla de otra categoría (o de antes de recargar): a la lista. El historial no se toca: «‹» igual va a la de arriba (volver).
+    if (DE_CATEGORIA.includes(p) && e.state?.cat !== catActual()) p = "categorias";
+    st.pantalla = pantallaValida(p);
+  }
   st.confirmar = "";
   dibujar();
 });
@@ -1224,9 +1245,27 @@ function itemCat() {
   const { tipo, id } = st.editCat;
   return tipo === "medios" ? st.cfg.medios.find((m) => m.id === id) : st.cfg.categorias[tipo].find((c) => c.id === id);
 }
+// La billetera elegida cambia el nombre del medio «mp»: también lleva su hora.
+const billeteraConHora = (medios) => medios.map((m) => (m.id === "mp" ? { ...m, mod: Date.now() } : m));
+// Cada categoría o medio editado lleva su hora (mod): entre dos dispositivos se juntan uno por uno y gana el cambio más nuevo.
 function guardarCats() {
-  const k = st.editCat.tipo === "medios" ? "medios" : "categorias";
+  const k = st.editCat.tipo === "medios" ? "medios" : "categorias", c = itemCat();
+  if (c) c.mod = Date.now();
   ponerConfig(k, st.cfg[k]);
+}
+// Cambia el ícono de una categoría (icono: id de la lista; dibujo: el de la persona; undefined: se quita) y devuelve cómo deshacerlo.
+// Se busca la categoría de nuevo al deshacer: mientras tanto pudo haber llegado otra versión de las categorías.
+function cambiarIcono(c, nuevo) {
+  const tipo = st.editCat.tipo, id = c.id, antes = { icono: c.icono, dibujo: c.dibujo };
+  const poner = (x, valores) => { for (const [k, val] of Object.entries(valores)) { if (val === undefined) delete x[k]; else x[k] = val; } x.mod = Date.now(); };
+  poner(c, nuevo);
+  ponerConfig("categorias", st.cfg.categorias);
+  return () => {
+    const x = st.cfg.categorias[tipo]?.find((y) => y.id === id);
+    if (!x) return;
+    poner(x, antes);
+    ponerConfig("categorias", st.cfg.categorias);
+  };
 }
 
 raiz.addEventListener("click", (e) => {
@@ -1842,7 +1881,7 @@ raiz.addEventListener("click", (e) => {
     case "hojaCuotas": s.nCuotas = +v; s.error = ""; break;
     case "hojaTarjeta": s.tarjeta = v; s.tarjetaNueva = ""; s.error = ""; break;
     case "hojaPrimera": s.primera = v; break;
-    case "billetera": ponerConfig("medios", ponerBilletera(st.cfg.medios, st.cfg.medios.find((m) => m.id === "mp")?.nombre === v ? "" : v)); break;
+    case "billetera": ponerConfig("medios", billeteraConHora(ponerBilletera(st.cfg.medios, st.cfg.medios.find((m) => m.id === "mp")?.nombre === v ? "" : v))); break;
     case "fijoActivo": {
       const f = st.fijos.find((x) => x.id === v);
       ponerItem("fijos", { ...f, activo: !f.activo, desde: f.activo ? f.desde : mesDeInicio(f.dia, hoy) });
@@ -1907,10 +1946,10 @@ raiz.addEventListener("click", (e) => {
     case "editarCat": st.editCat = { tipo: st.catTab, id: v }; abrir("editarCat"); break;
     case "agregarCat": {
       const id = "c_" + nuevoId().slice(0, 8);
-      if (st.catTab === "medios") { st.cfg.medios.push({ id, nombre: "Nuevo medio", oculto: false }); ponerConfig("medios", st.cfg.medios); }
+      if (st.catTab === "medios") { st.cfg.medios.push({ id, nombre: "Nuevo medio", oculto: false, mod: Date.now() }); ponerConfig("medios", st.cfg.medios); }
       else {
         const lista = st.cfg.categorias[st.catTab];
-        lista.splice(lista.findIndex((c) => c.id === RESPALDO[st.catTab]), 0, { id, nombre: "Nueva categoría", claves: [], oculta: false });
+        lista.splice(lista.findIndex((c) => c.id === RESPALDO[st.catTab]), 0, { id, nombre: "Nueva categoría", claves: [], oculta: false, mod: Date.now() });
         ponerConfig("categorias", st.cfg.categorias);
       }
       st.editCat = { tipo: st.catTab, id };
@@ -1918,6 +1957,43 @@ raiz.addEventListener("click", (e) => {
       dibujar();
       raiz.querySelector('[data-act="catNombre"]')?.select();
       return;
+    }
+    /* el ícono de una categoría */
+    case "elegirIcono": {
+      const c = itemCat();
+      if (!c || st.editCat.tipo === "medios" || !Art.iconoDeLista(v)) break;
+      const deshacer = cambiarIcono(c, { icono: v === c.id ? undefined : v, dibujo: undefined });
+      mostrarAviso("Listo: " + c.nombre + " tiene ícono nuevo.", deshacer);
+      return volver();
+    }
+    case "dibujarCat": {
+      const c = itemCat();
+      if (!c || st.editCat.tipo === "medios") break;
+      st.dibujo = limpiarDibujo(c.dibujo) || { c: 0, t: [] };
+      abrir("dibujoCat");
+      break;
+    }
+    case "dibujoColor": if (st.dibujo) st.dibujo = { ...st.dibujo, c: Math.max(0, Math.min(COLORES_DIBUJO.length - 1, Math.trunc(Number(v)) || 0)) }; break;
+    case "trazoDeshacer": if (st.dibujo) st.dibujo = { ...st.dibujo, t: st.dibujo.t.slice(0, -1) }; break;
+    case "trazoBorrar": {
+      const antes = st.dibujo, id = st.editCat?.id;
+      if (!antes?.t.length) break;
+      st.dibujo = { ...antes, t: [] };
+      // Deshacer solo si se sigue dibujando el de esa misma categoría.
+      mostrarAviso("Borré el dibujo.", () => { if (st.pantalla === "dibujoCat" && st.editCat?.id === id) st.dibujo = antes; });
+      break;
+    }
+    case "dibujoListo": {
+      const c = itemCat(), d = limpiarDibujo(st.dibujo);
+      if (!c || st.editCat.tipo === "medios") break;
+      if (!d) { mostrarAviso("Primero dibujá algo con el dedo, adentro del cuadro."); break; }
+      const deshacer = cambiarIcono(c, { icono: undefined, dibujo: d });
+      st.dibujo = null;
+      mostrarAviso("Listo: " + c.nombre + " tiene tu dibujo.", deshacer);
+      // De vuelta a la categoría: se saltea la lista de íconos (son dos pantallas atrás).
+      if (history.state?.p === "dibujoCat") { history.go(-2); return; }
+      st.pantalla = "editarCat";
+      break;
     }
     case "catOcultar": {
       const c = itemCat();
@@ -2016,6 +2092,16 @@ raiz.addEventListener("click", (e) => {
     raiz.querySelector(`[data-act="${act}"]${b.dataset.k ? `[data-k="${CSS.escape(b.dataset.k)}"]` : ""}${v ? `[data-v="${CSS.escape(v)}"]` : ""}`)?.focus();
 });
 
+// Dibujar el ícono de una categoría: cada trazo terminado se suma al dibujo (con sus topes) y recién ahí se redibuja.
+prepararLienzo(raiz, (trazo) => {
+  if (!st.dibujo || st.pantalla !== "dibujoCat") return;
+  const listo = trazoListo(trazo), antes = st.dibujo, nuevo = conTrazo(antes, listo);
+  const entro = nuevo.t.length > antes.t.length ? nuevo.t[nuevo.t.length - 1].length : 0;
+  st.dibujo = nuevo;
+  if (entro < listo.length) mostrarAviso(entro ? "Ese trazo quedó cortado: el dibujo ya está lleno. Deshacé alguno para seguir." : "El dibujo ya está lleno. Deshacé algún trazo para seguir.");
+  dibujar();
+});
+
 raiz.addEventListener("input", (e) => {
   const act = e.target.dataset.act, val = e.target.value;
   if (act === "detalle") { st.hoja.detalle = val; if (sugerirCategoria()) dibujar(); }
@@ -2085,7 +2171,7 @@ raiz.addEventListener("change", (e) => {
     if (al.alias) st.grupos.filter((g) => g.yo).forEach((g) => { const n = conMiAlias(g, al.alias); if (n !== g) guardarGrupo(n); });
     dibujar();
   }
-  else if (act === "billeteraOtra") { ponerConfig("medios", ponerBilletera(st.cfg.medios, e.target.value)); dibujar(); }
+  else if (act === "billeteraOtra") { ponerConfig("medios", billeteraConHora(ponerBilletera(st.cfg.medios, e.target.value))); dibujar(); }
   else if (act === "catNombre") {
     const c = itemCat();
     c.nombre = e.target.value.trim() || (st.editCat.tipo === "medios" ? "Medio sin nombre" : "Sin nombre");

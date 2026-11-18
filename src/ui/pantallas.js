@@ -17,6 +17,7 @@ import { EN_PRUEBA } from "../logic/buzon.js";
 import { ICONO_BILLETERA } from "./importar.js";
 import { idsDeTarjeta, paraGastos, sinCubrir, comprasPosibles, pagoParaElegir, pagoParaSaldar, restoSiEligen } from "../logic/tarjeta.js";
 import { repetidos } from "../logic/repetidos.js";
+import { limpiarDibujo, caminoDe, puntosDe, COLORES_DIBUJO, NOMBRES_COLOR, ANCHO, ALTO, ANCHO_COLOR, ANCHO_LINEA, MAX_TRAZOS, MAX_PUNTOS } from "../logic/iconos.js";
 
 const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 const DIAS = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
@@ -31,6 +32,8 @@ export function crearVistas(st, hoy) {
   const plata = (c, o = {}) => formatear(c, { ...o, oculto: st.cfg.ocultar });
   const cat = (id) => st.cfg.categorias.gasto.find((c) => c.id === id) || st.cfg.categorias.ingreso.find((c) => c.id === id);
   const nombreCat = (id) => cat(id)?.nombre || "Otros";
+  // El ícono de una categoría: el que eligió o dibujó la persona, o el de siempre. Todas las pantallas lo sacan de acá.
+  const iconoDe = (id) => Art.iconoDeCategoria(cat(id) || { id });
   const nombreMedio = (id) => st.cfg.medios.find((m) => m.id === id)?.nombre || "";
   const mesTexto = (mes) => MESES[Number(mes.slice(5, 7)) - 1];
 
@@ -361,7 +364,7 @@ export function crearVistas(st, hoy) {
         (actual ? `<div class="sub">Esto es solo de este mes. Si me decís cuánta plata tenés, te cuento toda.</div><div class="chips"><button class="pp" data-act="abrir" data-v="plata">¿Cuánta plata tenés?</button></div>` : "") + porDia + enDolares));
     if (!r.gastos) return h + crd(`<div class="empty"><b>Sin gastos este mes</b><span>Cuando anotes, acá vas a ver en qué se te va la plata.</span></div>`);
     h += `<div class="btnrow"><button class="btn pp alt" data-act="abrirTuMes" data-v="${st.mes}">Tu mes${actual ? " (hasta hoy)" : ""}</button><button class="btn pp alt" data-act="verPlan" data-v="analisis">Ver análisis</button></div>`;
-    h += crd(lbl("Por categoría") + pc.map((c) => `<div class="crow">${Art.catIcon(c.id)}<div class="cr"><div class="row f" style="padding:0 0 3px;min-height:0"><span>${esc(nombreCat(c.id))} · ${Math.round(c.parte * 100)}%</span><span>${plata(c.monto)}</span></div>${Art.barra(c.monto / pc[0].monto)}</div></div>`).join(""));
+    h += crd(lbl("Por categoría") + pc.map((c) => `<div class="crow">${iconoDe(c.id)}<div class="cr"><div class="row f" style="padding:0 0 3px;min-height:0"><span>${esc(nombreCat(c.id))} · ${Math.round(c.parte * 100)}%</span><span>${plata(c.monto)}</span></div>${Art.barra(c.monto / pc[0].monto)}</div></div>`).join(""));
     h += crd(lbl("Por medio de pago") + pm.map((m, i) => `<div class="row${i ? "" : " f"}"><span>${esc(nombreMedio(m.id) || "Sin medio")}</span><span>${plata(m.monto)}</span></div>`).join(""));
     h += crd(lbl("Tu ritmo") + `<div class="row f"><span>Gastás en promedio</span><span>${plata(r.promedio)} por día</span></div>` +
       (actual ? `<div class="sub">A este ritmo, a fin de mes vas a gastar ${plata(r.proyeccion)}.</div>` : ""));
@@ -503,7 +506,7 @@ export function crearVistas(st, hoy) {
         const oculto = c.oculta || c.oculto;
         const sub = oculto ? "Oculta" : t === "medios" ? "" : c.claves.length ? c.claves.slice(0, 4).join(", ") + (c.claves.length > 4 ? "…" : "") : "Sin palabras clave";
         return `<button class="row rowb${i ? "" : " f"}" data-act="editarCat" data-v="${esc(c.id)}"${oculto ? ' style="opacity:.55"' : ""}>` +
-          `<span style="display:flex;align-items:center;gap:10px">${t === "medios" ? "" : Art.catIcon(c.id).replace("<svg", '<svg style="width:34px;flex:none"')}<span>${esc(c.nombre)}${sub ? `<small>${esc(sub)}</small>` : ""}</span></span><span class="chev" aria-hidden="true">›</span></button>`;
+          `<span class="cat-fila">${t === "medios" ? "" : Art.iconoDeCategoria(c).replace("<svg", '<svg style="width:34px;flex:none"')}<span>${esc(c.nombre)}${sub ? `<small>${esc(sub)}</small>` : ""}</span></span><span class="chev" aria-hidden="true">›</span></button>`;
       }).join("")) +
       `<button class="btn pp w" data-act="agregarCat">+ Agregar ${t === "medios" ? "medio de pago" : "categoría"}</button>` +
       (t === "medios" ? "" : `<div class="sub">Las palabras clave sirven para adivinar la categoría cuando escribís «súper 5000».</div>`) +
@@ -522,6 +525,7 @@ export function crearVistas(st, hoy) {
   }
 
   function editarCat() {
+    if (!st.editCat) return back("Categorías");
     const { tipo, id } = st.editCat;
     const medios = tipo === "medios";
     const c = medios ? st.cfg.medios.find((m) => m.id === id) : st.cfg.categorias[tipo].find((x) => x.id === id);
@@ -529,9 +533,56 @@ export function crearVistas(st, hoy) {
     const respaldo = !medios && RESPALDO[tipo] === id;
     return back("Categorías") + hdr(medios ? "Medio de pago" : tipo === "gasto" ? "Categoría de gasto" : "Categoría de ingreso", esc(c.nombre)) +
       lbl("Nombre") + `<div class="quick"><div class="pp"><input class="field" data-act="catNombre" value="${esc(c.nombre)}" aria-label="Nombre" maxlength="30"></div></div>` +
+      (medios ? "" : lbl("Ícono") + crd(`<button class="srow f rowb icono-fila" data-act="abrir" data-v="elegirIconoCat" style="width:100%;text-align:left">${Art.iconoDeCategoria(c)}` +
+        `<span class="rt"><b>${nombreIcono(c)}</b><small>Elegí otro o dibujá el tuyo</small></span><span class="chev" aria-hidden="true">›</span></button>`)) +
       (medios ? "" : lbl("Palabras clave") + `<div class="quick"><div class="pp"><input class="field" data-act="catClaves" value="${esc(c.claves.join(", "))}" placeholder="por ejemplo: coto, verdulería" aria-label="Palabras clave separadas por coma" maxlength="400"></div></div><div class="hint">Separalas con comas.</div>`) +
       (respaldo ? `<div class="hint">Esta es la categoría que se usa cuando ninguna otra coincide, por eso no se puede ocultar.</div>` :
         crd(`<div class="srow f"><span class="rt"><b>Ocultar</b><small>No aparece al anotar. Lo ya anotado se mantiene.</small></span>${interruptor("catOcultar", !!(c.oculta || c.oculto), "Ocultar")}</div>`));
+  }
+
+  /* ---------- el ícono de una categoría: elegirlo o dibujarlo ---------- */
+  // La categoría que se está editando (solo de gastos o ingresos: los medios no tienen ícono).
+  const catEditada = () => st.editCat && st.editCat.tipo !== "medios" ? st.cfg.categorias[st.editCat.tipo]?.find((x) => x.id === st.editCat.id) : null;
+  const nombreIcono = (c) => { const k = Art.claveDeIcono(c); return k === "dibujo" ? "Tu dibujo" : esc(Art.ICONOS_CAT.find((i) => i.id === k)?.nombre || "Otros"); };
+
+  function elegirIconoCat() {
+    const c = catEditada();
+    if (!c) return back("Categorías");
+    const actual = Art.claveDeIcono(c);
+    // Cuáles ya usa otra categoría (de gastos o de ingresos, sin contar las ocultas): esos van aparte, al final.
+    const usado = new Map();
+    for (const x of [...st.cfg.categorias.gasto, ...st.cfg.categorias.ingreso]) {
+      const k = Art.claveDeIcono(x);
+      if (x.id !== c.id && !x.oculta && !usado.has(k)) usado.set(k, x.nombre);
+    }
+    const boton = (i) => `<button class="cat pp" data-act="elegirIcono" data-v="${esc(i.id)}" aria-pressed="${actual === i.id}"` +
+      ` aria-label="${esc(i.nombre)}${usado.has(i.id) ? ", lo usa " + esc(usado.get(i.id)) : ""}">${Art.iconoDeLista(i.id)}${esc(i.nombre)}</button>`;
+    const libres = Art.ICONOS_CAT.filter((i) => !usado.has(i.id)), enUso = Art.ICONOS_CAT.filter((i) => usado.has(i.id));
+    return back(c.nombre) + hdr(esc(c.nombre), "Elegí el ícono") +
+      crd(`<div class="srow f icono-fila">${Art.iconoDeCategoria(c)}<span class="rt"><b>${nombreIcono(c)}</b><small>Es el que tiene ahora</small></span></div>` +
+        `<button class="btn pp w" data-act="dibujarCat">Dibujar el mío</button>`) +
+      lbl("Sin usar") + `<div class="cats" role="group" aria-label="Íconos sin usar">${libres.map(boton).join("")}</div>` +
+      (enUso.length ? lbl("Ya los usa otra categoría") + `<div class="cats" role="group" aria-label="Íconos que ya usa otra categoría">${enUso.map(boton).join("")}</div>` : "");
+  }
+
+  // Dibujar con el dedo. Mientras se dibuja, el trazo lo maneja lienzo.js; acá se muestra lo ya dibujado (st.dibujo).
+  function dibujoCat() {
+    const c = catEditada(), d = st.dibujo;
+    if (!c || !d) return back("Categorías");
+    const limpio = limpiarDibujo(d), camino = limpio ? limpio.t.map(caminoDe).join("") : "";
+    const color = Number.isInteger(d.c) && COLORES_DIBUJO[d.c] ? d.c : 0; // solo un número de la lista llega a la pantalla
+    const trazos = camino ? `<g class="fl"><path d="${camino}" stroke="${COLORES_DIBUJO[limpio.c]}" stroke-width="${ANCHO_COLOR}" fill="none" stroke-linecap="round" stroke-linejoin="round"/></g>` +
+      `<g class="ln" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="${camino}" stroke-width="${ANCHO_LINEA}"/></g>` : "";
+    const lleno = limpio && (limpio.t.length >= MAX_TRAZOS || puntosDe(limpio.t) >= MAX_PUNTOS);
+    return back("Ícono") + hdr(esc(c.nombre), "Dibujá tu ícono") +
+      `<div class="sub">Con el dedo, adentro del cuadro. Queda chiquito: mejor pocas líneas y grandes.</div>` +
+      `<div class="lienzo pp" data-lienzo data-c="${color}"><svg viewBox="0 0 ${ANCHO} ${ALTO}" role="img" aria-label="Lienzo para dibujar el ícono${limpio ? ", con " + limpio.t.length + (limpio.t.length === 1 ? " trazo" : " trazos") : ", vacío"}">${trazos}</svg></div>` +
+      (lleno ? `<div class="hint">El dibujo está lleno. Deshacé algún trazo para seguir.</div>` : "") +
+      `<div class="dib-fila"><div class="cat pp dib-muestra" aria-hidden="true">${limpio ? Art.dibujoPropio(limpio) : Art.iconoDeLista("otros")}${esc(c.nombre.split("/")[0])}</div>` +
+      `<div class="chips"><button class="pp" data-act="trazoDeshacer">Deshacer</button><button class="pp" data-act="trazoBorrar">Borrar todo</button></div></div>` +
+      lbl("Color") + `<div class="colores" role="group" aria-label="Color">` + COLORES_DIBUJO.map((col, i) =>
+        `<button class="pp color" data-act="dibujoColor" data-v="${i}" aria-pressed="${color === i}" aria-label="${NOMBRES_COLOR[i]}"><span style="background:${col}"></span></button>`).join("") + `</div>` +
+      `<button class="btn pp w" data-act="dibujoListo">Usar este dibujo</button>`;
   }
 
   /* ---------- hoja de anotar ---------- */
@@ -566,7 +617,7 @@ export function crearVistas(st, hoy) {
       `<div class="top"><div class="chipcol">${chips("tipo", [["gasto", "Gasto"], ["ingreso", "Ingreso"]], s.tipo, "Tipo")}${chips("monedaHoja", [["ARS", "$"], ["USD", "US$"]], s.moneda, "Moneda")}</div>` +
       `<div class="amount"><small>${esc(usd ? (cot ? "≈ " + formatear(aPesos(total, cot.valor)) + " · dólar " + nombreTipo(st.cfg.dolar.tipo).toLowerCase() + " " + formatear(cot.valor) + (cot.estimado ? " (estimado)" : "") : "Falta el valor del dólar: Más › Dólar") : cuenta)}</small><div class="big" aria-live="polite">${formatear(total, { moneda: usd ? "US$ " : "$" })}</div></div></div>` +
       lbl("Categoría") + `<div class="cats" role="group" aria-label="Categoría">` +
-      cats.map((c) => `<button class="cat pp" data-act="cat" data-v="${esc(c.id)}" aria-pressed="${c.id === s.categoria}">${Art.catIcon(c.id)}${esc(c.nombre.split("/")[0])}</button>`).join("") + "</div>" +
+      cats.map((c) => `<button class="cat pp" data-act="cat" data-v="${esc(c.id)}" aria-pressed="${c.id === s.categoria}">${Art.iconoDeCategoria(c)}${esc(c.nombre.split("/")[0])}</button>`).join("") + "</div>" +
       lbl("Medio de pago") + chips("medio", medios.map((m) => [m.id, m.nombre]), s.medio, "Medio de pago") +
       (s.tipo === "gasto" && !editar ? enCuotas(s, total, usd) : "") +
       `<div class="chips" role="group" aria-label="Fecha">` + fechas.map(([v, t]) => `<button class="pp" data-act="fecha" data-v="${v}" aria-pressed="${v === s.fecha}">${t}</button>`).join("") +
@@ -606,7 +657,7 @@ export function crearVistas(st, hoy) {
       st.repetidos.map((x, i) => `<button class="pp repe" data-act="repetir" data-v="${i}" aria-label="Anotar de nuevo ${esc(x.detalle)}, ${plata(x.monto)}"><span>${esc(x.detalle)}</span> <b>${plata(x.monto)}</b></button>`).join("") + `</div>`;
   }
 
-  return { inicio, cartelInstalar, movimientos, idsTarjeta, movsGasto, comprasTarjeta, resumen, racha, festejo, mas, cargarPlata, personalizacion, hayEjemplo, categorias, editarCat, aprendidas, hoja, nombreCat, nombreMedio, nombreDia, mesTexto, plata, motivosApretado, estadoDelMes,
+  return { inicio, cartelInstalar, movimientos, idsTarjeta, movsGasto, comprasTarjeta, resumen, racha, festejo, mas, cargarPlata, personalizacion, hayEjemplo, categorias, editarCat, elegirIconoCat, dibujoCat, aprendidas, hoja, nombreCat, iconoCat: iconoDe, nombreMedio, nombreDia, mesTexto, plata, motivosApretado, estadoDelMes,
     guia, ayuda, ayudaHoja,
     ayudas: { back, hdr, lbl, crd, chips, interruptor, preg } };
 }
